@@ -1,0 +1,449 @@
+{
+  "version": 10,
+  "exportedAt": "2025-12-27T15:22:58.762Z",
+  "items": [
+    {
+      "store": "Diário Nerdify",
+      "q": "Como enviar e-mail de troca?",
+      "r": "Antes de enviar o e-mail, confirme no WhatsApp do suporte da fábrica que o produto devolvido pelo cliente chegou em perfeitas condições. Somente após essa confirmação o e-mail de troca deve ser enviado para a produção.\n\nAcesse o e-mail da loja no Zoho e envie para:\n\ncomercial@fabricaking.com.br\n\nproducao@fabricaking.com.br\n\nAnexos obrigatórios:\n\nDeclaração de conteúdo\n\nResumo ou recibo do pedido\n\nEtiqueta\n\nAssunto do e-mail:\nPedido de troca + Nome da loja\n\nCorpo do e-mail (modelo):\nPrezados,\nSeguem os pedidos do dia XX de XXXXX de 202X. Total de XX pedidos.\n\nAtte,\nSeu nome",
+      "links": "",
+      "tags": [],
+      "qImages": [
+        "10.PNG"
+      ],
+      "qLinks": [],
+      "steps": []
+    },
+    {
+      "store": "Diário Nerdify",
+      "q": "Como funciona a troca?",
+      "r": "O primeiro passo para realizar a troca é verificar se o cliente está dentro do prazo. Para isso, acesse o link de rastreio e confirme a data em que o pedido foi entregue. O cliente tem até 7 dias corridos após o recebimento para solicitar troca ou devolução.\n\nCaso o pedido esteja fora do prazo, envie o texto padrão indicado abaixo. Se o cliente tiver acabado de perder o prazo, consulte o gerente da loja antes de responder para verificar se é possível abrir uma exceção.\n\nAntes de responder o cliente, verifique também se ele possui muitos pedidos na loja. Se tiver, confirme com o gerente da loja se é possível abrir uma exceção nesse caso.\n\nSe o cliente ainda estiver dentro do prazo, clique no botão “O que fazer” e siga as instruções.",
+      "links": "",
+      "tags": [],
+      "qImages": [],
+      "qLinks": [],
+      "steps": [
+        {
+          "name": "Gerar etiqueta reversa",
+          "text": "Na Nuvemshop, acesse Nuvem Envio, cole o número do pedido e localize o pedido para o qual deseja gerar a etiqueta reversa.\n\nEm seguida, marque a caixa ao lado do número do pedido, na primeira coluna.\n\nPor fim, na última coluna, clique nos três pontinhos para abrir o menu e selecione a opção “Gerar etiqueta reversa”.",
+          "stepLinks": [
+            {
+              "name": "Link",
+              "url": "https://diarionerdify.com.br/trocas-devolucoes/"
+            }
+          ],
+          "imageFilename": "7.PNG",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Insira os dados na etiqueta reversa",
+          "text": "Todos os dados já estarão preenchidos. Você só precisa se atentar à seção Encomenda, seguindo o padrão para todos os produtos, com exceção dos bonés.\n\nPara pedidos sem boné, utilize as seguintes medidas por produto: 2 cm de altura, 30 cm de comprimento, 30 cm de largura e 300 g de peso.\n\nNo caso de pedidos com boné, a altura passa a ser de 8 cm, independentemente da quantidade de produtos. Isso ocorre porque, sempre que há boné no pedido, o envio é feito em uma caixa rígida para proteger a aba, e nessa mesma caixa vão juntos os bonés, camisetas e quaisquer outros itens do pedido. Nesses casos, a caixa terá sempre 8 cm de altura.\n\nNa parte de dados fiscais, selecione a opção Declaração de Conteúdo e, em seguida, clique no botão “Calcular frete”.",
+          "stepLinks": [],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Crie a etiqueta reversa",
+          "text": "Leia atentamente o resumo do pedido para confirmar se todas as informações estão corretas.\n\nEm seguida, selecione a opção de envio mais barata — na maioria dos casos, será exibida apenas a opção PAC dos Correios.\n\nPor fim, clique no botão “Criar envio avulso”.",
+          "stepLinks": [],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Envie a etiqueta ao cliente",
+          "text": "Agora, salve o número da etiqueta reversa na sua planilha de tarefas diárias. Esse número sempre vem com um # antes da numeração.\n\nEm seguida, clique no botão “Comprar”. Caso não haja saldo suficiente, entre em contato com o gerente da loja.\n\nObservação:\n\nSe a opção escolhida for Correios, o cliente deverá postar o pedido em qualquer agência dos Correios.\n\nSe a opção for Loggi ou Jadlog, a postagem deverá ser feita em uma unidade dessas transportadoras.\n\nHavendo saldo, finalize a compra, baixe a etiqueta e envie ao cliente junto com a mensagem abaixo:\n\nMensagem para o cliente:\n\nSegue a etiqueta reversa. Você pode realizar a postagem sem custos em qualquer agência dos Correios. O prazo para postagem é de 5 dias corridos; após esse período, não será mais possível realizar a troca ou devolução.\n\nNão é necessário imprimir a etiqueta — basta apresentá-la na unidade de envio. Peço, por gentileza, que me avise quando a postagem for realizada para que eu possa acompanhar o envio. Qualquer dúvida, fico à disposição.",
+          "stepLinks": [],
+          "imageFilename": "8.PNG",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Acompanhe e registre o envio",
+          "text": "Na sua planilha, marque no campo Próxima etapa um dia antes da data limite (ou seja, 4 dias corridos) ou, se fizer mais sentido, a próxima segunda-feira. Nessa data, verifique se o cliente já realizou a postagem.\n\nCaso o cliente ainda não tenha postado, envie uma mensagem lembrando que ele tem mais um dia para realizar a postagem.\n\nAssim que o cliente informar que postou — ou quando você verificar que a postagem foi realizada — insira o código de postagem na planilha de tarefas diárias e atualize o campo Próxima etapa com a data prevista para entrega, conforme indicado na etiqueta reversa.\n\nNo próximo passo, você verá como confirmar a postagem, obter o código de rastreio e verificar a data prevista de entrega.",
+          "stepLinks": [],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Verifique se o cliente recebeu",
+          "text": "Acesse o Nuvem Envio e cole o código da etiqueta reversa na busca.\nAo localizar a etiqueta, pegue o código de rastreio (clicando nele ou copiando).\n\nSalve na planilha de tarefas diárias:\n\nCódigo de rastreio\n\nData prevista de entrega\n\nSe o rastreio não mostrar data prevista, marque no campo Próxima etapa 5 dias úteis à frente.\n\nQuando a data chegar, verifique o status:\n\nSe estiver entregue, confirme com o suporte da fábrica se o produto chegou certinho. Após a confirmação, gere um novo envio ao cliente pela Nuvemshop ou solicite o reembolso ao gerente, em caso de devolução.\n\nSe não estiver entregue, abra um chamado de atraso no suporte da Nuvemshop.\n\nVeja como abrir um chamado de atraso na Nuvemshop, pesquisando no buscador por chamado de atraso Nuvemshop.\n\nSeguem os sites das transportadoras abaixo.\n\nLoggi:\nhttps://app.loggi.com/rastreador/completo\n\nJadlog:\nhttps://www.jadlog.com.br/jadlog/rastreio\n\nCorreios:\nhttps://rastreamento.correios.com.br/app/index.php",
+          "stepLinks": [],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Criar um pedido manual",
+          "text": "Procedimento para trocas\n\nPrimeiro, avise o cliente que o produto já chegou ao destino e que o novo envio será realizado.\n\nNa Nuvemshop, acesse Vendas e clique em Criar um pedido.\nInsira o produto correto, com o tamanho solicitado, e preencha os dados do cliente. Para facilitar, localize as informações copiando o número do pedido da planilha de tarefas diárias e colando na barra de pesquisa da tela de vendas da Nuvemshop.\n\nNa seção Suas anotações, adicione a informação:\n“Pedido de troca”.\n\nFinalize o pedido e gere a etiqueta de envio.\n\nApós gerar a etiqueta, envie o pedido de troca para a fábrica por e-mail, anexando os três documentos do novo pedido:\n\nDeclaração de conteúdo\n\nRecibo ou resumo do pedido\n\nEtiqueta de envio\n\nPara mais detalhes, utilize o buscador e pesquise por “enviar e-mail de troca”.",
+          "stepLinks": [],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        }
+      ]
+    },
+    {
+      "store": "Diário Nerdify",
+      "q": "Instagram: Link para coleção de temas dos anos 80",
+      "r": "Época boa demais! Dá uma olhada na nossa coleção completa. Mandei o link por mensagem.",
+      "links": "Seguem os links:\n.\nColeção Temas dos Anos 80:\nhttps://diarionerdify.com.br/nostalgia-80s/\n.\nWhatsApp:\nhttps://api.whatsapp.com/send?phone=5521996134232",
+      "tags": [
+        "temas",
+        "insta",
+        "Nerdify"
+      ],
+      "qImages": [],
+      "qLinks": [],
+      "steps": []
+    },
+    {
+      "store": "Diário Nerdify",
+      "q": "Instagram e Facebook: Link para coleção de marcas dos anos 80 e 90",
+      "r": "Época boa demais! Dá uma olhada na nossa coleção completa. Mandei o link por mensagem.",
+      "links": "Seguem os links:\n.\nColeção Company:\nhttps://diarionerdify.com.br/estampas-cy\n.\nColeção marcas dos anos 80 e 90:\nhttps://diarionerdify.com.br/marcas-anos-90/\n.\nColeção Temas dos Anos 80:\nhttps://diarionerdify.com.br/nostalgia-80s/\n.\nWhatsApp:\nhttps://api.whatsapp.com/send?phone=5521996134232",
+      "tags": [
+        "marcas",
+        "insta",
+        "company",
+        "face",
+        "Nerdify"
+      ],
+      "qImages": [],
+      "qLinks": [],
+      "steps": []
+    },
+    {
+      "store": "Diário Nerdify",
+      "q": "Facebook: Link para coleção de temas dos anos 80",
+      "r": "Época boa demais! Dá uma olhada na nossa coleção completa. \n.\nhttps://diarionerdify.com.br/nostalgia-80s",
+      "links": "",
+      "tags": [
+        "temas",
+        "face",
+        "Nerdify"
+      ],
+      "qImages": [],
+      "qLinks": [],
+      "steps": []
+    },
+    {
+      "store": "Diário Nerdify",
+      "q": "Instagram: Temas de estampas que não tem na loja",
+      "r": "No site não temos, mas fazemos qualquer estampa personalizada e não cobramos pela personalização, você paga apenas o valor do produto. Enviamos o link por mensagem.",
+      "links": "Segue o nosso contato, caso você queira a camiseta personalizada:\n\nWhatsApp:\nhttps://api.whatsapp.com/send?phone=5521996134232",
+      "tags": [
+        "insta",
+        "personalizacao",
+        "Nerdify"
+      ],
+      "qImages": [],
+      "qLinks": [],
+      "steps": []
+    },
+    {
+      "store": "Diário Nerdify",
+      "q": "Facebook: Temas de estampas que não tem na loja",
+      "r": "No site não temos, mas fazemos qualquer estampa personalizada e não cobramos pela personalização, você paga apenas o valor do produto. \n.\nCaso tenha interesse entre em contato pelo nosso WhatsApp.\n.\nhttps://api.whatsapp.com/send?phone=5521996134232",
+      "links": "",
+      "tags": [
+        "face",
+        "personalizacao"
+      ],
+      "qImages": [],
+      "qLinks": [],
+      "steps": []
+    },
+    {
+      "store": "Diário Nerdify",
+      "q": "WhatsApp: Automação de desconto",
+      "r": "Olá, tudo bem?\n\nPara compras no cartão de crédito, basta digitar CARTAO no campo de cupom de desconto.\n\nPara pagamentos via PIX, é só digitar PIX no mesmo campo.",
+      "links": "Se preferir, posso montar o pedido para você. Basta me informar a forma de pagamento que eu envio o link do seu carrinho já com o desconto aplicado.\n\nO link é temporário, então, se puder finalizar a compra agora, já te envio em seguida. Caso não seja possível no momento, é só me chamar aqui quando puder que eu gero o link na hora.\n\nQualquer dúvida, fico à disposição.",
+      "tags": [
+        "desconto",
+        "automacao",
+        "zap",
+        "whats",
+        "WhatsApp"
+      ],
+      "qImages": [],
+      "qLinks": [],
+      "steps": [
+        {
+          "name": "Enviar duas mensagens ao cliente",
+          "text": "Primeiro, copie a primeira mensagem que está no campo Resposta e envie para o cliente.\nEm seguida, copie a segunda mensagem que está no campo Links (para DM) e envie ao cliente.\n\nObservação:\nO cliente pode realizar a compra diretamente pelo site ou solicitar que você gere o link. Caso ele peça para gerar o link, siga para o Passo 2.",
+          "stepLinks": [],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Ver se o cliente tem pagamento pendente ou carrinho abandonado",
+          "text": "Acesse a Nuvemshop e, no menu lateral, vá em Vendas. Em seguida, cole o e-mail do cliente no campo de busca.\n\nPara obter o e-mail do cliente, acesse o SAK e, no menu lateral, copie o e-mail informado pelo cliente.\n\nSe o pedido aparecer, clique para abrir o pedido e siga para o passo 4.\n\nSe não aparecer, siga para o Passo 3.",
+          "stepLinks": [
+            {
+              "name": "Link",
+              "url": "https://diarionerdify.lojavirtualnuvem.com.br/admin/v2/orders?page=1&perPage=50"
+            }
+          ],
+          "imageFilename": "1.png",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Localizar o pedido nos carrinhos abandonados",
+          "text": "Acesse a Nuvemshop e, no menu lateral, vá em Vendas e depois em Carrinhos abandonados.\n\nEm seguida, pressione Ctrl + F para abrir a barra de pesquisa do navegador, cole o e-mail do cliente e pressione Enter. Isso levará diretamente ao carrinho abandonado correspondente.\n\nPor fim, clique no número do carrinho abandonado referente ao pedido do cliente, localizado na primeira coluna.",
+          "stepLinks": [
+            {
+              "name": "Link",
+              "url": "https://diarionerdify.lojavirtualnuvem.com.br/admin/v2/abandoned-carts"
+            }
+          ],
+          "imageFilename": "3.png",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Confirme os dados e os produtos",
+          "text": "Confirme com o cliente se os dados e os produtos do pedido estão corretos. Para isso, copie (ou faça um print) da parte da tela que contém essas informações e envie ao cliente via WhatsApp.\n\nApós ele confirmar que está tudo certo, siga para o Passo 5.",
+          "stepLinks": [],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Criar pedido manual",
+          "text": "Acesse a Nuvemshop e clique no botão Criar um pedido, localizado na parte superior da tela.\n\nPreencha todos os dados e não se esqueça de aplicar o desconto:\n\n10% para pagamentos via PIX\n\n5% para cartão de crédito ou boleto\n\nNo campo Origem do pedido, digite:\nWhatsApp – Aut c/ desconto\n\nApós concluir o preenchimento, clique em Adicionar pedido.",
+          "stepLinks": [
+            {
+              "name": "Link",
+              "url": "https://diarionerdify.lojavirtualnuvem.com.br/admin/v2/draft-orders/new"
+            }
+          ],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Enviar o link do carrinho ao cliente",
+          "text": "Copie o link e mande para o cliente com o texto abaixo:\n\nSegue o link do carrinho com o desconto aplicado.\nPor favor, confira seus dados e o(s) produto(s) antes de finalizar o pagamento.\n\nQualquer dúvida, é só chamar.",
+          "stepLinks": [],
+          "imageFilename": "4.png",
+          "link": "",
+          "linkName": ""
+        }
+      ]
+    },
+    {
+      "store": "Diário Nerdify",
+      "q": "O meu pedido Já foi enviado?",
+      "r": "A primeira ação é copiar o e-mail do cliente no SAK e colá-lo na tela de Vendas da Nuvemshop.\n\nCaso o cliente tenha feito o pedido há menos de 5 dias úteis, envie o texto abaixo.\n\nSe já tiverem passado mais de 5 dias úteis, clique no botão: O que fazer",
+      "links": "",
+      "tags": [
+        "envio",
+        "rastreio",
+        "prazo",
+        "entrega"
+      ],
+      "qImages": [],
+      "qLinks": [],
+      "steps": [
+        {
+          "name": "Acessar o link de rastreio",
+          "text": "Clique sobre o número do pedido e, após acessar o pedido, clique no link de rastreio.",
+          "stepLinks": [
+            {
+              "name": "Link",
+              "url": "https://diarionerdify.lojavirtualnuvem.com.br/admin/v2/orders?page=1&perPage=50"
+            }
+          ],
+          "imageFilename": "5.png",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Página do link de rastreio",
+          "text": "Se o link não apresentar nenhum status de entrega, isso pode indicar que o pedido ainda não foi enviado pela fábrica. Nesse caso, siga para o Passo 3.\n\nCaso contrário, copie essa tela e envie ao cliente, junto com o link de rastreio e o código, conforme o caso.\n\nEnvie o texto abaixo, acompanhado do link e do código de rastreio:\n\n“Está em trânsito. Segue o link de rastreio. Qualquer dúvida é só chamar.”\n\nRegras por transportadora\n\nLoggi\nBasta copiar e enviar apenas o link de rastreio. Não é necessário informar o código.\nExemplo de link:\nhttps://app.loggi.com/rastreador/NEADDD1CC9BE646CLG\n\nCorreios\nEnvie o link abaixo juntamente com o código de rastreio do cliente.\nSite para rastreamento:\nhttps://rastreamento.correios.com.br/app/index.php\n\nCódigo: copie e cole o código do cliente que aparece ao lado do link de rastreio na Nuvemshop.\n\nJadlog\nEnvie o link abaixo juntamente com o código de rastreio do cliente.\nSite para rastreamento:\nhttps://www.jadlog.com.br/jadlog/captcha\n\nCódigo: copie e cole o código do cliente que aparece ao lado do link de rastreio na Nuvemshop.",
+          "stepLinks": [],
+          "imageFilename": "6.png",
+          "link": "",
+          "linkName": ""
+        },
+        {
+          "name": "Atraso da Fábrica",
+          "text": "Se o pedido já tiver sido enviado para a fábrica há mais de 5 dias úteis e ainda não tiver sido despachado ao cliente, isso caracteriza atraso. Nesse caso, você deve entender o motivo com o suporte da fábrica e registrar o ocorrido na planilha de tarefas diárias.\n\nSe o atraso for por falta de estoque:\nEnvie uma mensagem ao cliente perguntando se ele deseja fazer a troca por outra variação (tamanho ou cor) disponível. Caso ele aceite, comunique a troca ao suporte da Fábrica King e acompanhe o pedido até a entrega, mantendo o chamado registrado na planilha de tarefas diárias. Quando o cliente receber, confirme se chegou tudo certo e, se estiver ok, remova a tarefa da planilha.\n\nSe for um problema da fábrica:\nSolicite um prazo de resolução, registre esse prazo na planilha de tarefas diárias no chamado do caso e acompanhe para cobrar a fábrica. O cliente deve ser informado a cada atualização repassada pela fábrica.\n\nSe o cliente solicitar estorno:\nComunique a solicitação ao suporte da Fábrica King e peça ao gerente da loja para realizar o estorno ao cliente.",
+          "stepLinks": [],
+          "imageFilename": "",
+          "link": "",
+          "linkName": ""
+        }
+      ]
+    }
+  ],
+  "menuButtons": [
+    {
+      "name": "Nuvemshop",
+      "iconUrl": "https://files.inhire.app/pages/career/vagasbyintera_nuvemshop-tiendanube-og.png",
+      "links": [
+        {
+          "name": "Diário Nerdify",
+          "url": "https://diarionerdify.lojavirtualnuvem.com.br/admin/v2/dashboard"
+        },
+        {
+          "name": "Shop 80",
+          "url": "https://shop802.lojavirtualnuvem.com.br/admin/v2/dashboard"
+        }
+      ]
+    },
+    {
+      "name": "Contatar a gerente Carla Gomes",
+      "iconUrl": "https://nocodestartup.io/wp-content/uploads/2024/08/SaaS-IA-com-WhatsApp-01.png",
+      "links": [
+        {
+          "name": "Abrir WhatsApp",
+          "url": "https://api.whatsapp.com/send/?phone=5522992248997&text&type=phone_number&app_absent=0"
+        }
+      ]
+    },
+    {
+      "name": "E-mail",
+      "iconUrl": "https://upload.wikimedia.org/wikipedia/commons/4/4e/Mail_%28iOS%29.svg",
+      "links": [
+        {
+          "name": "Abrir Zoho Mail",
+          "url": "https://mail.zoho.com/zm/#mail/folder/inbox"
+        }
+      ]
+    },
+    {
+      "name": "Planilha de Tarefas Diárias",
+      "iconUrl": "https://upload.wikimedia.org/wikipedia/commons/3/30/Google_Sheets_logo_%282014-2020%29.svg",
+      "links": [
+        {
+          "name": "Diário Nerdify",
+          "url": "#"
+        },
+        {
+          "name": "Shop 80",
+          "url": "https://docs.google.com/spreadsheets/d/1hMmHzQlg4LtKWYEOc_VTvaWFRnOSHb9lvbsXEULC3qs/edit?gid=0#gid=0"
+        }
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "name": "Diário Nerdify",
+      "logoUrl": "https://acdn-us.mitiendanube.com/stores/003/800/267/themes/common/logo-1017420669-1696607286-3604afa78036bc99d42c4a45a62c9aac1696607286-480-0.webp",
+      "siteUrl": "https://diarionerdify.com.br/",
+      "stampsUrl": "https://drive.google.com/drive/folders/10EKdHW5QXZwCgOWdbXCwkQH0llZnhObg",
+      "instagramUrl": "",
+      "facebookUrl": "",
+      "tiktokUrl": "",
+      "youtubeUrl": "",
+      "pinterestUrl": "",
+      "whatsappUrl": "https://chat.sak.com.br/",
+      "socialExtras": [
+        {
+          "name": "Facebook/Instagram",
+          "url": "https://business.facebook.com/latest/inbox/instagram?asset_id=288888780971776&business_id=1796204240794310&mailbox_id=288888780971776&selected_item_id=770298646164118&thread_type=INSTAGRAM_POST"
+        }
+      ],
+      "metaInboxUrl": "https://business.facebook.com/latest/inbox/instagram?asset_id=288888780971776&business_id=1796204240794310&mailbox_id=288888780971776&selected_item_id=770298646164118&thread_type=INSTAGRAM_POST",
+      "emailAdmin": "atendimento@diarionerdify.com.br",
+      "emailAtendimento": "contato@diarionerdify.com.br",
+      "emailOpenUrl": "https://mail.zoho.com/zm/#mail/folder/inbox"
+    },
+    {
+      "name": "Shop 80",
+      "logoUrl": "https://acdn-us.mitiendanube.com/stores/006/053/724/themes/common/logo-881782978-1743865292-d422bc1fcaed5234816adb11a5e1931b1743865292-480-0.webp",
+      "siteUrl": "https://shop80.com.br/",
+      "stampsUrl": "https://shop80.com.br/",
+      "instagramUrl": "",
+      "facebookUrl": "",
+      "tiktokUrl": "",
+      "youtubeUrl": "",
+      "pinterestUrl": "",
+      "whatsappUrl": "https://chat.sak.com.br/",
+      "socialExtras": [
+        {
+          "name": "Facebook/Instagram",
+          "url": "https://business.facebook.com/latest/inbox/instagram?asset_id=288888780971776&business_id=1796204240794310&mailbox_id=288888780971776&selected_item_id=770298646164118&thread_type=INSTAGRAM_POST"
+        }
+      ],
+      "metaInboxUrl": "https://shop80.com.br/",
+      "emailAdmin": "atendimento@shop80.com.br",
+      "emailAtendimento": "contato@shop80.com.br",
+      "emailOpenUrl": "https://mail.zoho.com/zm/#mail/folder/in"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "af4d29031ee119b60615ed0",
+      "data": "2025-12-01",
+      "cliente": "Marcelo Jangarelli",
+      "whatsapp": "5511999817004",
+      "loja": "Shop 80",
+      "pedido": "1226",
+      "rastreio": "",
+      "assunto": "Devolução",
+      "fonte": "",
+      "status": "",
+      "proxEtapa": "2025-12-29",
+      "obs": [
+        {
+          "text": "O pedido está sendo devolvido, pois o endereço estava errado. Cliente já mandou o correto por WhatsApp.",
+          "date": "2025-12-01",
+          "prazo": "2025-12-08",
+          "chamado": "",
+          "etiqueta": "",
+          "novoPedido": "",
+          "rastreio": "NE3801C6BB47D134LG",
+          "status": "Devolução - Cliente Não Localizado",
+          "state": "Concluída"
+        },
+        {
+          "text": "Perguntei dia 15/12 sobre a resolução. A Nuvemshop respondeu que ainda está em análise",
+          "date": "2025-12-08",
+          "prazo": "2025-12-22",
+          "chamado": "",
+          "etiqueta": "",
+          "novoPedido": "",
+          "rastreio": "",
+          "status": "Aguardando o retorno da Nuvemshop",
+          "state": "Concluída"
+        },
+        {
+          "text": "Nuvemshop fez o extravio e fiz o novo no dia 18/12.",
+          "date": "2025-12-18",
+          "prazo": "2025-12-29",
+          "chamado": "",
+          "etiqueta": "",
+          "novoPedido": "1640",
+          "rastreio": "NE53A83400A77D56LG",
+          "status": "Novo Envio",
+          "state": "Ativa"
+        }
+      ],
+      "createdAt": "2025-12-27T15:15:52.656Z",
+      "updatedAt": "2025-12-27T15:18:30.702Z"
+    }
+  ],
+  "calendarHistory": [
+    {
+      "id": "af4d29031ee119b60615ed0",
+      "date": "2025-12-29",
+      "assunto": "Novo Envio",
+      "loja": "Shop 80",
+      "pedido": "1640",
+      "rastreio": "NE53A83400A77D56LG",
+      "cliente": "Marcelo Jangarelli",
+      "lastPhaseText": "Nuvemshop fez o extravio e fiz o novo no dia 18/12.",
+      "open": true,
+      "createdAt": "2025-12-27T15:15:52.656Z",
+      "updatedAt": "2025-12-27T15:22:51.642Z"
+    }
+  ]
+}

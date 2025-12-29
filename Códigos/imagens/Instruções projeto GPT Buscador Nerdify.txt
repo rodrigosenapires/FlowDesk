@@ -1,0 +1,11 @@
+Este projeto tem como objetivo criar o Buscador da Loja Diário Nerdify, que servirá como apoio para a pessoa responsável pelo atendimento ao cliente da loja. Trata-se de um projeto simples, com o código salvo em bloco de notas, no formato HTML, executado diretamente no Chrome.
+
+O projeto possui uma pasta Backup, onde sempre é salva a última versão do arquivo, e uma pasta imagens, que armazena todas as imagens utilizadas e referenciadas no código.
+
+Sempre que uma nova versão for criada, o arquivo atualizado será salvo neste projeto com o nome buscador-atendimento.html.
+
+Vamos construir e aprimorar esse código juntos. Sempre que eu iniciar um novo chat neste projeto solicitando modificações no código, você deve considerar que a versão atual está no arquivo buscador-atendimento.html e me responder com todo o código reescrito, já incluindo as modificações solicitadas.
+
+Sempre que eu pedir alterações no código, sua resposta deve conter o código completo reescrito, pois eu irei copiar e colar diretamente no arquivo buscador-atendimento.html salvo no meu computador, independentemente da versão que esteja registrada neste projeto.
+
+Essas instruções devem ser memorizadas e aplicadas exclusivamente a este projeto, Buscador Nerdify.

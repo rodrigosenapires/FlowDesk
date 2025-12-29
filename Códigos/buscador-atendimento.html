@@ -1,0 +1,1229 @@
+﻿<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Buscador de Respostas e Solu&ccedil;&otilde;es</title>
+  <link rel="stylesheet" href="styles.css">
+  </head>
+
+<body>
+  <header>
+    <div class="wrap">
+      <div class="toprow">
+        <div class="brandleft">
+          <div class="appLogo" aria-label="Logo do app">
+            <img class="logoDark" src="../Extras/logo/logo-fundo-escuro.png" alt="Buscador de Solu&ccedil;&otilde;es">
+            <img class="logoLight" src="../Extras/logo/logo-fundo-claro.png" alt="Buscador de Solu&ccedil;&otilde;es">
+          </div>
+        </div>
+
+        <div class="brandright">
+          <div class="scrollBtns">
+            <button class="hambBtn" id="openDrawerBtn" title="Menu">
+              <div class="hambIcon" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+            </button>
+            <button class="themeBtn" id="orderLookupBtn" type="button" title="Buscar pedido" aria-label="Buscar pedido">
+              <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
+                <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
+                <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
+              </svg>
+            </button>
+            <button class="themeBtn quickLinkBtn" id="sakChatBtn" type="button" data-quick-link="sakChat" title="SAK" aria-label="SAK">
+              <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
+                <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
+              </svg>
+            </button>
+            <button class="themeBtn quickLinkBtn" id="metaInboxBtn" type="button" data-quick-link="metaInbox" title="Meta" aria-label="Meta">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="4" width="16" height="16" rx="5"></rect>
+                <circle cx="12" cy="12" r="4"></circle>
+                <circle cx="17" cy="7" r="1.2"></circle>
+              </svg>
+            </button>
+            <button class="themeBtn quickLinkBtn" id="emailMenuBtn" type="button" data-quick-link="emailMenu" title="E-mail" aria-label="E-mail">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="6" width="18" height="12" rx="2"></rect>
+                <path d="M3 8l9 6 9-6"></path>
+              </svg>
+            </button>
+            <button class="themeBtn quickLinkBtn" id="storeLinksBtn" type="button" data-quick-link="storeLinks" title="Lojas" aria-label="Lojas">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 10h18"></path>
+                <path d="M4 10l2-6h12l2 6"></path>
+                <path d="M6 10v8"></path>
+                <path d="M18 10v8"></path>
+                <rect x="9" y="14" width="6" height="4" rx="1"></rect>
+              </svg>
+            </button>
+            <div class="themeBtn" id="themeToggleBtn" title="Alternar tema"><span id="themeIcon"></span></div>
+            <div class="themeBtn" id="backupMenuBtn" title="Backup">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="5" y="4" width="14" height="16" rx="2"></rect>
+                <rect x="8" y="4" width="8" height="5"></rect>
+                <rect x="8" y="13" width="8" height="6" rx="1"></rect>
+              </svg>
+            </div>
+            <div class="themeBtn" id="settingsBtn" title="Configurações" aria-label="Configurações">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.2a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.2a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.2a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8 1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"></path>
+              </svg>
+            </div>
+            <div class="themeBtn rightDrawerBtn" id="openRightDrawerBtn" title="Menu extra" aria-label="Menu extra" onclick="openRightDrawer()">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="14" rx="3"></rect>
+                <line x1="9" y1="5" x2="9" y2="19"></line>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="searchrowWrap">
+        <div class="searchrow" id="searchRow">
+          <button class="btn small filterBtn" id="searchFilterBtn" title="Filtros" aria-label="Filtros">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 4h18l-7 8v6l-4 2v-8z"></path>
+            </svg>
+          </button>
+          <div class="icon">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+            </svg>
+          </div>
+          <input id="search" type="text" placeholder="Digite uma palavra-chave (ex: troca, prazo, rastreio, pix, tamanho...)" style="flex:4;min-width:0;">
+          <button class="btn small" id="searchClearBtn">Limpar</button>
+        </div>
+        <div class="scrollBtns searchArrows">
+          <div class="scrollBtn" id="toTopBtn" title="Ir para o topo">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <polyline points="6 12 12 6 18 12"></polyline>
+              <line x1="12" y1="6" x2="12" y2="18"></line>
+            </svg>
+          </div>
+          <div class="scrollBtn" id="toBottomBtn" title="Ir para o final">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <polyline points="6 12 12 18 18 12"></polyline>
+              <line x1="12" y1="6" x2="12" y2="18"></line>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Drawer -->
+  <div class="drawerBackdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawerHd">
+      <h3>Menu personaliz&aacute;vel</h3>
+      <button class="btn small" id="closeDrawerBtn">Fechar</button>
+    </div>
+
+    <div class="drawerBd" id="drawerBd">
+      <!-- NAV (2 bot&otilde;es) -->
+      <div class="menuCard">
+        <div class="menuTop">
+          <div class="menuIcon"><div class="txt">&harr;</div></div>
+          <p class="menuTitle">Navega&ccedil;&atilde;o</p>
+        </div>
+
+        <div class="menuBtnsRow">
+          <button class="btn small" id="navAtalhosBtn">Buscador</button>
+          <button class="btn small" id="navToggleViewBtn">Tarefas Di&aacute;rias</button>
+        </div>
+      </div>
+
+      <!-- Inserir novo bot&atilde;o -->
+      <div class="menuCard" id="atalhosCreateCard">
+        <div class="menuTop">
+          <div class="menuIcon"><div class="txt">+</div></div>
+          <p class="menuTitle">Inserir novo bot&atilde;o</p>
+        </div>
+
+        <div class="formGrid">
+          <input id="newMenuBtnName" type="text" placeholder="Nome do bot&atilde;o" />
+          <input id="newMenuBtnIcon" type="text" placeholder="Endere&ccedil;o do &iacute;cone (opcional)" />
+          <div class="label">Enviar &iacute;cone (opcional)</div>
+          <input id="newMenuBtnIconFile" type="file" accept="image/*" />
+          <input id="newMenuBtnLink" type="text" placeholder="Link do bot&atilde;o" />
+          <button class="btn small primary" id="addMenuBtn">Adicionar</button>
+          <div class="note">Se o &iacute;cone ficar em branco, o bot&atilde;o usa as 2 primeiras letras do nome.</div>
+        </div>
+      </div>
+
+      <div id="drawerButtonsHost"></div>
+    </div>
+
+    <div class="pager" id="drawerPager" style="display:none;">
+      <button class="btn small" id="drawerPrev">&#x25C0;</button>
+      <div class="count" id="drawerPageInfo">P&aacute;gina 1/1</div>
+      <button class="btn small" id="drawerNext">&#x25B6;</button>
+    </div>
+  </aside>
+
+  <!-- Drawer (direita) -->
+  <div class="drawerBackdrop" id="rightDrawerBackdrop"></div>
+    <aside class="drawer drawerRight" id="rightDrawer">
+      <div class="drawerHd">
+        <h3>Menu extra</h3>
+        <button class="btn small" id="closeRightDrawerBtn">Fechar</button>
+      </div>
+      <div class="drawerBd">
+        <div class="menuCard productsMenuCard">
+          <div class="menuTop">
+            <div class="menuIcon">
+              <svg class="menuIconSvg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 5l2 2h6l2-2 3 2-2 4-2-1v9H8v-9l-2 1-2-4 3-2z"></path>
+              </svg>
+            </div>
+            <p class="menuTitle">Produtos</p>
+            <div class="menuTopActions">
+              <button class="btn small iconBtn menuManageBtn" type="button" data-quick-link-manage="productsExtra" data-quick-link-label="Produtos" title="Editar bot&otilde;es" aria-label="Editar bot&otilde;es">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+              </button>
+              <button class="btn small danger iconBtn menuManageBtn" type="button" data-quick-link-manage="productsExtra" data-quick-link-label="Produtos" title="Excluir bot&otilde;es" aria-label="Excluir bot&otilde;es">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 6h18"></path>
+                  <path d="M8 6V4h8v2"></path>
+                  <rect x="6" y="6" width="12" height="14" rx="2"></rect>
+                  <path d="M10 10v6"></path>
+                  <path d="M14 10v6"></path>
+                </svg>
+              </button>
+              <button class="btn small iconBtn menuAddBtn" type="button" data-quick-link="productsExtra" title="Produtos" aria-label="Adicionar link">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14"></path>
+                  <path d="M5 12h14"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="menuBtnsRow">
+            <button class="btn small" id="openSizeTablesBtn">Abrir tabelas</button>
+            <button class="btn small" id="openProductsBtn">Ver produtos</button>
+            <span class="stampsLinksRow" id="stampsLinksRow"></span>
+            <span class="extraLinksRow" id="productsExtraLinks"></span>
+          </div>
+        </div>
+        <div class="menuCard transportadorasCard">
+          <div class="menuTop">
+            <div class="menuIcon">
+              <svg class="menuIconSvg" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="8" width="10" height="7" rx="1"></rect>
+                <path d="M13 10h4l4 3v2h-8"></path>
+                <circle cx="7" cy="17" r="2"></circle>
+                <circle cx="18" cy="17" r="2"></circle>
+              </svg>
+            </div>
+            <p class="menuTitle">Transportadoras</p>
+            <div class="menuTopActions">
+              <button class="btn small iconBtn menuManageBtn" type="button" data-quick-link-manage="transportadorasExtra" data-quick-link-label="Transportadoras" title="Editar bot&otilde;es" aria-label="Editar bot&otilde;es">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+              </button>
+              <button class="btn small danger iconBtn menuManageBtn" type="button" data-quick-link-manage="transportadorasExtra" data-quick-link-label="Transportadoras" title="Excluir bot&otilde;es" aria-label="Excluir bot&otilde;es">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 6h18"></path>
+                  <path d="M8 6V4h8v2"></path>
+                  <rect x="6" y="6" width="12" height="14" rx="2"></rect>
+                  <path d="M10 10v6"></path>
+                  <path d="M14 10v6"></path>
+                </svg>
+              </button>
+              <button class="btn small iconBtn menuAddBtn" type="button" data-quick-link="transportadorasExtra" title="Transportadoras" aria-label="Adicionar link">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14"></path>
+                  <path d="M5 12h14"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="menuBtnsRow">
+            <span class="extraLinksRow" id="transportadorasExtraLinks"></span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  <!-- Modal: Produtos -->
+  <div class="miniOverlay" id="productsOverlay">
+    <div class="miniModal productsModal">
+      <div class="mh">
+        <h3>Produtos</h3>
+        <button class="btn small" id="productsCloseBtn">Voltar</button>
+      </div>
+        <div class="mb">
+          <div class="productsGrid" id="productsGrid"></div>
+        </div>
+    </div>
+  </div>
+
+  <!-- Modal: Gerenciar produtos -->
+  <div class="miniOverlay" id="productManageOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Inserir produto</h3>
+        <button class="btn small" id="productManageCloseBtn">Voltar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Loja</div>
+            <select id="productManageStore"></select>
+            <div class="fieldError" id="productManageStoreError"></div>
+          </div>
+          <div>
+            <div class="label">Nome do produto</div>
+            <input id="productManageName" type="text" placeholder="Ex: Camisetas" />
+            <div class="fieldError" id="productManageNameError"></div>
+          </div>
+          <div>
+            <div class="label">Valor</div>
+            <input id="productManagePrice" type="text" placeholder="Ex: R$82,90" />
+            <div class="fieldError" id="productManagePriceError"></div>
+          </div>
+          <div>
+            <div class="label">Link das estampas</div>
+            <input id="productManageStampsUrl" type="text" placeholder="Cole o link das estampas" />
+            <div class="fieldError" id="productManageStampsError"></div>
+          </div>
+          <div>
+            <div class="label">Especifica&ccedil;&otilde;es</div>
+            <div class="specsAddRow">
+              <input id="productManageSpecsInput" type="text" placeholder="Ex: 100% Algod&atilde;o" />
+              <button class="btn small" type="button" id="productManageSpecsAddBtn">Adicionar</button>
+            </div>
+            <div class="specsList" id="productManageSpecsList"></div>
+            <div class="fieldError" id="productManageSpecsError"></div>
+          </div>
+          <div>
+            <div class="label">Cores</div>
+            <div class="colorPickerList" id="productManageColorsList"></div>
+            <div class="fieldError" id="productManageColorsError"></div>
+          </div>
+          <div>
+            <div class="label">Imagem da tabela</div>
+            <input id="productManageTableFile" type="file" accept="image/*" />
+            <div class="fieldError" id="productManageTableError"></div>
+          </div>
+          <button class="btn small" type="button" id="productManageTableClearBtn">Remover imagem da tabela</button>
+          <div class="note" id="productManageError" style="display:none;color:#ff6b6b;font-weight:800;"></div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn primary" id="productManageSaveBtn">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+    <!-- Modal: Detalhes do produto -->
+    <div class="miniOverlay" id="productDetailsOverlay">
+      <div class="miniModal productModal">
+        <div class="mh">
+          <h3 id="productDetailsTitle">Detalhes do produto</h3>
+          <button class="btn small" id="productDetailsCloseBtn">Voltar</button>
+        </div>
+        <div class="mb">
+        <div class="productDetailsTopActions">
+          <div class="productDetailsStore" id="productDetailsStore"></div>
+          <a class="btn small" id="productDetailsStampsBtn" href="#" target="_blank" rel="noopener noreferrer">Estampas do produto</a>
+        </div>
+          <div class="productDetailsMeta" id="productDetailsMeta"></div>
+          <div class="note" id="productDetailsEmpty" style="display:none;">Detalhes ainda n&atilde;o cadastrados para este produto.</div>
+
+          <div class="productDetailsContent" id="productDetailsContent">
+            <div class="productDetailsSection">
+              <div class="productDetailsHeader">
+                <div class="label" style="margin:0;">Especifica&ccedil;&otilde;es</div>
+                <button class="btn small" id="copyProductSpecsBtn">Copiar especifica&ccedil;&otilde;es</button>
+              </div>
+              <div class="productDetailsGroup">
+                <div class="productDetailsGroupTitle">Informa&ccedil;&otilde;es do Produto</div>
+                <ul class="productDetailsList" id="productDetailsSpecs"></ul>
+              </div>
+            </div>
+
+            <div class="productDetailsSection">
+              <div class="productDetailsHeader">
+                <div class="label" style="margin:0;">Cores da Tradicional</div>
+                <button class="btn small" id="copyProductColorsBtn">Copiar nomes das cores</button>
+              </div>
+              <div class="productColorsList" id="productColorsList"></div>
+            </div>
+
+            <div class="productDetailsSection" id="productDetailsVideoSection">
+              <div class="productDetailsHeader">
+                <div class="label" style="margin:0;" id="productVideoTitle">V&iacute;deo do produto</div>
+              </div>
+              <div class="productVideoRow">
+                <input class="productVideoInput" id="productVideoWhatsapp" type="text" placeholder="WhatsApp do cliente (ex: 21999999999)">
+                <button class="btn small" id="productVideoSendBtn">Enviar v&iacute;deo</button>
+              </div>
+              <div class="note">O link do v&iacute;deo ser&aacute; enviado via WhatsApp para o n&uacute;mero informado.</div>
+            </div>
+
+            <div class="productDetailsSection" id="productDetailsTableSection">
+              <div class="productDetailsHeader">
+                <div class="label" style="margin:0;">Tabela do produto</div>
+                <button class="btn small" id="copyProductTableBtn">Copiar imagem</button>
+              </div>
+              <img class="productTableImg" id="productDetailsTableImg" alt="Tabela do produto" loading="lazy">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <main>
+    <div class="viewTitleRow">
+      <div class="viewTitle" id="viewTitleText">Buscador de Solu&ccedil;&otilde;es</div>
+    </div>
+    <div class="viewStack" id="viewStack">
+      <!-- ===== VIEW: BUSCADOR ===== -->
+      <div id="viewSearch" class="viewScreen isActive">
+      <div class="row" style="justify-content:space-between; margin-bottom:10px; align-items:center;">
+        <button class="btn small" id="openQuestionModalBtn">Adicionar pergunta</button>
+        <button class="btn small" id="goToTasksBtn">Ir para as Tarefas Di&aacute;rias &rarr;</button>
+      </div>
+      <div class="grid single">
+        <!-- Resultados -->
+        <section class="card">
+          <div class="hd">
+            <h2>Resultados</h2>
+            <div class="count" id="count"></div>
+          </div>
+          <div class="bd">
+            <div class="results" id="results"></div>
+            <div class="cardsNav" id="cardsNav"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ===== VIEW: TAREFAS DI&Aacute;RIAS ===== -->
+    <div id="viewTasks" class="viewScreen">
+      <div class="taskGrid">
+        <div class="taskColumn">
+          <button class="btn small" id="openTaskModalBtn">Adicionar tarefa</button>
+          <!-- Lista -->
+          <aside class="card">
+            <div class="hd">
+              <h2>Lista de tarefas</h2>
+              <div class="count" id="tasksCount"></div>
+            </div>
+            <div class="bd">
+              <div class="taskList" id="tasksList"></div>
+
+              <div class="pager" id="tasksPager" style="margin-top:12px; justify-content:center;">
+                <button class="btn small" id="tasksNextBtn">Ver pr&oacute;xima tarefa</button>
+                <button class="btn small" id="tasksAllBtn">Ver todas as tarefas</button>
+                <button class="btn small" id="tasksSingleBtn" style="display:none;">Exibir apenas uma tarefa por vez</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="taskColumn">
+          <div class="row" style="justify-content:flex-end; gap:10px; flex-wrap:wrap;">
+            <button class="btn small hasIcon" id="openCalendarBtn">
+             <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+               <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+               <line x1="8" y1="2.5" x2="8" y2="6"></line>
+               <line x1="16" y1="2.5" x2="16" y2="6"></line>
+               <line x1="3" y1="10" x2="21" y2="10"></line>
+             </svg>
+             <span>Expandir calend&aacute;rio</span>
+            </button>
+            <button class="btn small" id="backToSearchBtn">&larr; Voltar para o Buscador</button>
+          </div>
+          <!-- Resumo do calendário -->
+          <section class="card">
+            <div class="hd">
+              <h2>Resumo do calend&aacute;rio</h2>
+              <div class="count" id="miniCalendarLabel"></div>
+            </div>
+            <div class="bd">
+              <div class="miniCalendarGrid" id="miniCalendarGrid"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cadastro de pergunta -->
+  <div class="miniOverlay" id="questionOverlay">
+    <div class="miniModal questionModal">
+      <div class="mh">
+        <h3 id="questionModalTitle">Cadastrar pergunta</h3>
+        <div class="count" id="modeLabel"></div>
+        <button class="btn small" id="questionCloseBtn">Voltar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <!-- 1) Pergunta / Resposta / Links (para DM) -->
+          <div>
+            <div class="label">Escolha a loja <span class="count">obrigat&oacute;rio</span></div>
+            <select id="qStore" required><option value="ALL" selected>Todas as lojas</option><option value="Di&aacute;rio Nerdify">Di&aacute;rio Nerdify</option><option value="Shop 80">Shop 80</option></select>
+          </div>
+
+          <div>
+            <div class="label">
+              <span>Pergunta</span>
+              <span class="count" id="qCount">0/140</span>
+            </div>
+            <input id="q" type="text" maxlength="140" placeholder="Ex: Como funciona troca?" />
+          </div>
+
+          <div>
+            <div class="label">Resposta</div>
+            <textarea id="r" placeholder="Texto principal que voc&ecirc; envia no atendimento..."></textarea>
+          </div>
+
+          <div>
+            <div class="label">Links (para DM) <span class="count">opcional</span></div>
+            <textarea id="links" placeholder="Texto com links para mandar por mensagem (DM)..."></textarea>
+          </div>
+
+          <hr class="dashDivider">
+
+          <!-- 2) Links da Pergunta -->
+          <div class="row" style="align-items:center; gap:10px;">
+            <div class="label" style="margin:0;">Links da Pergunta</div>
+            <button class="btn small" id="addQuestionLinkBtn">+ Adicionar link</button>
+          </div>
+          <div class="linkRows" id="questionLinksHost"></div>
+
+          <hr class="dashDivider">
+
+          <!-- 3) Imagens -->
+          <div>
+            <div class="row" style="align-items:center;">
+              <div class="label" style="margin:0;">Imagens da Pergunta <span class="count">opcional</span></div>
+            </div>
+
+            <div class="qImgsPreviewWrap" style="margin-top:10px;">
+              <div class="qImgsPreviewTop">
+                <div class="count" id="qImgsCount">0 arquivo(s)</div>
+                <div class="btnrow">
+                  <button class="btn small" id="qPickImgsBtn">Escolher imagens</button>
+                  <button class="btn small" id="qClearImgsBtn">Limpar</button>
+                </div>
+              </div>
+
+              <div class="qImgsGrid" id="qImgsPreviewGrid"></div>
+              <input id="qImgsFile" type="file" accept="image/*" multiple style="display:none">
+            </div>
+          </div>
+
+          <hr class="dashDivider">
+
+          <!-- 4) O que fazer -->
+          <div class="row" style="align-items:center;">
+            <div class="label" style="margin:0;">O que fazer</div>
+            <button class="btn small" id="addStepBtn">+ Adicionar passo</button>
+          </div>
+          <div id="stepsHost"></div>
+
+          <hr class="dashDivider">
+
+          <!-- 5) Tags -->
+          <div>
+            <div class="label">Tags <span class="count">separe por v&iacute;rgula</span></div>
+            <input id="tags" type="text" placeholder="Ex: instagram, link, colecao, whatsapp" />
+          </div>
+
+          <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:6px;">
+            <button class="btn primary" id="saveBtn">Salvar</button>
+          </div>
+
+          <input id="filePicker" type="file" accept=".txt,application/json,text/plain" style="display:none" />
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cadastro de tarefa -->
+  <div class="miniOverlay" id="taskOverlay">
+    <div class="miniModal taskModal">
+      <div class="mh">
+        <h3>Adicionar tarefa</h3>
+        <button class="btn small" id="taskCloseBtn">Voltar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Data inicial <span class="count">obrigat&oacute;rio</span></div>
+            <input id="tData" type="date" />
+          </div>
+
+          <div>
+            <div class="label">Cliente <span class="count">obrigat&oacute;rio</span></div>
+            <input id="tCliente" type="text" placeholder="Nome do cliente" />
+          </div>
+
+          <div>
+            <div class="label">N&uacute;mero do WhatsApp <span class="count">obrigat&oacute;rio</span></div>
+            <input id="tWhatsapp" type="text" placeholder="Ex: (11) 99674-1444" />
+          </div>
+
+          <div>
+            <div class="label">Loja <span class="count">obrigat&oacute;rio</span></div>
+            <select id="tLoja">
+              <option value="Todas as Lojas">Todas as Lojas</option>
+              <option value="Di&aacute;rio Nerdify">Di&aacute;rio Nerdify</option>
+              <option value="Shop 80">Shop 80</option>
+            </select>
+          </div>
+
+          <div>
+            <div class="label">Pedido <span class="count">obrigat&oacute;rio</span></div>
+            <input id="tPedido" type="text" placeholder="N&uacute;mero do pedido" />
+          </div>
+
+          <div>
+            <div class="label">Assunto <span class="count">obrigat&oacute;rio</span></div>
+            <input id="tAssunto" type="text" placeholder="Ex: atraso, troca, defeito..." />
+          </div>
+
+          <hr class="dashDivider">
+          <div class="row" style="gap:10px; flex-wrap:wrap;">
+            <button class="btn" id="tasksClearBtn">Limpar</button>
+            <button class="btn primary" id="tasksSaveBtn">Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </main>
+
+  <footer>
+    <div>Desenvolvido por Rodrigo Sena Pires - 2025</div>
+  </footer>
+
+  <!-- Modal (O que fazer) -->
+  <div class="overlay" id="overlay">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="mh">
+        <h3>O que fazer</h3>
+</div>
+      <div class="mb" id="modalBody"></div>
+      <div class="mf">
+        <button class="btn small" id="prevStepBtn">Voltar</button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn small" id="nextStepBtn">Pr&oacute;ximo passo</button>
+          <button class="btn small primary" id="okModalBtn">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Editar bot&atilde;o do menu -->
+  <div class="miniOverlay" id="menuEditOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Editar bot&atilde;o do menu</h3>
+        <button class="btn small" id="closeMenuEditBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Nome do bot&atilde;o</div>
+            <input type="text" id="menuEditName" placeholder="Nome" />
+          </div>
+          <div>
+            <div class="label">Endere&ccedil;o do &iacute;cone (opcional)</div>
+            <input type="text" id="menuEditIcon" placeholder="https://..." />
+          </div>
+          <div>
+            <div class="label">Enviar &iacute;cone (opcional)</div>
+            <input type="file" id="menuEditIconFile" accept="image/*" />
+          </div>
+
+          <hr class="dashDivider">
+
+          <div class="row" style="align-items:center;">
+            <div class="label" style="margin:0;">Links do bot&atilde;o</div>
+            <button class="btn small" id="menuEditAddLink">+ Adicionar link</button>
+          </div>
+          <div class="linkRows" id="menuEditLinksHost"></div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn danger" id="menuEditDeleteBtn">Remover</button>
+        <button class="btn primary" id="menuEditSaveBtn">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Op&ccedil;&otilde;es de importa&ccedil;&atilde;o -->
+  <div class="miniOverlay" id="importChoiceOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Importa&ccedil;&atilde;o</h3>
+        <button class="btn small" id="importChoiceCloseX">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="note" style="font-size:13px;">
+          Importa&ccedil;&atilde;o: o arquivo tamb&eacute;m cont&eacute;m os bot&otilde;es do menu lateral.<br><br>
+          <b>Op&ccedil;&atilde;o 1</b> = Mesclar com os bot&otilde;es atuais<br>
+          <b>Op&ccedil;&atilde;o 2</b> = Substituir os bot&otilde;es atuais<br>
+          <b>Cancelar importa&ccedil;&atilde;o</b> = N&atilde;o importar nada
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn danger" id="importCancelBtn">Cancelar importa&ccedil;&atilde;o</button>
+        <button class="btn" id="importOption2Btn">Op&ccedil;&atilde;o 2</button>
+        <button class="btn primary" id="importOption1Btn">Op&ccedil;&atilde;o 1</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Buscar pedido (Nuvemshop) -->
+  <div class="miniOverlay" id="orderLookupOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Buscar pedido (Nuvemshop)</h3>
+        <button class="btn small" id="closeOrderLookupBtn">Voltar</button>
+      </div>
+      <div class="mb">
+        <div class="orderLookupMenu" id="orderLookupMenu">
+          <div class="menuCard">
+            <div class="menuTop orderLookupDn">
+              <div class="menuIcon logoDn"><img alt="Di&aacute;rio Nerdify" id="orderLookupLogoDn"></div>
+              <p class="menuTitle">Di&aacute;rio Nerdify</p>
+            </div>
+            <div class="menuBtnsRow">
+              <button class="btn small" data-order-action="vendas" data-order-store="Di&aacute;rio Nerdify">Vendas</button>
+              <button class="btn small" data-order-action="produtos" data-order-store="Di&aacute;rio Nerdify">Produtos</button>
+              <button class="btn small" data-order-action="envios" data-order-store="Di&aacute;rio Nerdify">Envios</button>
+              <button class="btn small" data-order-action="mensagens" data-order-store="Di&aacute;rio Nerdify">Mensagens</button>
+              <button class="btn small" data-order-action="cupons" data-order-store="Di&aacute;rio Nerdify">Cupons de desconto</button>
+              <button class="btn small" data-order-action="novo" data-order-store="Di&aacute;rio Nerdify">Novo Pedido</button>
+            </div>
+          </div>
+          <div class="menuCard">
+            <div class="menuTop">
+              <div class="menuIcon"><img alt="Shop 80" id="orderLookupLogoShop80"></div>
+              <p class="menuTitle">Shop 80</p>
+            </div>
+            <div class="menuBtnsRow">
+              <button class="btn small" data-order-action="vendas" data-order-store="Shop 80">Vendas</button>
+              <button class="btn small" data-order-action="produtos" data-order-store="Shop 80">Produtos</button>
+              <button class="btn small" data-order-action="envios" data-order-store="Shop 80">Envios</button>
+              <button class="btn small" data-order-action="mensagens" data-order-store="Shop 80">Mensagens</button>
+              <button class="btn small" data-order-action="cupons" data-order-store="Shop 80">Cupons de desconto</button>
+              <button class="btn small" data-order-action="novo" data-order-store="Shop 80">Novo Pedido</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="formGrid" id="orderLookupFormWrap" style="display:none;">
+          <div>
+            <div class="label">Escolha a loja</div>
+            <select id="orderLookupStore">
+              <option value="" selected>Escolha a loja</option>
+              <option value="Di&aacute;rio Nerdify">Di&aacute;rio Nerdify</option>
+              <option value="Shop 80">Shop 80</option>
+            </select>
+          </div>
+
+          <div id="orderLookupDetails" style="display:none;">
+            <div class="label">Buscar por</div>
+            <select id="orderLookupType">
+              <option value="order">N&uacute;mero do pedido</option>
+              <option value="email">E-mail</option>
+              <option value="name">Nome do cliente</option>
+            </select>
+
+            <div style="height:10px;"></div>
+
+            <div class="label">N&uacute;mero do pedido</div>
+            <input id="orderLookupQuery" type="text" placeholder="Ex: 1701" />
+          </div>
+        </div>
+      </div>
+      <div class="mf" style="justify-content:space-between;">
+        <button class="btn" id="orderLookupCancelBtn">Fechar</button>
+        <button class="btn primary" id="orderLookupGoBtn">Buscar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nova/Editar fase (apenas pelo cart&atilde;o de tarefa) -->
+  <div class="miniOverlay" id="phaseEditOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3 id="phaseEditTitle">Nova fase</h3>
+        <button class="btn small" id="closePhaseEditBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div style="grid-column:1 / -1;">
+            <div class="label">Descri&ccedil;&atilde;o da fase</div>
+            <textarea id="phaseEditText" rows="5" placeholder="Descreva esta fase..."></textarea>
+          </div>
+
+          <div>
+            <div class="label">Data inicial da fase</div>
+            <input type="date" id="phaseEditDate" />
+          </div>
+
+          <div>
+            <div class="label">Prazo de resolu&ccedil;&atilde;o da fase</div>
+            <input type="date" id="phaseEditPrazo" />
+          </div>
+
+          <div>
+            <div class="label">N&uacute;mero do Chamado Nuvemshop</div>
+            <input type="text" id="phaseEditChamado" placeholder="Opcional" />
+          </div>
+
+          <div>
+            <div class="label">Etiqueta Reversa</div>
+            <input type="text" id="phaseEditEtiqueta" placeholder="Opcional" />
+          </div>
+
+          <div>
+            <div class="label">Status</div>
+            <select id="phaseEditStatus"></select>
+          </div>
+
+          <div>
+            <div class="label">Novo pedido</div>
+            <input type="text" id="phaseEditNovoPedido" placeholder="Se houver troca/novo envio" />
+          </div>
+          <div>
+            <div class="label">Rastreio da fase</div>
+            <input type="text" id="phaseEditRastreio" placeholder="Opcional" />
+          </div>
+        </div>
+      </div>
+      <div class="mf" style="justify-content:space-between;">
+        <button class="btn danger iconBtn" id="phaseEditDeleteBtn" title="Excluir" aria-label="Excluir">
+          <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 6h18"></path>
+            <path d="M8 6V4h8v2"></path>
+            <rect x="6" y="6" width="12" height="14" rx="2"></rect>
+            <path d="M10 10v6"></path>
+            <path d="M14 10v6"></path>
+          </svg>
+        </button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+          <button class="btn" id="phaseEditCancelBtn">Cancelar</button>
+          <button class="btn primary" id="phaseEditSaveBtn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Calend&aacute;rio (visualiza&ccedil;&atilde;o) -->
+  <div class="miniOverlay" id="calendarOverlay">
+    <div class="miniModal calModal">
+      <div class="mh">
+        <h3>Calend&aacute;rio</h3>
+        <div class="row" style="gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
+          <button class="btn small" id="calPrevMonth">&#x25C0;</button>
+          <div class="count" id="calMonthLabel" style="min-width:160px; text-align:center;">M&ecirc;s/Ano</div>
+          <button class="btn small" id="calNextMonth">&#x25B6;</button>
+          <button class="btn small" id="calTodayBtn">Hoje</button>
+          <button class="btn small primary" id="closeCalendarBtn">Fechar</button>
+        </div>
+      </div>
+      <div class="mb">
+        <div class="calLayout">
+          <div>
+            <div class="calWeekHeader" id="calWeekHeader"></div>
+            <div class="calGrid" id="calGrid"></div>
+          </div>
+
+          <div class="calSide" id="calSide">
+            <div class="label" id="calDayTitle" style="margin:0 0 10px 0;">Selecione um dia</div>
+            <div class="calDayDetails" id="calDayDetails"></div>
+            <button class="btn small danger" id="calClearDayBtn" style="width:100%; margin-top:10px; display:none;">Limpar dia</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <!-- Modal: Tabelas de medidas -->
+  <div class="miniOverlay" id="sizeTablesOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Tabelas de medidas</h3>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn small" id="openAddSizeTableBtn">Adicionar tabela</button>
+          <button class="btn small" id="sizeTablesCloseBtn">Voltar</button>
+        </div>
+      </div>
+      <div class="mb">
+        <div class="note">Envie a imagem da sua tabela de medidas.</div>
+        <div class="sizeTablesGrid" id="sizeTablesGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Enviar imagem da tabela -->
+  <div class="miniOverlay" id="sizeTableUploadOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3 id="sizeTableUploadTitle">Enviar imagem</h3>
+        <button class="btn small" id="sizeTableUploadCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Nome da tabela</div>
+            <input id="sizeTableUploadName" type="text" placeholder="Ex: Camisetas" />
+          </div>
+          <div>
+            <div class="label">Imagem da tabela</div>
+            <input id="sizeTableUploadFile" type="file" accept="image/*" />
+          </div>
+          <div class="note" id="sizeTableUploadHint">Selecione a imagem da tabela.</div>
+          <div class="note" id="sizeTableUploadError" style="display:none;color:#ff6b6b;font-weight:800;"></div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn primary" id="sizeTableUploadSaveBtn">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Filtros do Buscador -->
+  <div class="miniOverlay" id="searchFiltersOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Filtros do buscador</h3>
+        <button class="btn small" id="searchFiltersCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Loja</div>
+            <select id="searchStore" title="Loja">
+              <option value="" selected>Escolha a loja</option>
+              <option value="Di&aacute;rio Nerdify">Di&aacute;rio Nerdify</option>
+              <option value="Shop 80">Shop 80</option>
+            </select>
+          </div>
+          <div>
+            <div class="label">Tags</div>
+            <div class="tagFilters" id="searchTagList"></div>
+            <div class="formGrid searchTagForm">
+              <input id="searchTagNew" type="text" placeholder="Adicionar nova tag" />
+              <button class="btn small" type="button" id="addSearchTagBtn">Adicionar tag</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="searchFiltersClearBtn">Limpar filtros</button>
+        <button class="btn primary" id="searchFiltersApplyBtn">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Filtros de tarefas -->
+  <div class="miniOverlay" id="tasksFiltersOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Filtros de tarefas</h3>
+        <button class="btn small" id="tasksFiltersCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Loja</div>
+            <select id="tasksSearchStore" title="Loja">
+              <option value="" selected>Todas as lojas</option>
+              <option value="Di&aacute;rio Nerdify">Di&aacute;rio Nerdify</option>
+              <option value="Shop 80">Shop 80</option>
+            </select>
+          </div>
+          <div>
+            <div class="label">Per&iacute;odo</div>
+            <select id="tasksSearchPeriod" title="Per&iacute;odo">
+              <option value="ALL" selected>Todos</option>
+              <option value="TODAY">Hoje</option>
+              <option value="NEXT7">Pr&oacute;ximos 7 dias</option>
+              <option value="NEXT30">Pr&oacute;ximos 30 dias</option>
+              <option value="MONTH">M&ecirc;s atual</option>
+              <option value="CUSTOM">Personalizado</option>
+            </select>
+          </div>
+          <div id="tasksSearchPeriodCustom" style="display:none;">
+            <div class="label">Per&iacute;odo personalizado</div>
+            <div class="row" style="gap:10px; flex-wrap:wrap;">
+              <input id="tasksSearchPeriodFrom" type="date" style="min-width:140px;">
+              <input id="tasksSearchPeriodTo" type="date" style="min-width:140px;">
+            </div>
+          </div>
+          <div>
+            <div class="label">Status da fase</div>
+            <select id="tasksSearchStatus" title="Status da fase"></select>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="tasksFiltersClearBtn">Limpar filtros</button>
+        <button class="btn primary" id="tasksFiltersApplyBtn">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Fechar app -->
+  <div class="miniOverlay" id="closeAppOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Fechar app</h3>
+      </div>
+      <div class="mb">
+        <div class="note" style="font-size:13px;">
+          O que voc&ecirc; deseja fazer antes de fechar?
+        </div>
+      </div>
+      <div class="mf" style="justify-content:flex-end;">
+        <button class="btn" id="closeAppSaveBtn">Salvar backup e fechar</button>
+        <button class="btn danger" id="closeAppCloseBtn">Fechar sem salvar</button>
+        <button class="btn" id="closeAppCancelBtn">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Backup -->
+  <div class="miniOverlay" id="backupOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Backup</h3>
+        <button class="btn small" id="backupCloseBtn">Fechar</button>
+      </div>
+      <div class="mb" style="text-align:center;">
+        <div class="note" style="font-size:13px; text-align:center;">
+          Escolha uma op&ccedil;&atilde;o de backup:
+        </div>
+      </div>
+      <div class="mf" style="justify-content:flex-end;">
+        <button class="btn" id="exportBtn">Exportar Backup</button>
+        <button class="btn" id="importBtn">Importar Backup</button>
+        <button class="btn" id="backupDoneBtn">Backup Tarefas Concluídas</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Configurações -->
+  <div class="miniOverlay" id="settingsOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Configurações</h3>
+        <button class="btn small" id="settingsCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <button class="btn small" id="openStoresConfigBtn">Informações das lojas</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cadastro de lojas -->
+  <div class="miniOverlay" id="storesConfigOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Cadastro de lojas</h3>
+        <button class="btn small" id="storesConfigCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid" id="storesConfigHost"></div>
+      </div>
+      <div class="mf" style="justify-content:space-between;">
+        <button class="btn" id="storesConfigAddBtn">+ Adicionar loja</button>
+        <button class="btn primary" id="storesConfigSaveBtn">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cadastro de link (atalhos) -->
+  <div class="miniOverlay" id="quickLinkOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Cadastrar link</h3>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div class="label" id="quickLinkLabel">Link</div>
+          <input id="quickLinkTitleInput" type="text" placeholder="Titulo do link" />
+          <input id="quickLinkUrlInput" type="text" placeholder="Cole o link aqui" />
+          <div class="note" id="quickLinkNote">Exemplo: https://meusite.com.br</div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="quickLinkCancelBtn">Cancelar</button>
+        <button class="btn primary" id="quickLinkSaveBtn">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Lista de links (atalhos) -->
+  <div class="miniOverlay" id="quickLinksListOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3 id="quickLinksListTitle">Links</h3>
+        <button class="btn small" id="quickLinksListCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid" id="quickLinksListHost"></div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="quickLinksListAddBtn">+ Adicionar link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Links da Nuvemshop -->
+  <div class="miniOverlay" id="nuvemLinksOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Cadastrar links da Nuvemshop</h3>
+        <button class="btn small" id="nuvemLinksCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="orderLookupMenu" id="nuvemLinksHost"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Editar link Nuvemshop -->
+  <div class="miniOverlay" id="nuvemEditOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3 id="nuvemEditTitle">Editar link</h3>
+        <button class="btn small" id="nuvemEditCloseBtn">Voltar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div class="label">T&iacute;tulo do bot&atilde;o</div>
+          <input id="nuvemEditLabelInput" type="text" placeholder="T&iacute;tulo do bot&atilde;o" />
+          <div class="label">Link</div>
+          <input id="nuvemEditUrlInput" type="text" placeholder="Cole o link aqui" />
+          <div class="note">Exemplo: https://meusite.com.br</div>
+        </div>
+      </div>
+      <div class="mf" style="justify-content:space-between;">
+        <button class="btn danger iconBtn" id="nuvemEditDeleteBtn" title="Excluir" aria-label="Excluir">
+          <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 6h18"></path>
+            <path d="M8 6V4h8v2"></path>
+            <rect x="6" y="6" width="12" height="14" rx="2"></rect>
+            <path d="M10 10v6"></path>
+            <path d="M14 10v6"></path>
+          </svg>
+        </button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+          <button class="btn" id="nuvemEditCancelBtn">Fechar</button>
+          <button class="btn primary" id="nuvemEditSaveBtn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Links das lojas -->
+  <div class="miniOverlay" id="storeLinksOverlay">
+    <div class="miniModal storeLinksModal">
+      <div class="mh">
+        <h3>Lojas</h3>
+        <button class="btn small" id="storeLinksCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="storeLinksGrid" id="storeLinksGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Meta -->
+  <div class="miniOverlay" id="metaInboxOverlay">
+    <div class="miniModal metaInboxModal">
+      <div class="mh">
+        <h3>Responder aos clientes nas redes sociais</h3>
+        <button class="btn small" id="metaInboxCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="storeLinksGrid" id="metaInboxGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: E-mails -->
+  <div class="miniOverlay" id="emailMenuOverlay">
+    <div class="miniModal metaInboxModal">
+      <div class="mh">
+        <h3>E-mails</h3>
+        <button class="btn small" id="emailMenuCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="orderLookupMenu" id="emailMenuHost"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Concluir tarefa -->
+  <div class="miniOverlay" id="closeTaskOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Concluir tarefa</h3>
+        <button class="btn small" id="closeTaskCancelBtn">Cancelar</button>
+      </div>
+      <div class="mb">
+        <div class="note" style="font-size:13px;">
+          Deseja criar uma nova fase ou encerrar a tarefa?
+        </div>
+      </div>
+      <div class="mf" style="justify-content:flex-end;">
+        <button class="btn" id="closeTaskNewPhaseBtn">Criar nova fase</button>
+        <button class="btn danger" id="closeTaskDoneBtn">Encerrar tarefa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Avisos -->
+  <div class="miniOverlay" id="popupOverlay">
+    <div class="miniModal popupModal">
+      <div class="mh">
+        <h3 id="popupTitle">Aviso</h3>
+      </div>
+      <div class="mb">
+        <div class="popupMessage" id="popupMessage"></div>
+        <div class="popupInputWrap" id="popupInputWrap" style="display:none;">
+          <input class="popupInput" id="popupInput" type="text" autocomplete="off">
+        </div>
+      </div>
+      <div class="mf" id="popupActions" style="justify-content:flex-end;">
+        <button class="btn" id="popupCancelBtn">Cancelar</button>
+        <button class="btn primary" id="popupOkBtn">OK</button>
+      </div>
+    </div>
+  </div>
+
+<script src="app.js"></script>
+
+  </body>
+</html>
+
+
+
+
+
+
