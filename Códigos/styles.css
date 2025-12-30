@@ -99,6 +99,7 @@
     .hambBtn:hover{background: color-mix(in srgb, var(--brand) 16%, transparent)}
     .customizeIcon{width:18px;height:18px}
     body:not(.light) .hambBtn{color:#ffffff}
+    .mobileHambBtn{display:none}
     #goToTasksBtn .iconStroke{transition:transform .15s ease}
     #goToTasksBtn.isTasksView .iconStroke{transform:rotate(180deg)}
 
@@ -116,7 +117,7 @@
     .viewTitleRow{
       display:flex;
       justify-content:center;
-      margin:6px 0 40px;
+      margin:6px 0 32px;
     }
     .viewTitle{
       font-size:26px;
@@ -142,7 +143,7 @@
       justify-content:flex-end;
       gap:8px; /* menor */
       flex-wrap:nowrap;
-      padding-right:var(--search-arrows-offset);
+      padding-right:0;
     }
     /* Holding Sena maior */
     .brandright strong{
@@ -243,6 +244,22 @@
       width:20px;
       height:20px;
     }
+    #themeIconMobile{
+      display:grid;
+      place-items:center;
+      width:20px;
+      height:20px;
+    }
+    #themeIconMobile svg{
+      width:20px;
+      height:20px;
+      stroke:currentColor;
+      stroke-width:2;
+      fill:none;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      display:block;
+    }
     #orderLookupBtn{
       color:#ffffff;
     }
@@ -336,13 +353,17 @@
       align-items:center;
     }
     #searchTagList{
-      margin-bottom:8px;
+      margin-top:16px;
+      margin-bottom:0;
     }
     .searchTagForm{
+      display:flex;
+      align-items:center;
       gap:8px;
     }
     .searchTagForm #addSearchTagBtn{
-      margin-top:8px;
+      margin-top:0;
+      flex:0 0 auto;
     }
     .tagFilterItem{
       display:inline-flex;
@@ -388,7 +409,7 @@
 
     main{
       max-width:1100px;
-      margin:32px auto 0;
+      margin:8px auto 0;
       padding:18px 16px 8px;
     }
     .grid{
@@ -520,12 +541,21 @@
       font-size:14px;
       line-height:1.25;
     }
+    .item .btnrow{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:nowrap;
+    }
 
     .row{
       display:flex;
       gap:10px;
       align-items:flex-start;
       justify-content:space-between;
+    }
+    .row.centerRow{
+      justify-content:center;
     }
     .label{
       font-size:12px;
@@ -537,7 +567,7 @@
       align-items:center;
       gap:10px;
     }
-    textarea, input[type="text"], input[type="date"], select{
+    textarea, input[type="text"], input[type="date"], input[type="time"], select{
       width:100%;
       padding:12px 12px;
       border-radius:12px;
@@ -549,11 +579,38 @@
       font-size:13px;
       resize:vertical;
     }
-    body.light textarea, body.light input[type="text"], body.light input[type="date"], body.light select{
+    body.light textarea, body.light input[type="text"], body.light input[type="date"], body.light input[type="time"], body.light select{
       background: color-mix(in srgb, var(--card) 90%, transparent);
     }
     textarea{min-height:110px}
+    .emailMultiField{
+      min-height:56px;
+    }
+    .attentionRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .attentionToggle{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-weight:900;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .attentionNoteWrap{
+      display:block;
+    }
     select{appearance:none}
+    input[type="time"]::-webkit-calendar-picker-indicator{
+      filter: invert(1);
+      opacity: 0.95;
+    }
+    body.light input[type="time"]::-webkit-calendar-picker-indicator{
+      filter: none;
+      opacity: 0.7;
+    }
 
     .formGrid{display:flex;flex-direction:column;gap:10px}
     .specsAddRow{
@@ -600,6 +657,15 @@
       margin-bottom:8px;
     }
     .socialExtraRow input{
+      flex:1;
+    }
+    .emailExtraRow{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      margin-bottom:8px;
+    }
+    .emailExtraRow input{
       flex:1;
     }
     .specsActions{
@@ -1149,6 +1215,13 @@
     }
     .menuBtnsRow{display:flex;gap:10px;flex-wrap:wrap}
     .menuBtnsRow .btn.small{padding:7px 9px;font-size:12px;border-radius:10px}
+    .mobileHeaderCard{display:none}
+    .mobileHeaderActions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:12px;
+    }
     .stampsLinksRow{display:contents}
     .extraLinksRow{display:contents}
     .menuTopActions{
@@ -1496,6 +1569,14 @@
     #popupActions.mf{
       justify-content:center !important;
     }
+    #popupActions .btn{
+      padding:8px 12px;
+      font-size:12px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;      
+    }
     #popupActions.isHidden{
       display:none !important;
     }
@@ -1504,6 +1585,8 @@
       line-height:1.4;
       color: color-mix(in srgb, var(--text) 94%, transparent);
       text-align:center;
+      white-space:pre-wrap;
+      overflow-wrap:anywhere;
     }
     .popupSummary{
       display:flex;
@@ -1512,13 +1595,56 @@
       text-align:left;
       padding-bottom:14px;
     }
+    .summaryPhase{
+      display:flex;
+      flex-direction:column;
+    }
+    .summaryRow{
+      display:grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap:16px;
+      align-items:center;
+    }
+    .summaryRow > div{
+      padding-bottom:10px;
+      border-bottom:1px dashed color-mix(in srgb, var(--line) 65%, transparent);
+    }
+    .summaryRow.summaryDates{
+      margin-top:12px;
+    }
+    .summaryRow.summaryDates > div{
+      border-bottom:1px dashed color-mix(in srgb, var(--line) 60%, transparent);
+    }
+    .summaryRow.summaryDates{
+      margin-top:10px;
+    }
+    .summaryText{
+      margin-top:10px;
+      display:block;
+      gap:16px;
+      text-align:center;
+    }
+    .summaryText .popupSummaryLabel{
+      padding-bottom:0;
+      border-bottom:none;
+    }
+    .summaryTextValue{
+      padding-bottom:0;
+      border-bottom:none;
+    }
+    .summaryTextValue{
+      grid-column:auto;
+      min-width:0;
+      overflow-wrap:anywhere;
+      display:block;
+    }
     .popupSummaryLabel{
       font-weight:900;
       color: color-mix(in srgb, var(--text) 96%, transparent);
     }
     .popupSummaryDivider{
       height:1px;
-      background: color-mix(in srgb, var(--line) 65%, transparent);
+      background: rgba(255,255,255,0.7);
       opacity:.7;
     }
     .popupSummaryItem{
@@ -1601,16 +1727,16 @@
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      width:28px;
-      height:28px;
-      border-radius:8px;
-      border:1px solid color-mix(in srgb, var(--line) 85%, transparent);
-      background: color-mix(in srgb, var(--bg) 75%, transparent);
+      width:18px;
+      height:18px;
+      border-radius:6px;
+      border:0;
+      background:transparent;
       color:var(--text);
       transition:.15s ease;
     }
     .emailOpenIcon:hover{
-      background: color-mix(in srgb, var(--brand) 16%, transparent);
+      background:transparent;
     }
     body:not(.light) .emailOpenIcon{
       color:#ffffff;
@@ -1638,6 +1764,13 @@
       fill:none;
       stroke-linecap:round;
       stroke-linejoin:round;
+    }
+    .attentionBtn{
+      border-color: color-mix(in srgb, var(--danger) 70%, transparent);
+      color:var(--danger);
+    }
+    .attentionBtn:hover{
+      background: color-mix(in srgb, var(--danger) 12%, transparent);
     }
     .emailOpenBtn{
       align-self:flex-start;
@@ -1809,10 +1942,54 @@
     .storeLinksModal{
       width:min(560px, 92vw);
     }
+    .socialHubModal{
+      width:min(860px, 96vw);
+      background: linear-gradient(160deg, rgba(17,27,45,.9), rgba(12,16,30,.98));
+      border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    }
+    body.light .socialHubModal{
+      background: linear-gradient(160deg, rgba(255,255,255,.98), rgba(246,248,252,.98));
+    }
+    .socialHubHeader{
+      align-items:flex-end;
+      gap:16px;
+    }
+    .socialHubTitle{display:flex;flex-direction:column;gap:6px}
+    .socialHubEyebrow{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.18em;
+      color:color-mix(in srgb, var(--brand2) 60%, var(--text));
+      font-weight:900;
+    }
+    .socialHubSubtitle{
+      max-width:520px;
+      opacity:.85;
+      margin:0;
+    }
+    .socialHubHighlights{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-bottom:14px;
+    }
+    .socialHubPill{
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.04em;
+      border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg) 75%, transparent);
+    }
     .storeLinksGrid{
       display:grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap:12px;
+    }
+    .storeLinksGridSocial{
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap:14px;
     }
     .storeLinksGrid[data-count="1"]{
       grid-template-columns: minmax(200px, 360px);
@@ -1884,6 +2061,46 @@
       padding:14px;
       text-align:center;
     }
+    .socialHubModal .socialLinksCard{
+      text-align:left;
+      min-height:220px;
+      padding:16px;
+      background: linear-gradient(160deg, rgba(21,33,55,.96), rgba(12,16,30,.96));
+      border:1px solid color-mix(in srgb, var(--line) 65%, transparent);
+      position:relative;
+      overflow:hidden;
+    }
+    body.light .socialHubModal .socialLinksCard{
+      background: linear-gradient(160deg, rgba(255,255,255,.98), rgba(241,245,252,.98));
+      border:1px solid color-mix(in srgb, var(--line) 75%, transparent);
+    }
+    .socialHubModal .socialLinksCard::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: radial-gradient(120px 120px at 20% 20%, rgba(56,217,169,.12), transparent 60%);
+      pointer-events:none;
+    }
+    .socialHubModal .storeLinkMedia{
+      align-items:center;
+      gap:6px;
+    }
+    .socialHubModal .storeLinkLogo{
+      margin:0 auto;
+    }
+    .socialHubModal .storeLinkLogo{
+      width:120px;
+      height:120px;
+    }
+    .socialHubModal .storeLinkLogo.dn{
+      width:130px;
+      height:130px;
+    }
+    .socialHubModal .storeLinkName{
+      font-size:14px;
+      font-weight:900;
+      letter-spacing:.02em;
+    }
     .socialLinksCard .storeLinkLogo{
       width:140px;
       height:140px;
@@ -1897,6 +2114,18 @@
       flex-wrap:wrap;
       gap:8px;
       justify-content:center;
+    }
+    .socialHubModal .socialLinksActions{
+      justify-content:flex-start;
+      width:100%;
+    }
+    .socialHubModal .socialLinksActions .btn{
+      flex:1 1 120px;
+      justify-content:center;
+    }
+    .socialHubModal .storeLinkCard:hover{
+      transform:translateY(-2px);
+      box-shadow: 0 10px 24px rgba(0,0,0,.28);
     }
 
     .productDetailsMeta{
@@ -2027,6 +2256,54 @@
       font-size:13px;
       color: color-mix(in srgb, var(--text) 92%, transparent);
       line-height:1.4;
+    }
+    .nuvemEditActions{
+      justify-content:center !important;
+      gap:10px;
+    }
+    .nuvemEditActionsMain{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
+    }
+    .phaseEditActions{
+      position:relative;
+      justify-content:center !important;
+    }
+    .phaseEditActionsMain{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
+      margin:0 auto;
+    }
+    .phaseEditDeleteBtn{
+      position:absolute;
+      left:14px;
+      top:50%;
+      transform:translateY(-50%);
+    }
+    .closeTaskActions{
+      justify-content:center !important;
+    }
+    .questionStoreBlock{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      text-align:center;
+      margin:6px 0 10px;
+    }
+    .questionStoreLogo{
+      height:45px;
+      width:auto;
+      display:block;
+    }
+    .questionStoreLabel{
+      margin-top:8px;
+      font-size:12px;
+      font-weight:900;
+      color: color-mix(in srgb, var(--text) 86%, transparent);
     }
     .productColorsList{
       display:flex;
@@ -2182,6 +2459,7 @@
       border-radius:14px;
       border:1px solid rgba(255,255,255,0.9);
       background: color-mix(in srgb, var(--bg) 65%, transparent);
+      position:relative;
     }
     body.light .taskCard{background: color-mix(in srgb, var(--card) 92%, transparent)}
 
@@ -2191,6 +2469,14 @@
       gap:10px;
       align-items:flex-start;
       flex-wrap:wrap;
+    }
+    .taskMainInfo{
+      min-width:240px;
+    }
+    .taskLogoWrap{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
     }
 
     .taskTitle{
@@ -2207,6 +2493,23 @@
       gap:8px;
       flex-wrap:wrap;
       align-items:center;
+    }
+    .taskSubMeta{
+      display:flex;
+      flex-direction:row;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .taskSubLine{
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .taskSubLine:not(:first-child)::before{
+      content:"-";
+      margin:0 6px 0 2px;
+      opacity:.75;
     }
 
     .pillMini{
@@ -2328,8 +2631,8 @@
       border:1px solid color-mix(in srgb, var(--line) 65%, transparent);
       background: color-mix(in srgb, var(--bg) 55%, transparent);
       border-radius:14px;
-      padding:10px;
-      height:75px;
+      padding:8px;
+      aspect-ratio:1 / 1;
       overflow:hidden;
       display:flex;
       flex-direction:column;
@@ -2348,8 +2651,8 @@
 
     .calDayNum{
       font-weight:950;
-      font-size:13px;
-      margin:0 0 8px 0;
+      font-size:11px;
+      margin:0 0 6px 0;
       display:flex;
       justify-content:space-between;
       align-items:center;
@@ -2403,6 +2706,338 @@
       background: color-mix(in srgb, var(--card) 85%, transparent);
       border-radius:14px;
       padding:10px;
+    }
+    .calDetailRow.isFocus{
+      outline:2px solid color-mix(in srgb, var(--brand2) 55%, transparent);
+      box-shadow: 0 8px 18px rgba(0,0,0,.18);
+    }
+
+    /* ===== Mobile ===== */
+    @media(max-width:720px){
+      .wrap{
+        margin:18px auto 0;
+        padding:12px;
+      }
+      .toprow{
+        display:grid;
+        grid-template-columns:44px 1fr 44px;
+        align-items:center;
+        gap:8px;
+      }
+      .brandleft{
+        min-width:0;
+        justify-self:center;
+        justify-content:center;
+      }
+      .brandright{
+        display:flex;
+        justify-self:end;
+      }
+      .scrollBtns{
+        justify-content:flex-end;
+      }
+      .scrollBtns > *{
+        display:none;
+      }
+      .scrollBtns #goToTasksBtn{
+        display:grid;
+      }
+      .mobileHambBtn{
+        display:grid;
+      }
+      .appLogo img{
+        height:30px;
+      }
+      .viewTitleRow{
+        margin-bottom:32px;
+      }
+      .viewTitle{
+        font-size:20px;
+      }
+      .searchArrows{
+        display:none;
+      }
+      .searchrowWrap{
+        flex-direction:column;
+        gap:8px;
+        align-items:stretch;
+      }
+      .searchrow{
+        display:grid;
+        grid-template-columns:1fr auto auto;
+        grid-template-rows:auto auto;
+        column-gap:10px;
+        row-gap:16px;
+        padding:10px 12px;
+        position:relative;
+        width:100%;
+      }
+      .searchrow .icon{
+        grid-column:1;
+        grid-row:1;
+        position:absolute;
+        left:12px;
+        top:12px;
+        z-index:2;
+      }
+      .searchrow .filterBtn{
+        grid-column:1 / -1;
+        grid-row:2;
+        width:100%;
+        display:inline-flex;
+      }
+      .searchrow input{
+        grid-column:1 / -1;
+        grid-row:1;
+        width:100%;
+        padding-left:36px;
+      }
+      .searchrow .filterBtn{
+        grid-column:2;
+        grid-row:2;
+        width:44px;
+        height:44px;
+        padding:0;
+        border-radius:12px;
+        justify-self:end;
+      }
+      .searchrow #searchClearBtn{
+        grid-column:3;
+        grid-row:2;
+        width:auto;
+        padding:8px 12px;
+        font-size:12px;
+        border-radius:10px;
+        height:auto;
+      }
+      .resultsCard .hd,
+      #viewTasks .card .hd{
+        grid-template-columns:1fr auto;
+        row-gap:6px;
+      }
+      .resultsCard .hd{
+        grid-template-columns:1fr auto 1fr;
+      }
+      .resultsCard .hd #openQuestionModalBtn{
+        justify-self:center;
+      }
+      .resultsCard .hd .count{
+        justify-self:end;
+        grid-column:auto;
+      }
+      #viewTasks .card .hd .count{
+        justify-self:start;
+        grid-column:1 / -1;
+      }
+      .card .bd{
+        padding:12px;
+      }
+      .taskTopRow{
+        display:grid;
+        grid-template-columns: 1fr auto;
+        align-items:start;
+        column-gap:12px;
+      }
+      .taskMainInfo{
+        min-width:0;
+      }
+      .taskMeta .pillMini{
+        white-space:normal;
+      }
+      .taskSubMeta{
+        display:block;
+      }
+      .taskSubLine:not(:first-child)::before{
+        content:"";
+        margin:0;
+      }
+      .taskSubLine{
+        display:block;
+        width:100%;
+      }
+      .linksBlock{
+        gap:10px;
+      }
+      .phaseBtnsRow{
+        flex-wrap:wrap;
+      }
+      .miniOverlay{
+        padding:0;
+        align-items:stretch;
+        justify-content:stretch;
+      }
+      .miniModal{
+        width:100vw;
+        height:100vh;
+        max-height:100vh;
+        border-radius:0;
+        display:flex;
+        flex-direction:column;
+      }
+      .miniModal .mh{
+        flex-wrap:wrap;
+        gap:8px;
+      }
+      .miniModal .mb{
+        padding:12px;
+        overflow:auto;
+        flex:1 1 auto;
+        min-height:0;
+      }
+      .miniModal .mf{
+        flex-direction:column;
+        align-items:stretch;
+      }
+      .miniModal .mf .btn{
+        width:100%;
+      }
+      #popupActions .btn{
+        width:auto;
+      }
+      #popupActions.mf{
+        flex-direction:row;
+        justify-content:center;
+        align-items:center;
+        gap:10px;
+      }
+      .storeLinksGrid{
+        grid-template-columns:1fr;
+      }
+      .storeLinksGridSocial{
+        grid-template-columns:1fr;
+      }
+      .socialHubModal .storeLinkCard{
+        min-height:200px;
+      }
+      .summaryRow{
+        grid-template-columns:1fr;
+      }
+      .summaryRow > div{
+        border-bottom:1px dashed color-mix(in srgb, var(--line) 60%, transparent);
+      }
+      .summaryText{
+        text-align:left;
+      }
+      .overlay{
+        padding:0;
+        align-items:stretch;
+        justify-content:stretch;
+      }
+      .modal{
+        width:100vw;
+        height:100vh;
+        max-height:100vh;
+        border-radius:0;
+      }
+      .productsModal,
+      .productModal,
+      .calModal{
+        width:100vw;
+        height:100vh;
+        max-height:100vh;
+        border-radius:0;
+      }
+      #sizeTablesOverlay .miniModal,
+      #productsOverlay .productsModal,
+      #questionOverlay .miniModal,
+      #phaseEditOverlay .miniModal,
+      #taskOverlay .miniModal{
+        width:100vw;
+        height:100vh;
+        max-width:100vw;
+        max-height:100vh;
+        border-radius:0;
+      }
+      .productsModal .mb,
+      .productModal .mb,
+      .calModal .mb,
+      #sizeTablesOverlay .miniModal .mb,
+      #phaseEditOverlay .miniModal .mb,
+      #questionOverlay .miniModal .mb,
+      #taskOverlay .miniModal .mb,
+      #productManageOverlay .miniModal .mb{
+        max-height:none;
+        overflow:auto;
+        flex:1 1 auto;
+        min-height:0;
+      }
+      .calModal{
+        max-height:100vh;
+      }
+      .calWeekHeader{
+        font-size:11px;
+        gap:6px;
+      }
+      .calGrid{
+        gap:6px;
+      }
+      .calCell{
+        padding:6px;
+      }
+      .calDayNum{
+        font-size:10px;
+        margin-bottom:4px;
+      }
+      .calItems{
+        display:none;
+      }
+      .calCell::after{
+        content: attr(data-count);
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        font-size:10px;
+        font-weight:900;
+        color:#38d9a9;
+        align-self:center;
+        margin-top:auto;
+      }
+      .calCell:not([data-count])::after{
+        content:"";
+        display:none;
+      }
+      .calDetailRow{
+        flex-direction:column;
+        align-items:flex-start;
+      }
+      .calDetailRow .txt{
+        width:100%;
+      }
+      .mobileHeaderCard{
+        display:block;
+      }
+    }
+
+    @media(max-width:520px){
+      .btn{
+        padding:9px 12px;
+        font-size:12px;
+      }
+      .pillMini{
+        font-size:11px;
+      }
+      .taskActions{
+        padding-top:18px;
+        gap:8px;
+      }
+      .searchrow .btn.small{
+        padding:9px 12px;
+      }
+      .drawer{
+        width:100vw;
+        height:100vh;
+        max-height:100vh;
+        border-radius:0;
+      }
+      .drawer.drawerRight{
+        width:100vw;
+      }
+      .calWeekHeader{
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+      }
+      .calDayDetails{
+        gap:8px;
+      }
     }
     .calDetailRow .dot{ width:10px; height:10px; border-radius:999px; margin-top:3px; }
     .calDetailRow .dot.open{ background:#0f8f5f; }

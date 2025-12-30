@@ -85,6 +85,7 @@
         logoUrl: DEFAULT_DIARIO_LOGO,
         siteUrl: "https://diarionerdify.com.br/",
         stampsUrl: "https://drive.google.com/drive/folders/10EKdHW5QXZwCgOWdbXCwkQH0llZnhObg",
+        supportWhatsapp: "https://api.whatsapp.com/send?phone=551150395895",
         instagramUrl: "",
         facebookUrl: "",
         tiktokUrl: "",
@@ -103,6 +104,7 @@
         logoUrl: DEFAULT_SHOP80_LOGO,
         siteUrl: "https://shop80.com.br/",
         stampsUrl: "https://drive.google.com/drive/folders/1e5GAl5tYRRL6xKmp4SHSPxGwmUuf9N_x",
+        supportWhatsapp: "https://api.whatsapp.com/send?phone=551140207216",
         instagramUrl: "",
         facebookUrl: "",
         tiktokUrl: "",
@@ -390,8 +392,16 @@
         <div class="specsItem">
           <span>${escapeHtml(item)}</span>
           <span class="specsActions">
-            <button class="specsMoveBtn" type="button" data-spec-move="up" data-spec-index="${idx}" aria-label="Subir">?</button>
-            <button class="specsMoveBtn" type="button" data-spec-move="down" data-spec-index="${idx}" aria-label="Descer">?</button>
+            <button class="specsMoveBtn" type="button" data-spec-move="up" data-spec-index="${idx}" aria-label="Subir">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="6 14 12 8 18 14"></polyline>
+              </svg>
+            </button>
+            <button class="specsMoveBtn" type="button" data-spec-move="down" data-spec-index="${idx}" aria-label="Descer">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="6 10 12 16 18 10"></polyline>
+              </svg>
+            </button>
             <button class="specsRemoveBtn" type="button" data-spec-remove="${idx}" aria-label="Remover">x</button>
           </span>
         </div>
@@ -558,6 +568,7 @@
         logoUrl: (s?.logoUrl || "").toString().trim(),
         siteUrl: (s?.siteUrl || "").toString().trim(),
         stampsUrl: (s?.stampsUrl || "").toString().trim(),
+        supportWhatsapp: (s?.supportWhatsapp || "").toString().trim(),
         instagramUrl: (s?.instagramUrl || "").toString().trim(),
         facebookUrl: (s?.facebookUrl || "").toString().trim(),
         tiktokUrl: (s?.tiktokUrl || "").toString().trim(),
@@ -571,6 +582,12 @@
             })).filter(item => item.name || item.url)
           : [],
         metaInboxUrl: (s?.metaInboxUrl || "").toString().trim(),
+        emailList: Array.isArray(s?.emailList)
+          ? s.emailList.map(item => ({
+              email: (item?.email || "").toString().trim(),
+              openUrl: (item?.openUrl || "").toString().trim()
+            })).filter(item => item.email || item.openUrl)
+          : [],
         emailAdmin: (s?.emailAdmin || "").toString().trim(),
         emailAtendimento: (s?.emailAtendimento || "").toString().trim(),
         emailOpenUrl1: (() => {
@@ -607,8 +624,16 @@
           });
           if(extras.length) s.socialExtras = extras;
         }
+        if(!s.emailList || !s.emailList.length){
+          const legacy = [];
+          const admin = (s.emailAdmin || "").toString().trim();
+          const atendimento = (s.emailAtendimento || "").toString().trim();
+          if(admin) legacy.push({ email: admin, openUrl: (s.emailOpenUrl1 || "").toString().trim() });
+          if(atendimento) legacy.push({ email: atendimento, openUrl: (s.emailOpenUrl2 || "").toString().trim() });
+          if(legacy.length) s.emailList = legacy;
+        }
         return s;
-      }).filter(s => s.name || s.logoUrl || s.siteUrl || s.stampsUrl || s.instagramUrl || s.facebookUrl || s.tiktokUrl || s.youtubeUrl || s.pinterestUrl || s.whatsappUrl || s.socialExtras.length || s.metaInboxUrl || s.emailAdmin || s.emailAtendimento || s.emailOpenUrl1 || s.emailOpenUrl2);
+      }).filter(s => s.name || s.logoUrl || s.siteUrl || s.stampsUrl || s.supportWhatsapp || s.instagramUrl || s.facebookUrl || s.tiktokUrl || s.youtubeUrl || s.pinterestUrl || s.whatsappUrl || s.socialExtras.length || s.metaInboxUrl || (s.emailList && s.emailList.length) || s.emailAdmin || s.emailAtendimento || s.emailOpenUrl1 || s.emailOpenUrl2);
 
       return out.slice(0, MAX_STORES);
     }
@@ -854,13 +879,16 @@
       if(quickLinkNote){
         if(pendingQuickLinkKey === "sakChat"){
           quickLinkNote.textContent = "Aqui voc\u00ea deve cadastrar o link do seu atendimento via WhatsApp ou de algum programa que voc\u00ea use, como o SAK, por exemplo.";
-          quickLinkNote.dataset.example = "https://chat.sak.com.br/";
-          quickLinkNote.textContent += " Exemplo: https://chat.sak.com.br/";
+          quickLinkNote.dataset.example = "https://api.whatsapp.com/send?phone=5521999999999";
+          quickLinkNote.textContent += " Exemplo: https://api.whatsapp.com/send?phone=5521999999999";
         }else{
           quickLinkNote.textContent = "Exemplo: https://meusite.com.br";
         }
       }
-      if(quickLinkOverlay) quickLinkOverlay.classList.add("show");
+      if(quickLinkOverlay){
+        markOverlayForDrawerReturn(quickLinkOverlay, [quickLinkCancelBtn]);
+        quickLinkOverlay.classList.add("show");
+      }
       if(quickLinkTitleInput) quickLinkTitleInput.focus();
     }
 
@@ -881,13 +909,16 @@
       if(quickLinkNote){
         if(pendingQuickLinkKey === "sakChat"){
           quickLinkNote.textContent = "Aqui voc\u00ea deve cadastrar o link do seu atendimento via WhatsApp ou de algum programa que voc\u00ea use, como o SAK, por exemplo.";
-          quickLinkNote.dataset.example = "https://chat.sak.com.br/";
-          quickLinkNote.textContent += " Exemplo: https://chat.sak.com.br/";
+          quickLinkNote.dataset.example = "https://api.whatsapp.com/send?phone=5521999999999";
+          quickLinkNote.textContent += " Exemplo: https://api.whatsapp.com/send?phone=5521999999999";
         }else{
           quickLinkNote.textContent = "Exemplo: https://meusite.com.br";
         }
       }
-      if(quickLinkOverlay) quickLinkOverlay.classList.add("show");
+      if(quickLinkOverlay){
+        markOverlayForDrawerReturn(quickLinkOverlay, [quickLinkCancelBtn]);
+        quickLinkOverlay.classList.add("show");
+      }
       if(quickLinkTitleInput) quickLinkTitleInput.focus();
     }
 
@@ -911,6 +942,7 @@
         addQuickLink(key, title, url);
       }
       closeQuickLinkModal();
+      clearDrawerReturnState(quickLinkOverlay, [quickLinkCancelBtn]);
       openQuickLinksListModal(key, label, currentQuickLinksListMode);
     }
 
@@ -924,7 +956,10 @@
           : (currentQuickLinksListLabel || "Links");
       }
       renderQuickLinksList();
-      if(quickLinksListOverlay) quickLinksListOverlay.classList.add("show");
+      if(quickLinksListOverlay){
+        markOverlayForDrawerReturn(quickLinksListOverlay, [quickLinksListCloseBtn]);
+        quickLinksListOverlay.classList.add("show");
+      }
     }
 
     function closeQuickLinksListModal(){
@@ -1057,7 +1092,12 @@
               <div class="menuIcon">${logoUrl ? `<img alt="${escapeHtml(store)}" src="${escapeHtml(logoUrl)}">` : `<div class="txt">NS</div>`}</div>
               <p class="menuTitle">${escapeHtml(store)}</p>
               <div class="nuvemHeaderRight">
-                <button class="btn small" type="button" data-nuvem-add="${escapeHtml(store)}">+ Adicionar bot\u00e3o</button>
+                <button class="btn small iconBtn" type="button" data-nuvem-add="${escapeHtml(store)}" title="Adicionar bot\u00e3o" aria-label="Adicionar bot\u00e3o">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
               </div>
             </div>
             <div class="menuBtnsRow">
@@ -1074,7 +1114,10 @@
 
     function openNuvemLinksModal(){
       renderNuvemLinks();
-      if(nuvemLinksOverlay) nuvemLinksOverlay.classList.add("show");
+      if(nuvemLinksOverlay){
+        markOverlayForDrawerReturn(nuvemLinksOverlay, [nuvemLinksCloseBtn]);
+        nuvemLinksOverlay.classList.add("show");
+      }
     }
 
     function closeNuvemLinksModal(){
@@ -1149,27 +1192,41 @@
     }
 
     function cloneStoresList(list){
-      return (list || []).map(s => ({
-        name: (s?.name || "").toString(),
-        logoUrl: (s?.logoUrl || "").toString(),
-        siteUrl: (s?.siteUrl || "").toString(),
-        stampsUrl: (s?.stampsUrl || "").toString(),
-        instagramUrl: (s?.instagramUrl || "").toString(),
-        facebookUrl: (s?.facebookUrl || "").toString(),
-        tiktokUrl: (s?.tiktokUrl || "").toString(),
-        youtubeUrl: (s?.youtubeUrl || "").toString(),
-        pinterestUrl: (s?.pinterestUrl || "").toString(),
-        whatsappUrl: (s?.whatsappUrl || "").toString(),
-        socialExtras: Array.isArray(s?.socialExtras) ? s.socialExtras.map(item => ({
-          name: (item?.name || "").toString(),
-          url: (item?.url || "").toString()
-        })) : [],
-        metaInboxUrl: (s?.metaInboxUrl || "").toString(),
-        emailAdmin: (s?.emailAdmin || "").toString(),
-        emailAtendimento: (s?.emailAtendimento || "").toString(),
-        emailOpenUrl1: (s?.emailOpenUrl1 || s?.emailOpenUrl || "").toString(),
-        emailOpenUrl2: (s?.emailOpenUrl2 || s?.emailOpenUrl || "").toString()
-      }));
+      return (list || []).map(s => {
+        const emailList = Array.isArray(s?.emailList) ? s.emailList.map(item => ({
+          email: (item?.email || "").toString(),
+          openUrl: (item?.openUrl || "").toString()
+        })) : [];
+        if(!emailList.length){
+          const admin = (s?.emailAdmin || "").toString().trim();
+          const atendimento = (s?.emailAtendimento || "").toString().trim();
+          if(admin) emailList.push({ email: admin, openUrl: (s?.emailOpenUrl1 || s?.emailOpenUrl || "").toString() });
+          if(atendimento) emailList.push({ email: atendimento, openUrl: (s?.emailOpenUrl2 || s?.emailOpenUrl || "").toString() });
+        }
+        return {
+          name: (s?.name || "").toString(),
+          logoUrl: (s?.logoUrl || "").toString(),
+          siteUrl: (s?.siteUrl || "").toString(),
+          stampsUrl: (s?.stampsUrl || "").toString(),
+          supportWhatsapp: (s?.supportWhatsapp || "").toString(),
+          instagramUrl: (s?.instagramUrl || "").toString(),
+          facebookUrl: (s?.facebookUrl || "").toString(),
+          tiktokUrl: (s?.tiktokUrl || "").toString(),
+          youtubeUrl: (s?.youtubeUrl || "").toString(),
+          pinterestUrl: (s?.pinterestUrl || "").toString(),
+          whatsappUrl: (s?.whatsappUrl || "").toString(),
+          socialExtras: Array.isArray(s?.socialExtras) ? s.socialExtras.map(item => ({
+            name: (item?.name || "").toString(),
+            url: (item?.url || "").toString()
+          })) : [],
+          metaInboxUrl: (s?.metaInboxUrl || "").toString(),
+          emailList,
+          emailAdmin: (s?.emailAdmin || "").toString(),
+          emailAtendimento: (s?.emailAtendimento || "").toString(),
+          emailOpenUrl1: (s?.emailOpenUrl1 || s?.emailOpenUrl || "").toString(),
+          emailOpenUrl2: (s?.emailOpenUrl2 || s?.emailOpenUrl || "").toString()
+        };
+      });
     }
 
     function renderStoresConfig(){
@@ -1186,6 +1243,16 @@
               </div>
             `).join("")
           : `<div class="note">Nenhuma rede adicional cadastrada.</div>`;
+        const emails = Array.isArray(store.emailList) ? store.emailList : [];
+        const emailsHtml = emails.length
+          ? emails.map((item, j) => `
+              <div class="emailExtraRow" data-email-row="${j}">
+                <input type="text" data-email-field="email" data-email-index="${j}" placeholder="E-mail" value="${escapeHtml(item?.email || "")}">
+                <input type="text" data-email-field="openUrl" data-email-index="${j}" placeholder="Link de acesso" value="${escapeHtml(item?.openUrl || "")}">
+                <button class="specsRemoveBtn" type="button" data-email-remove="${j}" title="Remover" aria-label="Remover">x</button>
+              </div>
+            `).join("")
+          : `<div class="note">Nenhum e-mail cadastrado.</div>`;
         return `
           <div class="menuCard" data-store-index="${idx}">
             <div class="menuTop">
@@ -1196,6 +1263,7 @@
               <div class="label">Nome da loja</div>
               <input type="text" data-store-field="name" placeholder="Nome da loja" value="${escapeHtml(store.name || "")}">
               <div class="label">Link da logo</div>
+              <div class="note">Informe o link da logo ou envie o arquivo abaixo.</div>
               <input type="text" data-store-field="logoUrl" placeholder="Link da logo" value="${escapeHtml(store.logoUrl || "")}">
               <div class="label">Enviar logo</div>
               <input type="file" data-store-field="logoFile" accept="image/*">
@@ -1209,14 +1277,12 @@
               <div class="note">Use o link do atendimento/caixa de entrada (onde voc&ecirc; responde aos clientes), n&atilde;o o link do perfil da rede social.</div>
               ${extrasHtml}
               <button class="btn small" type="button" data-social-extra-add="${idx}">+ Adicionar rede</button>
-              <div class="label">Endere\u00e7o de E-mail 1</div>
-              <input type="text" data-store-field="emailAdmin" placeholder="Endere\u00e7o de E-mail 1" value="${escapeHtml(store.emailAdmin || "")}">
-              <div class="label">Endere\u00e7o de E-mail 2</div>
-              <input type="text" data-store-field="emailAtendimento" placeholder="Endere\u00e7o de E-mail 2" value="${escapeHtml(store.emailAtendimento || "")}">
-              <div class="label">Link para abrir o e-mail 1</div>
-              <input type="text" data-store-field="emailOpenUrl1" placeholder="Link para abrir o e-mail 1" value="${escapeHtml(store.emailOpenUrl1 || "")}">
-              <div class="label">Link para abrir o e-mail 2</div>
-              <input type="text" data-store-field="emailOpenUrl2" placeholder="Link para abrir o e-mail 2" value="${escapeHtml(store.emailOpenUrl2 || "")}">
+              <div class="label">E-mails</div>
+              <div class="note">Insira o e-mail e o link de acesso correspondente.</div>
+              ${emailsHtml}
+              <button class="btn small" type="button" data-email-add="${idx}">+ Adicionar e-mail</button>
+              <div class="label">WhatsApp suporte Nuvemshop</div>
+              <input type="text" data-store-field="supportWhatsapp" placeholder="Link do WhatsApp de suporte" value="${escapeHtml(store.supportWhatsapp || "")}">
             </div>
             ${idx > 0 ? `<div class="menuToolsRow"><button class="btn small danger iconBtn" type="button" data-store-remove="${idx}" title="Excluir" aria-label="Excluir">
               <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
@@ -1257,6 +1323,7 @@
           logoUrl: read("logoUrl"),
           siteUrl: read("siteUrl"),
           stampsUrl: read("stampsUrl"),
+          supportWhatsapp: read("supportWhatsapp"),
           instagramUrl: read("instagramUrl"),
           facebookUrl: read("facebookUrl"),
           tiktokUrl: read("tiktokUrl"),
@@ -1271,10 +1338,14 @@
               url: urlInput ? (urlInput.value || "").toString().trim() : ""
             };
           }).filter(item => item.name || item.url),
-          emailAdmin: read("emailAdmin"),
-          emailAtendimento: read("emailAtendimento"),
-          emailOpenUrl1: read("emailOpenUrl1"),
-          emailOpenUrl2: read("emailOpenUrl2")
+          emailList: Array.from(card.querySelectorAll("[data-email-row]")).map(row => {
+            const emailInput = row.querySelector('[data-email-field="email"]');
+            const urlInput = row.querySelector('[data-email-field="openUrl"]');
+            return {
+              email: emailInput ? (emailInput.value || "").toString().trim() : "",
+              openUrl: urlInput ? (urlInput.value || "").toString().trim() : ""
+            };
+          }).filter(item => item.email || item.openUrl)
         };
       });
       return normalizeStores(next);
@@ -1359,72 +1430,46 @@
 
       if(emailMenuHost){
         const cards = list.map(store => {
-          const admin = (store.emailAdmin || "").trim();
-          const atendimento = (store.emailAtendimento || "").trim();
-          const openUrl1 = (store.emailOpenUrl1 || "").trim();
-          const openUrl2 = (store.emailOpenUrl2 || "").trim();
+          const emailList = Array.isArray(store.emailList) ? store.emailList : [];
           const getEmailLabel = (email) => {
             const atIndex = email.indexOf("@");
             const name = atIndex > 0 ? email.slice(0, atIndex) : email;
             return (name || "E-mail").toString().trim();
           };
           const rows = [];
-          if(admin){
-            const openBtn1 = openUrl1
-              ? `<a class="emailOpenIcon" href="${escapeHtml(openUrl1)}" target="_blank" rel="noopener noreferrer" title="Abrir e-mail" aria-label="Abrir e-mail">
+          const renderEmailRow = (entry) => {
+            const email = (entry?.email || "").toString().trim();
+            const openUrl = (entry?.openUrl || "").toString().trim();
+            if(!email && !openUrl) return "";
+            const openBtn = openUrl
+              ? `<a class="emailOpenIcon" href="${escapeHtml(openUrl)}" target="_blank" rel="noopener noreferrer" title="Abrir e-mail" aria-label="Abrir e-mail">
                   <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="3"></circle>
                     <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
                   </svg>
                 </a>`
               : `<button class="btn small" type="button" data-open-stores-config="1">Adicionar link</button>`;
-            rows.push(`
+            return `
               <div class="emailBtn">
                 <div class="emailBtnTitleRow">
-                  <span class="emailBtnTitle">${escapeHtml(getEmailLabel(admin))}</span>
-                  ${openUrl1 ? openBtn1 : ""}
+                  <span class="emailBtnTitle">${escapeHtml(getEmailLabel(email))}</span>
+                  ${openUrl ? openBtn : ""}
                 </div>
                 <div class="emailBtnRow">
-                  <span class="emailBtnAddr">${escapeHtml(admin)}</span>
-                  <button class="copyIconBtn" type="button" data-copy-email="${escapeHtml(admin)}" title="Copiar e-mail" aria-label="Copiar e-mail">
+                  <span class="emailBtnAddr">${escapeHtml(email)}</span>
+                  <button class="copyIconBtn" type="button" data-copy-email="${escapeHtml(email)}" title="Copiar e-mail" aria-label="Copiar e-mail">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <rect x="9" y="9" width="10" height="10" rx="2"></rect>
                       <rect x="5" y="5" width="10" height="10" rx="2"></rect>
                     </svg>
                   </button>
                 </div>
-                ${openUrl1 ? "" : `<div class="emailBtnActions">${openBtn1}</div>`}
+                ${openUrl ? "" : `<div class="emailBtnActions">${openBtn}</div>`}
               </div>
-            `);
-          }
-          if(atendimento){
-            const openBtn2 = openUrl2
-              ? `<a class="emailOpenIcon" href="${escapeHtml(openUrl2)}" target="_blank" rel="noopener noreferrer" title="Abrir e-mail" aria-label="Abrir e-mail">
-                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
-                  </svg>
-                </a>`
-              : `<button class="btn small" type="button" data-open-stores-config="1">Adicionar link</button>`;
-            rows.push(`
-              <div class="emailBtn">
-                <div class="emailBtnTitleRow">
-                  <span class="emailBtnTitle">${escapeHtml(getEmailLabel(atendimento))}</span>
-                  ${openUrl2 ? openBtn2 : ""}
-                </div>
-                <div class="emailBtnRow">
-                  <span class="emailBtnAddr">${escapeHtml(atendimento)}</span>
-                  <button class="copyIconBtn" type="button" data-copy-email="${escapeHtml(atendimento)}" title="Copiar e-mail" aria-label="Copiar e-mail">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <rect x="9" y="9" width="10" height="10" rx="2"></rect>
-                      <rect x="5" y="5" width="10" height="10" rx="2"></rect>
-                    </svg>
-                  </button>
-                </div>
-                ${openUrl2 ? "" : `<div class="emailBtnActions">${openBtn2}</div>`}
-              </div>
-            `);
-          }
+            `;
+          };
+          const emailHtml = emailList.map(renderEmailRow).filter(Boolean).join("");
+          if(emailHtml) rows.push(emailHtml);
           return `
             <div class="menuCard">
               <div class="menuTop">
@@ -1433,7 +1478,7 @@
               </div>
               <div class="menuBtnsRow">
                 <div class="emailBtnGroup">
-                  ${rows.join("")}
+                  ${rows.join("") || `<div class="note">Nenhum e-mail cadastrado.</div>`}
                 </div>
               </div>
             </div>
@@ -1560,6 +1605,7 @@
     const drawer = document.getElementById("drawer");
     const drawerBackdrop = document.getElementById("drawerBackdrop");
     const openDrawerBtn = document.getElementById("openDrawerBtn");
+    const openDrawerBtnMobile = document.getElementById("openDrawerBtnMobile");
     const closeDrawerBtn = document.getElementById("closeDrawerBtn");
     const drawerButtonsHost = document.getElementById("drawerButtonsHost");
     const drawerPager = document.getElementById("drawerPager");
@@ -1636,6 +1682,7 @@
 
     const themeToggleBtn = document.getElementById("themeToggleBtn");
     const themeIcon = document.getElementById("themeIcon");
+    const themeIconMobile = document.getElementById("themeIconMobile");
     const appCloseBtn = document.getElementById("appCloseBtn");
     const backupMenuBtn = document.getElementById("backupMenuBtn");
     const backupOverlay = document.getElementById("backupOverlay");
@@ -1745,9 +1792,13 @@
     const phaseEditDate = document.getElementById("phaseEditDate");
     const phaseEditNovoPedido = document.getElementById("phaseEditNovoPedido");
     const phaseEditRastreio = document.getElementById("phaseEditRastreio");
+    const phaseEditAttention = document.getElementById("phaseEditAttention");
+    const phaseEditAttentionWrap = document.getElementById("phaseEditAttentionWrap");
+    const phaseEditAttentionNote = document.getElementById("phaseEditAttentionNote");
     const phaseEditChamado = document.getElementById("phaseEditChamado");
     const phaseEditEtiqueta = document.getElementById("phaseEditEtiqueta");
     const phaseEditPrazo = document.getElementById("phaseEditPrazo");
+    const phaseEditPrazoHora = document.getElementById("phaseEditPrazoHora");
     const phaseEditStatus = document.getElementById("phaseEditStatus");
     const phaseEditSaveBtn = document.getElementById("phaseEditSaveBtn");
     const phaseEditDeleteBtn = document.getElementById("phaseEditDeleteBtn");
@@ -2182,7 +2233,7 @@
     async function copyTextToClipboard(text, btn, doneLabel){
       try{
         if(!navigator.clipboard){
-          showAlert("Copia de texto nao suportada neste navegador.");
+          showAlert("Cópia de texto não suportada neste navegador.");
           return;
         }
         await navigator.clipboard.writeText(text);
@@ -2192,14 +2243,14 @@
           setTimeout(()=>{ btn.textContent = original; }, 900);
         }
       }catch(e){
-        showAlert("Nao foi possivel copiar o texto.");
+        showAlert("Não foi possível copiar o texto.");
       }
     }
 
     async function copyImageToClipboard(url, btn, defaultLabel){
       try{
         if(!navigator.clipboard || !window.ClipboardItem){
-          showAlert("Copia de imagem nao suportada neste navegador.");
+          showAlert("Cópia de imagem não suportada neste navegador.");
           return;
         }
         const res = await fetch(url);
@@ -2212,7 +2263,7 @@
           setTimeout(()=>{ btn.textContent = original; }, 900);
         }
       }catch(e){
-        showAlert("Nao foi possivel copiar a imagem.");
+        showAlert("Não foi possível copiar a imagem.");
       }
     }
 
@@ -2278,7 +2329,7 @@
     }
 
     function showAlert(message, title){
-      return openPopup({ title: title || "Aviso", message, showCancel: false });
+      return openPopup({ title: title || "Aviso", message, okLabel: "", showCancel: false });
     }
 
     function showConfirm(message, title){
@@ -2316,6 +2367,9 @@
         const prev = map.get(id);
         const date = (getEffectivePhaseDate(t) || t.proxEtapa || prev?.date || "").toString().trim();
         if(!date) continue;
+        const whatsapp = normalizeWhatsappNumber(t.whatsapp || "") || (prev?.whatsapp || "");
+        const phaseIdx = getLastPhaseIndex(t);
+        const prazoHora = getEffectivePhaseTime(t);
         const entry = {
           id,
           date,
@@ -2324,6 +2378,9 @@
           pedido: (getEffectivePedidoFromTask(t) || t.pedido || "").toString().trim(),
           rastreio: (getEffectiveRastreioFromTask(t) || t.rastreio || "").toString().trim(),
           cliente: (t.cliente || "").trim(),
+          whatsapp,
+          prazoHora,
+          phaseIdx,
           lastPhaseText: getLastPhaseText(t),
           open: true,
           createdAt: prev?.createdAt || nowIso,
@@ -2338,6 +2395,9 @@
           prev.pedido === entry.pedido &&
           prev.rastreio === entry.rastreio &&
           prev.cliente === entry.cliente &&
+          prev.whatsapp === entry.whatsapp &&
+          prev.prazoHora === entry.prazoHora &&
+          prev.phaseIdx === entry.phaseIdx &&
           prev.lastPhaseText === entry.lastPhaseText &&
           prev.open === true;
 
@@ -2373,6 +2433,7 @@
       const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
       const rastEfetivo = (getEffectiveRastreioFromTask(t) || "").trim();
       const lastPhaseText = getLastPhaseText(t);
+      const prazoHora = getEffectivePhaseTime(t);
 
       const entry = {
         id: String(t.id || ""),
@@ -2383,6 +2444,8 @@
         rastreio: rastEfetivo || (t.rastreio || "").trim(),
         cliente: (t.cliente || "").trim(),
         whatsapp: normalizeWhatsappNumber(t.whatsapp || ""),
+        prazoHora,
+        phaseIdx: getLastPhaseIndex(t),
         lastPhaseText,
         open: true,
         createdAt: prev?.createdAt || nowIso,
@@ -2406,6 +2469,7 @@
       const rastEfetivo = (getEffectiveRastreioFromTask(t) || prev?.rastreio || "").toString().trim();
       const clienteEfetivo = (t.cliente || prev?.cliente || "").toString().trim();
       const lastPhaseText = getLastPhaseText(t) || (prev?.lastPhaseText || "");
+      const prazoHora = getEffectivePhaseTime(t) || (prev?.prazoHora || "");
 
       const entry = {
         id: String(t.id || ""),
@@ -2415,6 +2479,9 @@
         pedido: pedidoEfetivo || ((t.pedido || prev?.pedido || "")).trim(),
         rastreio: rastEfetivo || ((t.rastreio || prev?.rastreio || "")).trim(),
         cliente: clienteEfetivo,
+        whatsapp: normalizeWhatsappNumber(t.whatsapp || "") || (prev?.whatsapp || ""),
+        prazoHora,
+        phaseIdx: getLastPhaseIndex(t) || (prev?.phaseIdx ?? 0),
         lastPhaseText,
         open: false,
         createdAt: prev?.createdAt || nowIso,
@@ -2455,38 +2522,27 @@
       buildWeekHeader();
       calMonthLabel.textContent = monthLabelPT(calViewYear, calViewMonth);
 
-      const first = new Date(calViewYear, calViewMonth, 1);
       const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
-
-      // 0 = Seg...6 = Dom
-      const firstDayIdx = (first.getDay() + 6) % 7;
 
       const todayIso = todayISO();
       const cells = [];
 
-      // gera 6 semanas (42 celulas)
-      for(let i=0; i<42; i++){
-        const dayNum = i - firstDayIdx + 1;
-        if(dayNum < 1 || dayNum > daysInMonth){
-          cells.push({ blank:true });
-          continue;
-        }
-        const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
-        const entries = (calendarHistory || [])
-          .filter(e => e.date === iso)
-          .sort((a,b) => {
-            if(Boolean(a.open) !== Boolean(b.open)) return a.open ? -1 : 1;
-            return (a.assunto||"").localeCompare(b.assunto||"");
-          });
-        cells.push({ blank:false, dayNum, iso, entries });
+      // sempre 31 dias + 4 vazios (35 celulas)
+      for(let dayNum = 1; dayNum <= 31; dayNum++){
+        const valid = dayNum <= daysInMonth;
+        const iso = valid ? `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}` : "";
+        const entries = valid
+          ? (calendarHistory || [])
+              .filter(e => e.date === iso)
+              .sort((a,b) => {
+                if(Boolean(a.open) !== Boolean(b.open)) return a.open ? -1 : 1;
+                return (a.assunto||"").localeCompare(b.assunto||"");
+              })
+          : [];
+        cells.push({ blank:false, dayNum, iso, entries, valid });
       }
-
-      // remove a ultima linha se estiver vazia
-      while(cells.length >= 7){
-        const tail = cells.slice(cells.length - 7);
-        const allBlank = tail.every(x => x.blank);
-        if(!allBlank) break;
-        cells.splice(cells.length - 7, 7);
+      for(let i=0; i<4; i++){
+        cells.push({ blank:true });
       }
 
       const showGridNote = !calSelectedISO;
@@ -2499,8 +2555,8 @@
           return `<div class="calCell isBlank" aria-hidden="true"></div>`;
         }
 
-        const isToday = (c.iso === todayIso);
-        const isSelected = (c.iso === calSelectedISO);
+        const isToday = c.iso && (c.iso === todayIso);
+        const isSelected = c.iso && (c.iso === calSelectedISO);
 
         const entriesCount = (c.entries || []).length;
         const list = entriesCount > 1
@@ -2510,8 +2566,10 @@
               return `<div class="calItem ${cls}" title="${escapeHtml(e.assunto)}">${escapeHtml(e.assunto)}</div>`;
             }).join("");
 
+        const countAttr = entriesCount ? ` data-count="${entriesCount}"` : "";
+        const cellAttrs = c.iso ? `data-iso="${c.iso}" data-cal-iso="${c.iso}" tabindex="0"` : "";
         return `
-          <div class="calCell ${isSelected ? "isSelected" : ""}" data-iso="${c.iso}" data-cal-iso="${c.iso}" tabindex="0">
+          <div class="calCell ${isSelected ? "isSelected" : ""}" ${cellAttrs}${countAttr}>
             <div class="calDayNum">
               <span>${c.dayNum}</span>
               ${isToday ? `<span class="calTodayDot" title="Hoje"></span>` : ""}
@@ -2586,18 +2644,35 @@
 
     function openTaskSummaryPopup(ref){
       if(!ref) return;
-      const assunto = getCalendarAssuntoFromTask(ref);
-      const texto = getLastPhaseText(ref) || "-";
-      const pedido = getEffectivePedidoFromTask(ref) || "-";
-      const dataInicial = formatDateBR(ref.data || "");
-      const prazo = formatDateBR(getEffectivePhaseDate(ref) || "");
-      const summaryItems = [
-        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Status:</span> ${escapeHtml(assunto || "-")}</div>`,
-        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Texto:</span> ${escapeHtml(texto)}</div>`,
-        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Pedido:</span> ${escapeHtml(pedido)}</div>`,
-        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Data inicial:</span> ${escapeHtml(dataInicial)}</div>`,
-        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Prazo de resolu&ccedil;&atilde;o:</span> ${escapeHtml(prazo)}</div>`
-      ];
+      const phases = Array.isArray(ref.obs) && ref.obs.length ? ref.obs : [{
+        status: getCalendarAssuntoFromTask(ref) || "",
+        novoPedido: getEffectivePedidoFromTask(ref) || "",
+        date: ref.data || "",
+        prazo: getEffectivePhaseDate(ref) || "",
+        text: getLastPhaseText(ref) || ""
+      }];
+      const summaryItems = phases.map(p => {
+        const status = (p?.status || "").toString().trim() || "-";
+        const pedido = (p?.novoPedido || getEffectivePedidoFromTask(ref) || "-").toString().trim() || "-";
+        const dataInicial = formatDateBR(p?.date || "");
+        const prazo = formatDateBR(p?.prazo || "");
+        const texto = (p?.text || "").toString().trim() || "-";
+        return `
+          <div class="summaryPhase">
+            <div class="summaryRow summaryTop">
+              <div><span class="popupSummaryLabel">Status:</span> ${escapeHtml(status)}</div>
+              <div><span class="popupSummaryLabel">Pedido:</span> ${escapeHtml(pedido)}</div>
+            </div>
+            <div class="summaryRow summaryDates">
+              <div><span class="popupSummaryLabel">Data inicial:</span> ${escapeHtml(dataInicial)}</div>
+              <div><span class="popupSummaryLabel">Prazo de resolu&ccedil;&atilde;o:</span> ${escapeHtml(prazo)}</div>
+            </div>
+            <div class="summaryText">
+              <span class="summaryTextValue">${escapeHtml(texto)}</span>
+            </div>
+          </div>
+        `;
+      });
       const summaryHtml = `
         <div class="popupSummary">
           ${summaryItems.join('<div class="popupSummaryDivider"></div>')}
@@ -2610,6 +2685,66 @@
         showCancel: false,
       });
       if(popupMessage) popupMessage.innerHTML = summaryHtml;
+    }
+
+    function openAttentionPopup(note){
+      const raw = (note ?? "").toString();
+      const text = raw.trim() ? raw : "Fazer acompanhamento di\u00e1rio";
+      openPopup({ title: "Aten\u00e7\u00e3o", message: text, okLabel: "", showCancel: false });
+    }
+
+    async function openNuvemshopSupportPopup(storeName){
+      const base = getNuvemshopSupportBaseUrl(storeName);
+      if(!base){
+        showAlert("WhatsApp do suporte da Nuvemshop n\u00e3o informado.");
+        return;
+      }
+      const message = await openPopup({
+        title: "Suporte Nuvemshop",
+        message: "Digite a mensagem:",
+        okLabel: "Enviar",
+        cancelLabel: "Cancelar",
+        showCancel: true,
+        input: true,
+        inputType: "text",
+        inputValue: "",
+        inputPlaceholder: "Escreva sua mensagem"
+      });
+      if(message === null) return;
+      const text = (message || "").toString().trim();
+      if(!text){
+        showAlert("Digite uma mensagem.");
+        return;
+      }
+      const url = `${base}${base.includes("?") ? "&" : "?"}text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank", "noopener");
+    }
+
+    async function openCustomerWhatsappPopup(raw){
+      const base = buildCustomerWhatsappUrl(raw || "");
+      if(!base){
+        showAlert("Nenhum n\u00famero de WhatsApp informado.");
+        return;
+      }
+      const message = await openPopup({
+        title: "WhatsApp do cliente",
+        message: "Digite a mensagem:",
+        okLabel: "Enviar",
+        cancelLabel: "Cancelar",
+        showCancel: true,
+        input: true,
+        inputType: "text",
+        inputValue: "",
+        inputPlaceholder: "Escreva sua mensagem"
+      });
+      if(message === null) return;
+      const text = (message || "").toString().trim();
+      if(!text){
+        showAlert("Digite uma mensagem.");
+        return;
+      }
+      const url = `${base}${base.includes("?") ? "&" : "?"}text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank", "noopener");
     }
 
     function renderCalendarDayDetails(iso){
@@ -2626,7 +2761,9 @@
       const entries = (calendarHistory || [])
         .filter(e => e.date === iso)
         .sort((a,b) => {
-          if(Boolean(a.open) !== Boolean(b.open)) return a.open ? -1 : 1;
+          const ta = getDueTimestamp(a.date, a.prazoHora);
+          const tb = getDueTimestamp(b.date, b.prazoHora);
+          if(ta !== tb) return ta - tb;
           return (a.assunto||"").localeCompare(b.assunto||"");
         });
 
@@ -2643,14 +2780,18 @@
         const pedido = (e.pedido || "").trim();
         const rastreio = (e.rastreio || "").trim();
         const cliente = (e.cliente || "").trim();
+        const taskRef = (tasks || []).find(t => String(t.id || "") === String(e.id || "")) || (tasksDone || []).find(t => String(t.id || "") === String(e.id || ""));
+        const customerWhatsappRaw = (e.whatsapp || (taskRef?.whatsapp || "")).toString().trim();
+        const customerWhatsappUrl = buildCustomerWhatsappUrl(customerWhatsappRaw);
         const doneTask = (!e.open && Array.isArray(tasksDone))
           ? tasksDone.find(t => String(t.id || "") === String(e.id || ""))
           : null;
         const lastPhaseText = (e.lastPhaseText || getLastPhaseText(doneTask) || "").trim();
+        const closedSummaryText = lastPhaseText || "-";
 
         const pedidoUrl = pedido ? getNuvemshopOrderUrl(loja, pedido) : "";
         const rastreioUrl = rastreio ? (detectCarrierFromCode(rastreio).url || "") : "";
-        const suporteUrl = buildNuvemshopSupportUrl(loja, e.assunto || "", iso, pedido, rastreio);
+        const suporteBase = getNuvemshopSupportBaseUrl(loja);
 
         const pedidoHtml = pedido
           ? (pedidoUrl
@@ -2676,7 +2817,10 @@
 
         const titleGreen = (t) => `<span style="color:#38d9a9; font-weight:800;">${t}</span>`;
         const prazoResolucao = (e.date || "").toString().trim();
-        const prazoResolucaoLabel = prazoResolucao ? formatDateBR(prazoResolucao) : "-";
+        const prazoHora = (e.prazoHora || getEffectivePhaseTime(taskRef) || "").toString().trim();
+        const prazoResolucaoLabel = prazoResolucao
+          ? `${formatDateBR(prazoResolucao)}${prazoHora ? ` ${prazoHora}` : ""}`
+          : "-";
         const prazoCopyBtn = prazoResolucao
           ? `<button class="btn small copyBtn copyBtnHidden" data-copy-text="${escapeHtml(prazoResolucaoLabel)}" title="Copiar prazo de resolu\u00e7\u00e3o" aria-label="Copiar prazo de resolu\u00e7\u00e3o" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
           : "";
@@ -2685,9 +2829,22 @@
           const fromTasks = (tasks || []).find(t => String(t.id || "") === id);
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
-          if(!ref) return { idx: 0, label: "-" };
-          const idx = getEffectivePhaseIndex(ref);
+          if(!ref){
+            const fallback = Number.isFinite(e.phaseIdx)
+              ? e.phaseIdx
+              : Number.parseInt((e.phaseIdx || "0").toString(), 10);
+            const idx = Number.isFinite(fallback) ? fallback : 0;
+            return { idx, label: idx >= 0 ? String(idx + 1) : "-" };
+          }
+          const idx = getLastPhaseIndex(ref);
           return { idx, label: String(idx + 1) };
+        })();
+        const attentionInfo = (() => {
+          const id = String(e.id || "");
+          const fromTasks = (tasks || []).find(t => String(t.id || "") === id);
+          const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
+          const ref = fromTasks || fromDone;
+          return ref ? getEffectivePhaseAttention(ref) : { has:false, note:"" };
         })();
         const phaseCopyBtn = (phaseInfo.label && phaseInfo.label !== "-")
           ? `<button class="btn small copyBtn copyBtnHidden" data-copy-text="${escapeHtml(phaseInfo.label)}" title="Copiar n\u00famero da fase" aria-label="Copiar n\u00famero da fase" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
@@ -2702,14 +2859,29 @@
         ].filter(Boolean).map(line => `<div>${line}</div>`).join("");
 
         return `
-          <div class="calDetailRow">
+          <div class="calDetailRow" data-cal-item-id="${escapeHtml(String(e.id || ""))}">
             <div class="dot ${cls}"></div>
             <div class="txt">
               <p class="title">${escapeHtml(e.assunto || "Sem assunto")}</p>
               <div class="meta">${metaLines}</div>
-              ${(!e.open && lastPhaseText) ? `<div class="note" style="margin-top:6px;"><span style="color:#38d9a9; font-weight:800;">\u00daltima fase:</span> ${escapeHtml(lastPhaseText)}</div>` : ""}
+              ${!e.open ? `<div class="note" style="margin-top:6px;"><span style="color:#38d9a9; font-weight:800;">Resumo:</span> ${escapeHtml(closedSummaryText)}</div>` : ""}
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              ${attentionInfo.has ? `<button class="btn small iconBtn attentionBtn" data-cal-item-attn="${escapeHtml(String(e.id || ""))}" title="Aten\u00e7\u00e3o" aria-label="Aten\u00e7\u00e3o">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 9v4"></path>
+                  <circle cx="12" cy="17" r="1"></circle>
+                  <path d="M10.3 4.5h3.4l6.3 11.1a2 2 0 0 1-1.7 3H5.7a2 2 0 0 1-1.7-3z"></path>
+                </svg>
+              </button>` : ""}
+              ${!e.open ? `<button class="btn small iconBtn" data-cal-item-reactivate="${escapeHtml(String(e.id || ""))}" title="Reativar" aria-label="Reativar">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 12a9 9 0 0 1 9-9"></path>
+                  <polyline points="3 4 3 12 11 12"></polyline>
+                  <path d="M21 12a9 9 0 0 1-9 9"></path>
+                  <polyline points="21 20 21 12 13 12"></polyline>
+                </svg>
+              </button>` : ""}
               <button class="btn small iconBtn" data-cal-item-summary="${escapeHtml(String(e.id || ""))}" title="Resumo" aria-label="Resumo">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <line x1="6" y1="7" x2="20" y2="7"></line>
@@ -2726,12 +2898,17 @@
                   <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
                 </svg>
               </button>
-              ${suporteUrl ? `<a class="btn small iconBtn" href="${escapeHtml(suporteUrl)}" target="_blank" rel="noopener" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
+              ${suporteBase ? `<button class="btn small iconBtn" type="button" data-support-store="${escapeHtml(loja)}" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
                 <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
                   <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
                   <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
                 </svg>
-              </a>` : ""}
+              </button>` : ""}
+              ${customerWhatsappUrl ? `<button class="btn small iconBtn" type="button" data-customer-whatsapp="${escapeHtml(customerWhatsappRaw)}" title="WhatsApp Cliente" aria-label="WhatsApp Cliente">
+                <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
+                  <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
+                </svg>
+              </button>` : ""}
               <button class="btn small iconBtn" data-cal-item-add="${escapeHtml(String(e.id || ""))}" title="Adicionar" aria-label="Adicionar">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -2767,7 +2944,7 @@
           navigator.clipboard.writeText(val).then(()=>{
             btn.style.opacity = "0.6";
             setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
-          }).catch(()=> showAlert("Nao foi possivel copiar."));
+          }).catch(()=> showAlert("Não foi possível copiar."));
         });
       });
 
@@ -2776,7 +2953,7 @@
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-del") || "").toString();
           if(!id) return;
-          const ok = await showConfirm("Excluir este chamado? (Ele será removido da lista e também do calendário.)");
+          const ok = await showConfirm("Excluir este chamado? (Ele será removido da lista de tarefas e também do calendário.)");
           if(!ok) return;
 
           // remove da lista
@@ -2857,6 +3034,51 @@
         });
       });
 
+      calDayDetails.querySelectorAll("[data-cal-item-attn]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const id = (btn.getAttribute("data-cal-item-attn") || "").toString().trim();
+          if(!id) return;
+          const fromTasks = (tasks || []).find(t => String(t.id || "") === id);
+          const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
+          const ref = fromTasks || fromDone;
+          if(!ref){
+            showAlert("Tarefa nǜo encontrada.");
+            return;
+          }
+          const info = getEffectivePhaseAttention(ref);
+          openAttentionPopup(info.note);
+        });
+      });
+
+      calDayDetails.querySelectorAll("[data-cal-item-reactivate]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const id = (btn.getAttribute("data-cal-item-reactivate") || "").toString().trim();
+          if(!id) return;
+          const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
+          if(!fromDone){
+            showAlert("Tarefa nǜo encontrada.");
+            return;
+          }
+          const ok = await showConfirm("Reativar esta tarefa?");
+          if(!ok) return;
+          tasksDone = (tasksDone || []).filter(t => String(t.id || "") !== id);
+          saveTasksDone(tasksDone);
+          tasks = tasks || [];
+          tasks.unshift(fromDone);
+          saveTasks(tasks);
+          const reopenedDate = (getEffectivePhaseDate(fromDone) || (fromDone.proxEtapa || "")).toString().trim();
+          if(reopenedDate){
+            upsertCalendarFromTask(fromDone);
+          }else{
+            calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
+            saveCalendarHistory(calendarHistory);
+          }
+          renderTasks();
+          renderCalendar();
+          renderCalendarDayDetails(calSelectedISO);
+        });
+      });
+
       calDayDetails.querySelectorAll("[data-cal-item-add]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-add") || "").toString().trim();
@@ -2885,7 +3107,7 @@
         clearBtn.addEventListener("click", async ()=>{
           const dayIso = (clearBtn.getAttribute("data-cal-clear-day") || "").trim();
           if(!dayIso) return;
-          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendario?\n\nIsso NAO remove os chamados em aberto, apenas apaga os itens do calendario deste dia.`);
+          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendário?\n\nIsso NÃO remove as tarefas em aberto, apenas apaga os itens do calendário deste dia.`);
           if(!ok) return;
           const next = (calendarHistory || []).filter(e => e.date !== dayIso);
           saveCalendarHistory(next);
@@ -3055,7 +3277,7 @@
     function applyTheme(mode){
       if(mode === "light"){
         document.body.classList.add("light");
-        themeIcon.innerHTML = `
+        const iconMarkup = `
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="4"></circle>
             <line x1="12" y1="2" x2="12" y2="5"></line>
@@ -3068,13 +3290,17 @@
             <line x1="4.5" y1="19.5" x2="6.8" y2="17.2"></line>
           </svg>
         `;
+        if(themeIcon) themeIcon.innerHTML = iconMarkup;
+        if(themeIconMobile) themeIconMobile.innerHTML = iconMarkup;
       }else{
         document.body.classList.remove("light");
-        themeIcon.innerHTML = `
+        const iconMarkup = `
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
           </svg>
         `;
+        if(themeIcon) themeIcon.innerHTML = iconMarkup;
+        if(themeIconMobile) themeIconMobile.innerHTML = iconMarkup;
       }
       localStorage.setItem(STORAGE_KEY_THEME, mode);
     }
@@ -3241,11 +3467,14 @@ function fillPhaseStatusSelect(){
               text: (o?.text ?? o?.descricao ?? o?.obs ?? "").toString(),
               date: (o?.date ?? o?.data ?? "").toString(),
               prazo: (o?.prazo ?? o?.prazoResolucao ?? "").toString(),
+              prazoHora: (o?.prazoHora ?? o?.hora ?? "").toString(),
               chamado: (o?.chamado ?? o?.numeroChamado ?? "").toString(),
               etiqueta: (o?.etiqueta ?? o?.etiquetaReversa ?? "").toString(),
               novoPedido: (o?.novoPedido ?? "").toString(),
               rastreio: (o?.rastreio ?? "").toString(),
               status: (o?.status ?? "").toString(),
+              attention: Boolean(o?.attention),
+              attentionNote: (o?.attentionNote ?? "").toString(),
               state: (o?.state ?? "").toString(),
             }));
           }else{
@@ -3253,16 +3482,19 @@ function fillPhaseStatusSelect(){
               text: String(v || ""),
               date: "",
               prazo: "",
+              prazoHora: "",
               chamado: "",
               etiqueta: "",
               novoPedido: "",
               rastreio: "",
               status: "",
+              attention: false,
+              attentionNote: "",
               state: "",
             }));
           }
         }else if(typeof rawObs === "string" && rawObs.trim().length){
-          obsArr = [{ text: rawObs.toString(), date: "", prazo: "", chamado: "", etiqueta: "", novoPedido: "", rastreio: "", status: "", state: "" }];
+          obsArr = [{ text: rawObs.toString(), date: "", prazo: "", prazoHora: "", chamado: "", etiqueta: "", novoPedido: "", rastreio: "", status: "", attention: false, attentionNote: "", state: "" }];
         }
 
         // limpa objetos vazios
@@ -3271,22 +3503,28 @@ function fillPhaseStatusSelect(){
             text: (o.text||"").toString(),
             date: (o.date||"").toString(),
             prazo: (o.prazo||o.prazoResolucao||"").toString(),
+            prazoHora: (o.prazoHora||o.hora||"").toString(),
             chamado: (o.chamado||o.numeroChamado||"").toString(),
             etiqueta: (o.etiqueta||o.etiquetaReversa||"").toString(),
             novoPedido: (o.novoPedido||"").toString(),
             rastreio: (o.rastreio||"").toString(),
             status: (o.status||"").toString(),
+            attention: Boolean(o.attention),
+            attentionNote: (o.attentionNote||"").toString(),
             state: (o.state||"").toString(),
           }))
           .filter(o =>
             (o.text||"").trim() ||
             (o.date||"").trim() ||
             (o.prazo||"").trim() ||
+            (o.prazoHora||"").trim() ||
             (o.chamado||"").trim() ||
             (o.etiqueta||"").trim() ||
             (o.novoPedido||"").trim() ||
             (o.rastreio||"").trim() ||
             (o.status||"").trim() ||
+            (o.attentionNote||"").trim() ||
+            o.attention ||
             (o.state||"").trim()
           );
         obsArr = normalizePhaseStates(obsArr);
@@ -3348,6 +3586,9 @@ function fillPhaseStatusSelect(){
           rastreio: (e.rastreio || "").toString(),
           cliente: (e.cliente || "").toString(),
           lastPhaseText: (e.lastPhaseText || "").toString(),
+          prazoHora: (e.prazoHora || "").toString(),
+          whatsapp: (e.whatsapp || "").toString(),
+          phaseIdx: Number.isFinite(e.phaseIdx) ? e.phaseIdx : Number.parseInt((e.phaseIdx || "0").toString(), 10) || 0,
           open: Boolean(e.open),
           createdAt: (e.createdAt || "").toString(),
           updatedAt: (e.updatedAt || "").toString(),
@@ -3393,6 +3634,7 @@ function fillPhaseStatusSelect(){
     }
 
     function exportFile(){
+      const themePref = localStorage.getItem(STORAGE_KEY_THEME) || "";
       const data = {
         version: BACKUP_VERSION,
         exportedAt: new Date().toISOString(),
@@ -3400,7 +3642,15 @@ function fillPhaseStatusSelect(){
         menuButtons,
         stores,
         tasks,
-        calendarHistory
+        tasksDone,
+        calendarHistory,
+        quickLinks,
+        nuvemLinks,
+        searchTags,
+        sizeTablesCustom,
+        sizeTablesOverrides,
+        productsCustom,
+        themePref
       };
       const text = JSON.stringify(data, null, 2);
       const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
@@ -3520,6 +3770,7 @@ function fillPhaseStatusSelect(){
 
         // tasks (se existir)
         const importedTasks = Array.isArray(parsed.tasks) ? normalizeTasks(parsed.tasks) : null;
+        const importedDone = Array.isArray(parsed.tasksDone) ? normalizeTasks(parsed.tasksDone) : null;
 
         // calend\u00e1rio (se existir)
         const importedCalendar = Array.isArray(parsed.calendarHistory)
@@ -3567,14 +3818,46 @@ function fillPhaseStatusSelect(){
           saveStores(parsed.stores);
         }
 
+        if(parsed.quickLinks && typeof parsed.quickLinks === "object"){
+          saveQuickLinks(parsed.quickLinks);
+        }
+
+        if(parsed.nuvemLinks && typeof parsed.nuvemLinks === "object"){
+          saveNuvemLinks(parsed.nuvemLinks);
+        }
+
+        if(Array.isArray(parsed.searchTags)){
+          saveSearchTags(parsed.searchTags);
+        }
+
+        if(Array.isArray(parsed.sizeTablesCustom)){
+          saveSizeTablesCustom(parsed.sizeTablesCustom);
+        }
+
+        if(Array.isArray(parsed.sizeTablesOverrides)){
+          saveSizeTablesOverrides(parsed.sizeTablesOverrides);
+        }
+
+        if(Array.isArray(parsed.productsCustom)){
+          saveProducts(parsed.productsCustom);
+        }
+
         // aplica tasks importadas (se vier)
         if(importedTasks){
           saveTasks(importedTasks);
         }
 
+        if(importedDone){
+          saveTasksDone(importedDone);
+        }
+
         // aplica calend\u00e1rio importado (se vier)
         if(importedCalendar){
           saveCalendarHistory(importedCalendar);
+        }
+
+        if(parsed.themePref === "light" || parsed.themePref === "dark"){
+          applyTheme(parsed.themePref);
         }
 
         // sincroniza flags open/closed e datas do calend\u00e1rio com a lista atual
@@ -3597,11 +3880,61 @@ function fillPhaseStatusSelect(){
       if(!rightDrawer || !rightDrawerBackdrop) return;
       rightDrawer.classList.add("show");
       rightDrawerBackdrop.classList.add("show");
+      if(pendingRightDrawerReturn && isMobileViewport()){
+        rightDrawer.dataset.returnDrawer = "1";
+        if(closeRightDrawerBtn){
+          if(!closeRightDrawerBtn.dataset.originalLabel) closeRightDrawerBtn.dataset.originalLabel = closeRightDrawerBtn.textContent;
+          closeRightDrawerBtn.textContent = "Voltar";
+        }
+        pendingRightDrawerReturn = false;
+      }
     }
     function closeRightDrawer(){
       if(!rightDrawer || !rightDrawerBackdrop) return;
       rightDrawer.classList.remove("show");
       rightDrawerBackdrop.classList.remove("show");
+      const shouldReturn = isMobileViewport() && rightDrawer.dataset.returnDrawer === "1";
+      if(rightDrawer.dataset.returnDrawer === "1") rightDrawer.dataset.returnDrawer = "";
+      if(closeRightDrawerBtn && closeRightDrawerBtn.dataset.originalLabel){
+        closeRightDrawerBtn.textContent = closeRightDrawerBtn.dataset.originalLabel;
+        delete closeRightDrawerBtn.dataset.originalLabel;
+      }
+      if(shouldReturn) openDrawer();
+    }
+
+    let pendingDrawerReturn = false;
+    function isMobileViewport(){
+      return window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+    }
+    function markOverlayForDrawerReturn(overlay, closeButtons){
+      if(!overlay || !pendingDrawerReturn || !isMobileViewport()) return;
+      overlay.dataset.returnDrawer = "1";
+      pendingDrawerReturn = false;
+      (closeButtons || []).forEach((btn)=>{
+        if(!btn) return;
+        if(!btn.dataset.originalLabel) btn.dataset.originalLabel = btn.textContent;
+        btn.textContent = "Voltar";
+      });
+    }
+    function restoreCloseButtons(closeButtons){
+      (closeButtons || []).forEach((btn)=>{
+        if(!btn) return;
+        if(!btn.dataset.originalLabel) return;
+        btn.textContent = btn.dataset.originalLabel;
+        delete btn.dataset.originalLabel;
+      });
+    }
+    function handleDrawerReturnAfterClose(overlay, closeButtons){
+      if(!overlay) return;
+      const shouldReturn = isMobileViewport() && overlay.dataset.returnDrawer === "1";
+      if(overlay.dataset.returnDrawer === "1") overlay.dataset.returnDrawer = "";
+      restoreCloseButtons(closeButtons);
+      if(shouldReturn) openDrawer();
+    }
+    function clearDrawerReturnState(overlay, closeButtons){
+      if(!overlay) return;
+      if(overlay.dataset.returnDrawer === "1") overlay.dataset.returnDrawer = "";
+      restoreCloseButtons(closeButtons);
     }
 
     function setSizeTableUploadError(message){
@@ -4723,9 +5056,14 @@ function fillPhaseStatusSelect(){
 
       const stRaw = (((it && it.store) ? it.store : "Di\u00e1rio Nerdify") + "").trim();
       const storeLabel = (stRaw === "ALL") ? "Todas as lojas" : stRaw;
-      const storePillHtml = `
-        <div class="tags" style="margin-top:6px;">
-          <span class="tag">Loja: ${escapeHtml(storeLabel)}</span>
+      const storeData = getStoreByName(storeLabel);
+      const storeLogoUrl = (storeData && storeData.logoUrl)
+        ? storeData.logoUrl
+        : (storeLabel.toLowerCase().includes("shop 80") ? DEFAULT_SHOP80_LOGO : DEFAULT_DIARIO_LOGO);
+      const storeBlockHtml = `
+        <div class="questionStoreBlock">
+          <img class="questionStoreLogo" src="${escapeHtml(storeLogoUrl)}" alt="Logo ${escapeHtml(storeLabel)}" loading="lazy">
+          <div class="questionStoreLabel">Loja: ${escapeHtml(storeLabel)}</div>
         </div>
       `;
 
@@ -4751,7 +5089,12 @@ function fillPhaseStatusSelect(){
                 <div class="label">Links (para DM)</div>
                 <div class="pre" data-copy="${escapeHtml(linksDmText)}">${escapeHtml(linksDmText)}</div>
               </div>
-              <button class="btn small copyBtn" data-copybtn>Copiar</button>
+              <button class="btn small iconBtn copyBtn" data-copybtn title="Copiar" aria-label="Copiar">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                  <rect x="5" y="5" width="10" height="10" rx="2"></rect>
+                </svg>
+              </button>
             </div>
           </div>
         ` : "";
@@ -4791,12 +5134,22 @@ function fillPhaseStatusSelect(){
             </div>
           </div>
 
-          ${storePillHtml}
+          ${storeBlockHtml}
 
           ${rText ? `
             <div class="linksBlock">
-              <div class="label">Resposta</div>
-              <div class="pre" data-copy="${escapeHtml(rText)}">${escapeHtml(rText)}</div>
+              <div class="copyRow">
+                <div style="width:100%;">
+                  <div class="label">Resposta</div>
+                  <div class="pre" data-copy="${escapeHtml(rText)}">${escapeHtml(rText)}</div>
+                </div>
+                <button class="btn small iconBtn copyBtn" data-copybtn title="Copiar" aria-label="Copiar">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                    <rect x="5" y="5" width="10" height="10" rx="2"></rect>
+                  </svg>
+                </button>
+              </div>
             </div>
           ` : ""}
 
@@ -4891,8 +5244,13 @@ function fillPhaseStatusSelect(){
           const text = pre ? pre.getAttribute("data-copy") : "";
           if(!text) return;
           navigator.clipboard.writeText(text).then(()=>{
-            btn.textContent = "Copiado!";
-            setTimeout(()=> btn.textContent = "Copiar", 900);
+            if(btn.classList.contains("iconBtn")){
+              btn.style.opacity = "0.6";
+              setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
+            }else{
+              btn.textContent = "Copiado!";
+              setTimeout(()=> btn.textContent = "Copiar", 900);
+            }
           }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
         });
       });
@@ -5015,20 +5373,28 @@ function fillPhaseStatusSelect(){
         const textEl = b.querySelector("textarea.obsItem");
         const dateEl = b.querySelector("input.obsDate");
         const prazoEl = b.querySelector("input.obsPrazo");
+        const prazoHoraEl = b.querySelector("input.obsPrazoHora");
         const chamadoEl = b.querySelector("input.obsChamado");
         const etiquetaEl = b.querySelector("input.obsEtiqueta");
         const novoEl = b.querySelector("input.obsNovoPedido");
         const rastEl = b.querySelector("input.obsRastreio");
         const statusEl = b.querySelector("select.obsStatus");
+        const attentionEl = b.querySelector("input.obsAttention");
+        const attentionNoteEl = b.querySelector("textarea.obsAttentionNote");
         return {
           text: ((textEl?.value || "").toString()).trim(),
           date: ((dateEl?.value || "").toString()).trim(),
           prazo: ((prazoEl?.value || "").toString()).trim(),
+          prazoHora: ((prazoHoraEl?.value || "").toString()).trim(),
           chamado: ((chamadoEl?.value || "").toString()).trim(),
           etiqueta: ((etiquetaEl?.value || "").toString()).trim(),
           novoPedido: ((novoEl?.value || "").toString()).trim(),
           rastreio: ((rastEl?.value || "").toString()).trim(),
           status: ((statusEl?.value || "").toString()).trim(),
+          attention: Boolean(attentionEl && attentionEl.checked),
+          attentionNote: Boolean(attentionEl && attentionEl.checked)
+            ? ((attentionNoteEl?.value || "").toString()).trim()
+            : "",
           state: ((b.dataset.state || "").toString()).trim(),
           _i: i,
         };
@@ -5036,14 +5402,14 @@ function fillPhaseStatusSelect(){
 
       // remove totalmente vazias
       const cleaned = out
-        .map(o => ({ text:o.text, date:o.date, prazo:o.prazo, chamado:o.chamado, etiqueta:o.etiqueta, novoPedido:o.novoPedido, rastreio:o.rastreio, status:o.status, state:o.state }))
-        .filter(o => o.text || o.date || o.prazo || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.status || o.state);
+        .map(o => ({ text:o.text, date:o.date, prazo:o.prazo, prazoHora:o.prazoHora, chamado:o.chamado, etiqueta:o.etiqueta, novoPedido:o.novoPedido, rastreio:o.rastreio, status:o.status, attention:o.attention, attentionNote:o.attentionNote, state:o.state }))
+        .filter(o => o.text || o.date || o.prazo || o.prazoHora || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.status || o.attention || o.attentionNote || o.state);
 
       return cleaned;
     }
 
     function createDescPhaseBlock(idx, data){
-      const d = data || { text:"", date:"", prazo:"", chamado:"", etiqueta:"", novoPedido:"", rastreio:"", state:"" };
+      const d = data || { text:"", date:"", prazo:"", prazoHora:"", chamado:"", etiqueta:"", novoPedido:"", rastreio:"", attention:false, attentionNote:"", state:"" };
       // monta as op\u00e7\u00f5es do select de status reutilizando PHASE_STATUS_OPTIONS
       const buildStatusOptions = (selected) => {
         const sel = (selected || "").toString().trim();
@@ -5100,6 +5466,17 @@ function fillPhaseStatusSelect(){
       inputPrazo.dataset.index = String(idx);
       inputPrazo.value = (d.prazo || "");
       colPrazo.appendChild(inputPrazo);
+
+      const colPrazoHora = document.createElement("div");
+      colPrazoHora.style.flex = "1";
+      colPrazoHora.style.minWidth = "180px";
+      colPrazoHora.innerHTML = `<div class="label" style="margin-bottom:6px;">Hor&aacute;rio do prazo</div>`;
+      const inputPrazoHora = document.createElement("input");
+      inputPrazoHora.type = "time";
+      inputPrazoHora.className = "obsPrazoHora";
+      inputPrazoHora.dataset.index = String(idx);
+      inputPrazoHora.value = (d.prazoHora || "");
+      colPrazoHora.appendChild(inputPrazoHora);
 
       const colChamado = document.createElement("div");
       colChamado.style.flex = "1";
@@ -5161,14 +5538,49 @@ function fillPhaseStatusSelect(){
 
       row.appendChild(colDate);
       row.appendChild(colPrazo);
+      row.appendChild(colPrazoHora);
       row.appendChild(colChamado);
       row.appendChild(colEtiqueta);
       row.appendChild(colNovo);
       row.appendChild(colRast);
       row.appendChild(colStatus);
 
+      const attentionRow = document.createElement("div");
+      attentionRow.className = "attentionRow";
+      const attentionLabel = document.createElement("label");
+      attentionLabel.className = "attentionToggle";
+      const attentionInput = document.createElement("input");
+      attentionInput.type = "checkbox";
+      attentionInput.className = "obsAttention";
+      attentionInput.dataset.index = String(idx);
+      attentionInput.checked = Boolean(d.attention || d.attentionNote);
+      attentionLabel.appendChild(attentionInput);
+      attentionLabel.appendChild(document.createTextNode(" Atenção"));
+      attentionRow.appendChild(attentionLabel);
+
+      const attentionWrap = document.createElement("div");
+      attentionWrap.className = "attentionNoteWrap";
+      attentionWrap.style.display = attentionInput.checked ? "block" : "none";
+      const attentionLabelText = document.createElement("div");
+      attentionLabelText.className = "label";
+      attentionLabelText.textContent = "Observações";
+      const attentionNote = document.createElement("textarea");
+      attentionNote.className = "obsAttentionNote";
+      attentionNote.dataset.index = String(idx);
+      attentionNote.rows = 3;
+      attentionNote.placeholder = "Digite as observações...";
+      attentionNote.value = (d.attentionNote || "");
+      attentionWrap.appendChild(attentionLabelText);
+      attentionWrap.appendChild(attentionNote);
+
+      attentionInput.addEventListener("change", ()=>{
+        attentionWrap.style.display = attentionInput.checked ? "block" : "none";
+      });
+
       wrap.appendChild(textarea);
       wrap.appendChild(row);
+      wrap.appendChild(attentionRow);
+      wrap.appendChild(attentionWrap);
       return wrap;
     }
 
@@ -5176,7 +5588,7 @@ function fillPhaseStatusSelect(){
       if(!obsList) return;
 
       const safe = Array.isArray(phases) ? phases : [];
-      const list = (safe.length ? safe : [{ text:"", date:"", prazo:"", chamado:"", etiqueta:"", novoPedido:"", rastreio:"", state:"" }]);
+      const list = (safe.length ? safe : [{ text:"", date:"", prazo:"", prazoHora:"", chamado:"", etiqueta:"", novoPedido:"", rastreio:"", attention:false, attentionNote:"", state:"" }]);
 
       obsList.innerHTML = "";
       list.forEach((p, idx) => {
@@ -5199,6 +5611,8 @@ function fillPhaseStatusSelect(){
         if(d) d.dataset.index = String(idx);
         const p = b.querySelector("input.obsPrazo");
         if(p) p.dataset.index = String(idx);
+        const ph = b.querySelector("input.obsPrazoHora");
+        if(ph) ph.dataset.index = String(idx);
         const c = b.querySelector("input.obsChamado");
         if(c) c.dataset.index = String(idx);
         const e = b.querySelector("input.obsEtiqueta");
@@ -5209,6 +5623,10 @@ function fillPhaseStatusSelect(){
         if(r) r.dataset.index = String(idx);
         const s = b.querySelector("select.obsStatus");
         if(s) s.dataset.index = String(idx);
+        const a = b.querySelector("input.obsAttention");
+        if(a) a.dataset.index = String(idx);
+        const an = b.querySelector("textarea.obsAttentionNote");
+        if(an) an.dataset.index = String(idx);
 
         const add = b.querySelector("[data-obs-add]");
         if(add) add.setAttribute("data-obs-add", String(idx));
@@ -5257,6 +5675,28 @@ function fillPhaseStatusSelect(){
       return "";
     }
 
+    function getEffectivePhaseTime(t){
+      const phases = Array.isArray(t?.obs) ? t.obs : [];
+      if(!phases.length) return "";
+      for(let i = phases.length - 1; i >= 0; i--){
+        const prazo = ((phases[i]?.prazo || "").toString()).trim();
+        if(prazo) return ((phases[i]?.prazoHora || phases[i]?.hora || "").toString()).trim();
+      }
+      for(let i = phases.length - 1; i >= 0; i--){
+        const d = ((phases[i]?.date || "").toString()).trim();
+        if(d) return ((phases[i]?.prazoHora || phases[i]?.hora || "").toString()).trim();
+      }
+      return "";
+    }
+
+    function getDueTimestamp(dateStr, timeStr){
+      const date = (dateStr || "").toString().trim();
+      if(!date) return Number.POSITIVE_INFINITY;
+      const time = (timeStr || "").toString().trim() || "23:59";
+      const ts = new Date(`${date}T${time}:00`).getTime();
+      return Number.isNaN(ts) ? Number.POSITIVE_INFINITY : ts;
+    }
+
     function getEffectivePhaseIndex(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       if(!phases.length) return 0;
@@ -5271,6 +5711,21 @@ function fillPhaseStatusSelect(){
       return phases.length - 1;
     }
 
+    function getActivePhaseIndex(t){
+      const phases = Array.isArray(t?.obs) ? t.obs : [];
+      if(!phases.length) return 0;
+      for(let i = phases.length - 1; i >= 0; i--){
+        const st = ((phases[i]?.state || "").toString()).trim();
+        if(st === PHASE_STATE_ACTIVE) return i;
+      }
+      return phases.length - 1;
+    }
+
+    function getLastPhaseIndex(t){
+      const phases = Array.isArray(t?.obs) ? t.obs : [];
+      return phases.length ? phases.length - 1 : 0;
+    }
+
     function getEffectivePhaseStatus(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       for(let i = phases.length - 1; i >= 0; i--){
@@ -5278,6 +5733,27 @@ function fillPhaseStatusSelect(){
         if(st) return st;
       }
       return "";
+    }
+
+    function getPhaseAttentionByIndex(t, idx){
+      const phases = Array.isArray(t?.obs) ? t.obs : [];
+      if(!Number.isFinite(idx) || idx < 0 || idx >= phases.length) return { has:false, note:"" };
+      const phase = phases[idx] || {};
+      const note = (phase.attentionNote || "").toString().trim();
+      const has = Boolean(phase.attention || note);
+      return { has, note };
+    }
+
+    function getPhaseDateByIndex(t, idx){
+      const phases = Array.isArray(t?.obs) ? t.obs : [];
+      if(!Number.isFinite(idx) || idx < 0 || idx >= phases.length) return "";
+      const phase = phases[idx] || {};
+      return ((phase.prazo || phase.date || "")).toString().trim();
+    }
+
+    function getEffectivePhaseAttention(t){
+      const idx = getEffectivePhaseIndex(t);
+      return getPhaseAttentionByIndex(t, idx);
     }
 
     function getCalendarAssuntoFromTask(t){
@@ -5380,6 +5856,9 @@ function fillPhaseStatusSelect(){
 
 function getNuvemshopSupportBaseUrl(lojaText){
       const l = (lojaText || "").trim();
+      const store = getStoreByName(l);
+      const custom = (store?.supportWhatsapp || "").toString().trim();
+      if(custom) return custom;
       if(l === "Shop 80") return "https://api.whatsapp.com/send?phone=551140207216";
       return "https://api.whatsapp.com/send?phone=551150395895"; // Di\u00e1rio Nerdify (padr\u00e3o)
     }
@@ -5444,6 +5923,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       renderTasks();
     }
 
+    function togglePhaseEditAttention(){
+      if(!phaseEditAttentionWrap) return;
+      const show = Boolean(phaseEditAttention && phaseEditAttention.checked);
+      phaseEditAttentionWrap.style.display = show ? "block" : "none";
+    }
+
     function openPhaseEditor({ taskId, mode, index }){
       const id = (taskId || "").trim();
       if(!id) return;
@@ -5483,6 +5968,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(phaseEditChamado) phaseEditChamado.value = (current.chamado || "");
       if(phaseEditEtiqueta) phaseEditEtiqueta.value = (current.etiqueta || "");
       if(phaseEditPrazo) phaseEditPrazo.value = (current.prazo || "");
+      if(phaseEditPrazoHora) phaseEditPrazoHora.value = (current.prazoHora || "");
+      const attentionValue = Boolean(current.attention || current.attentionNote);
+      if(phaseEditAttention) phaseEditAttention.checked = attentionValue;
+      if(phaseEditAttentionNote) phaseEditAttentionNote.value = (current.attentionNote || "");
+      togglePhaseEditAttention();
       const phaseStatusValue = (phaseEditMode === "add")
         ? ""
         : (current.status || "");
@@ -5515,14 +6005,19 @@ function getNuvemshopSupportBaseUrl(lojaText){
         text: ((phaseEditText?.value || "").toString()).trim(),
         date: ((phaseEditDate?.value || "").toString()).trim(),
         prazo: ((phaseEditPrazo?.value || "").toString()).trim(),
+        prazoHora: ((phaseEditPrazoHora?.value || "").toString()).trim(),
         chamado: ((phaseEditChamado?.value || "").toString()).trim(),
         etiqueta: ((phaseEditEtiqueta?.value || "").toString()).trim(),
         novoPedido: ((phaseEditNovoPedido?.value || "").toString()).trim(),
         rastreio: ((phaseEditRastreio?.value || "").toString()).trim(),
         status: ((phaseEditStatus?.value || "").toString()).trim(),
+        attention: Boolean(phaseEditAttention && phaseEditAttention.checked),
+        attentionNote: Boolean(phaseEditAttention && phaseEditAttention.checked)
+          ? ((phaseEditAttentionNote?.value || "").toString()).trim()
+          : "",
       };
 
-      if(!next.status && !next.text && !next.date && !next.prazo && !next.chamado && !next.etiqueta && !next.novoPedido && !next.rastreio){
+      if(!next.status && !next.text && !next.date && !next.prazo && !next.prazoHora && !next.chamado && !next.etiqueta && !next.novoPedido && !next.rastreio && !next.attention){
         showAlert("Preencha pelo menos um campo da fase.");
         return;
       }
@@ -5584,16 +6079,19 @@ function getNuvemshopSupportBaseUrl(lojaText){
             text: (o?.text || "").toString().trim(),
             date: (o?.date || "").toString().trim(),
             prazo: (o?.prazo || "").toString().trim(),
+            prazoHora: (o?.prazoHora || "").toString().trim(),
             chamado: (o?.chamado || "").toString().trim(),
             etiqueta: (o?.etiqueta || "").toString().trim(),
             novoPedido: (o?.novoPedido || "").toString().trim(),
             rastreio: (o?.rastreio || "").toString().trim(),
             status: (o?.status || "").toString().trim(),
+            attention: Boolean(o?.attention),
+            attentionNote: (o?.attentionNote || "").toString().trim(),
             state: (o?.state || "").toString().trim(),
           }))
         : [];
 
-      const cleaned = phases.filter(o => o.text || o.date || o.prazo || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.status || o.state);
+      const cleaned = phases.filter(o => o.text || o.date || o.prazo || o.prazoHora || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.status || o.attention || o.attentionNote || o.state);
       if(!cleaned.length) return "";
 
       const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
@@ -5605,6 +6103,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(o.status) parts.push(`Status: <b>${escapeHtml(o.status)}</b>`);
         if(o.date) parts.push(`Data inicial: <b>${escapeHtml(formatDateBR(o.date))}</b>`);
         if(o.prazo) parts.push(`Prazo de resolu&ccedil;&atilde;o: <b>${escapeHtml(formatDateBR(o.prazo))}</b>`);
+        if(o.prazoHora) parts.push(`Hor&aacute;rio: <b>${escapeHtml(o.prazoHora)}</b>`);
         if(o.chamado) parts.push(`Chamado Nuvemshop: <b>${escapeHtml(o.chamado)}</b>`);
         if(o.etiqueta){
           const etiquetaLink = `<a href="#" data-copy-etiqueta="${escapeHtml(o.etiqueta)}" data-etiqueta-url="${escapeHtml(etiquetaUrl)}" style="font-weight:600; text-decoration:underline;">${escapeHtml(o.etiqueta)}</a>`;
@@ -5663,6 +6162,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const isActive = stateValue === PHASE_STATE_ACTIVE;
         const phaseStateHtml = `<div class="phaseState ${isActive ? "isActive" : "isDone"} phaseStateSmall"><span class="phaseDot"></span><span>${escapeHtml(stateValue)}</span></div>`;
         const showToggle = cleaned.length > 1 && o._idx === lastIdx;
+        const showAttention = Boolean(o.attention || o.attentionNote);
+        const attentionBtn = showAttention
+          ? `<button type="button" class="btn small iconBtn attentionBtn" data-task-phase-attn="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Aten\u00e7\u00e3o" aria-label="Aten\u00e7\u00e3o">
+               <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                 <path d="M12 9v4"></path>
+                 <circle cx="12" cy="17" r="1"></circle>
+                 <path d="M10.3 4.5h3.4l6.3 11.1a2 2 0 0 1-1.7 3H5.7a2 2 0 0 1-1.7-3z"></path>
+               </svg>
+             </button>`
+          : "";
         const summaryBtn = (o._idx === lastIdx)
           ? `<button type="button" class="btn small iconBtn" data-task-summary="${escapeHtml(safeTaskId)}" title="Resumo" aria-label="Resumo">
                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
@@ -5672,6 +6181,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
                  <circle cx="4" cy="7" r="1"></circle>
                  <circle cx="4" cy="12" r="1"></circle>
                  <circle cx="4" cy="17" r="1"></circle>
+               </svg>
+             </button>`
+          : "";
+        const calendarBtn = (o._idx === lastIdx)
+          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calendário" aria-label="Calendário">
+               <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                 <rect x="3" y="4" width="18" height="17" rx="2"></rect>
+                 <line x1="16" y1="2" x2="16" y2="6"></line>
+                 <line x1="8" y1="2" x2="8" y2="6"></line>
+                 <line x1="3" y1="10" x2="21" y2="10"></line>
                </svg>
              </button>`
           : "";
@@ -5699,7 +6218,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
             ${metaHtml}
             ${textHtml}
             <div class="phaseBtnsRow">
+              ${attentionBtn}
               ${summaryBtn}
+              ${calendarBtn}
               ${toggleBtn}
               ${phaseBtns}
             </div>
@@ -5930,8 +6451,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }).sort((a,b) => {
         const da = (getEffectivePhaseDate(a) || "").trim();
         const db = (getEffectivePhaseDate(b) || "").trim();
-        const ta = da ? new Date(`${da}T00:00:00`).getTime() : Number.POSITIVE_INFINITY;
-        const tb = db ? new Date(`${db}T00:00:00`).getTime() : Number.POSITIVE_INFINITY;
+        const ta = getDueTimestamp(da, getEffectivePhaseTime(a));
+        const tb = getDueTimestamp(db, getEffectivePhaseTime(b));
         if(ta !== tb) return ta - tb;
         const aa = (a.assunto || "").toString();
         const bb = (b.assunto || "").toString();
@@ -6009,7 +6530,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
             `</svg></button>`
           : "";
 
-        const subtitleHtml = [pedidoHtml, clienteHtml].filter(Boolean).join(" - ");
+        const subtitleParts = [pedidoHtml, clienteHtml].filter(Boolean);
+        const subtitleHtml = subtitleParts.length
+          ? subtitleParts.map((line)=> `<div class="taskSubLine">${line}</div>`).join("")
+          : `<div class="taskSubLine">-</div>`;
         const logoHtml = lojaLogoUrl
           ? `<img src="${escapeHtml(lojaLogoUrl)}" alt="${escapeHtml(lojaText)}" style="height:22px; width:auto; display:block;" />`
           : "";
@@ -6019,16 +6543,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
         return `
           <div class="taskCard ${dueToday ? "taskDueToday" : ""}" data-task-id="${escapeHtml(t.id)}">
             <div class="taskTopRow">
-              <div style="min-width:240px;">
+              <div class="taskMainInfo">
                 <p class="taskTitle">${escapeHtml(title)}</p>
-                <div class="note" style="margin-top:6px;">${subtitleHtml || "-"}</div>
+                <div class="note taskSubMeta" style="margin-top:6px;">${subtitleHtml}</div>
               </div>
-              ${logoHtml ? `<div style="display:flex; align-items:center; justify-content:flex-end;">${logoHtml}</div>` : ""}
+              ${logoHtml ? `<div class="taskLogoWrap">${logoHtml}</div>` : ""}
             </div>
 
             <div class="taskMeta">
               <span class="pillMini">Loja: ${escapeHtml(lojaText)}</span>
-              <span class="pillMini">Proxima Etapa: <b>${escapeHtml(prox)}</b></span>
+              <span class="pillMini">Próxima Etapa: <b>${escapeHtml(prox)}</b></span>
               <span class="pillMini">Data inicial: <b>${escapeHtml(data)}</b></span>
             </div>
 
@@ -6046,17 +6570,17 @@ function getNuvemshopSupportBaseUrl(lojaText){
                   <polyline points="5 13 9 17 19 7"></polyline>
                 </svg>
               </button>
-              <a class="btn small iconBtn" href="${escapeHtml(buildNuvemshopSupportUrl(lojaText, assuntoRaw, data, pedidoEfetivo, rastEfetivo))}" target="_blank" rel="noopener" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
+              <button class="btn small iconBtn" type="button" data-support-store="${escapeHtml(lojaText)}" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
                 <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
                   <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
                   <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
                 </svg>
-              </a>
-              ${(buildCustomerWhatsappUrl(t.whatsapp||"")) ? `<a class="btn small iconBtn" href="${escapeHtml(buildCustomerWhatsappUrl(t.whatsapp||""))}" target="_blank" rel="noopener" title="WhatsApp Cliente" aria-label="WhatsApp Cliente">
+              </button>
+              ${(buildCustomerWhatsappUrl(t.whatsapp||"")) ? `<button class="btn small iconBtn" type="button" data-customer-whatsapp="${escapeHtml(t.whatsapp || "")}" title="WhatsApp Cliente" aria-label="WhatsApp Cliente">
                 <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
                   <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
                 </svg>
-              </a>` : ``}
+              </button>` : ``}
               <button class="btn small iconBtn" data-task-edit="${escapeHtml(t.id)}" title="Editar" aria-label="Editar">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 20h9"></path>
@@ -6172,7 +6696,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             setTimeout(()=>{ el.style.opacity = "1"; }, 450);
             openUrl();
           }).catch(()=>{
-            showAlert("Nao foi possivel copiar.");
+            showAlert("Não foi possível copiar.");
             openUrl();
           });
         });
@@ -6209,12 +6733,84 @@ function getNuvemshopSupportBaseUrl(lojaText){
           openTaskSummaryPopup(ref);
         });
       });
+      tasksList.querySelectorAll("[data-task-phase-calendar]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const id = (btn.getAttribute("data-task-phase-calendar") || "").toString().trim();
+          const idxRaw = (btn.getAttribute("data-phase-idx") || "-1").toString();
+          const phaseIdx = Number.parseInt(idxRaw, 10);
+          if(!id) return;
+          const ref = (tasks || []).find(t => String(t.id || "") === id);
+          if(!ref){
+            showAlert("Tarefa n€oo encontrada.");
+            return;
+          }
+          const date = getPhaseDateByIndex(ref, phaseIdx) || getEffectivePhaseDate(ref);
+          if(!date){
+            showAlert("Esta fase n€oo possui data.");
+            return;
+          }
+          const parts = date.split("-");
+          if(parts.length === 3){
+            const y = Number(parts[0]);
+            const m = Number(parts[1]) - 1;
+            if(Number.isFinite(y) && Number.isFinite(m)){
+              calViewYear = y;
+              calViewMonth = m;
+            }
+          }
+          calSelectedISO = date;
+          openCalendar();
+          renderCalendarDayDetails(date);
+          requestAnimationFrame(()=>{
+            if(!calDayDetails) return;
+            const row = calDayDetails.querySelector(`[data-cal-item-id="${CSS.escape(id)}"]`);
+            if(!row) return;
+            row.classList.add("isFocus");
+            row.scrollIntoView({ behavior:"smooth", block:"center" });
+            setTimeout(()=> row.classList.remove("isFocus"), 1400);
+          });
+        });
+      });
+      tasksList.querySelectorAll("[data-task-phase-attn]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const id = (btn.getAttribute("data-task-phase-attn") || "").toString().trim();
+          const idx = parseInt((btn.getAttribute("data-phase-idx") || "-1"), 10);
+          if(!id) return;
+          if(!Number.isFinite(idx) || idx < 0) return;
+          const ref = (tasks || []).find(t => String(t.id || "") === id);
+          if(!ref){
+            showAlert("Tarefa nǜo encontrada.");
+            return;
+          }
+          const info = getPhaseAttentionByIndex(ref, idx);
+          if(!info.has){
+            openAttentionPopup("");
+            return;
+          }
+          openAttentionPopup(info.note);
+        });
+      });
       tasksList.querySelectorAll("[data-task-close]").forEach(btn=>{
         btn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation();
           const id = (btn.getAttribute("data-task-close") || "").trim();
           openCloseTaskModal(id);
         });
       });
+      if(tasksList && tasksList.dataset.supportBound !== "1"){
+        tasksList.addEventListener("click", (e)=>{
+          const btn = e.target.closest("[data-support-store]");
+          if(!btn) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const storeName = (btn.getAttribute("data-support-store") || "").toString().trim();
+          openNuvemshopSupportPopup(storeName);
+        });
+        tasksList.dataset.supportBound = "1";
+      }
 
       // editar/excluir fase espec\u00edfica (bot\u00f5es dentro de cada fase)
       tasksList.querySelectorAll("[data-task-phase-editone]").forEach(btn=>{
@@ -6227,17 +6823,28 @@ function getNuvemshopSupportBaseUrl(lojaText){
         });
       });
       tasksList.querySelectorAll("[data-task-phase-delone]").forEach(btn=>{
-        btn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation();
+        btn.addEventListener("click", async (e)=>{ e.preventDefault(); e.stopPropagation();
           const id = (btn.getAttribute("data-task-phase-delone") || "").trim();
           const idx = parseInt((btn.getAttribute("data-phase-idx") || "-1"), 10);
           if(!id) return;
           if(!Number.isFinite(idx) || idx < 0) return;
-          // abre modal j\u00e1 no modo edit e dispara o delete pelo bot\u00e3o (mant\u00e9m UX consistente)
-          openPhaseEditor({ taskId:id, mode:"edit", index:idx });
-          if(phaseEditDeleteBtn){
-            // d\u00e1 foco no bot\u00e3o de excluir para ficar claro
-            setTimeout(()=>{ phaseEditDeleteBtn.focus(); }, 80);
+          const t = tasks.find(x => x.id === id);
+          if(!t) return;
+          if(!Array.isArray(t.obs) || !t.obs.length){
+            showAlert("N\u00e3o h\u00e1 fases para excluir.");
+            return;
           }
+          if(idx >= t.obs.length){
+            showAlert("Fase inv\u00e1lida.");
+            return;
+          }
+          const ok = await showConfirm(`Excluir a fase ${idx + 1}?`);
+          if(!ok) return;
+          t.obs.splice(idx, 1);
+          t.proxEtapa = getEffectivePhaseDate(t) || "";
+          saveTasks(tasks);
+          upsertCalendarFromTask(t);
+          renderTasks();
         });
       });
       renderMiniCalendar();
@@ -6456,12 +7063,35 @@ function getNuvemshopSupportBaseUrl(lojaText){
     });
 
     // drawer
-    openDrawerBtn.addEventListener("click", openDrawer);
-    closeDrawerBtn.addEventListener("click", closeDrawer);
-    drawerBackdrop.addEventListener("click", closeDrawer);
+    if(openDrawerBtn) openDrawerBtn.addEventListener("click", openDrawer);
+    if(openDrawerBtnMobile) openDrawerBtnMobile.addEventListener("click", openDrawer);
+    if(closeDrawerBtn) closeDrawerBtn.addEventListener("click", closeDrawer);
+    if(drawerBackdrop) drawerBackdrop.addEventListener("click", closeDrawer);
     if(openRightDrawerBtn) openRightDrawerBtn.addEventListener("click", openRightDrawer);
     if(closeRightDrawerBtn) closeRightDrawerBtn.addEventListener("click", closeRightDrawer);
     if(rightDrawerBackdrop) rightDrawerBackdrop.addEventListener("click", closeRightDrawer);
+    let pendingRightDrawerReturn = false;
+    const mobileHeaderProxyBtns = document.querySelectorAll("[data-header-proxy]");
+    const headerPopupTargets = new Set([
+      "orderLookupBtn",
+      "sakChatBtn",
+      "metaInboxBtn",
+      "emailMenuBtn",
+      "backupMenuBtn",
+      "settingsBtn",
+    ]);
+    mobileHeaderProxyBtns.forEach((btn)=>{
+      btn.addEventListener("click", ()=>{
+        const targetId = (btn.getAttribute("data-header-proxy") || "").trim();
+        if(!targetId) return;
+        const target = document.getElementById(targetId);
+        pendingDrawerReturn = headerPopupTargets.has(targetId) && isMobileViewport();
+        if(targetId === "openRightDrawerBtn" && isMobileViewport()) pendingRightDrawerReturn = true;
+        if(target) target.click();
+        if(pendingDrawerReturn) pendingDrawerReturn = false;
+        closeDrawer();
+      });
+    });
     if(openSizeTablesBtn) openSizeTablesBtn.addEventListener("click", openSizeTables);
     if(sizeTablesCloseBtn){
       sizeTablesCloseBtn.addEventListener("click", ()=>{
@@ -6733,7 +7363,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(copyProductTableBtn){
       copyProductTableBtn.addEventListener("click", async ()=>{
         if(!currentProductTableUrl){
-          showAlert("Tabela nao disponivel para este produto.");
+          showAlert("Tabela não disponível para este produto.");
           return;
         }
         await copyImageToClipboard(currentProductTableUrl, copyProductTableBtn, "Copiar imagem");
@@ -6755,7 +7385,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         const phone = digits.startsWith("55") ? digits : `55${digits}`;
         if(!currentProductVideoUrl || !currentProductVideoText){
-          showAlert("Video nao disponivel para este produto.");
+          showAlert("Vídeo não disponível para este produto.");
           return;
         }
         const message = `${currentProductVideoText}\n\n${currentProductVideoUrl}`;
@@ -6800,6 +7430,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(phaseEditCancelBtn) phaseEditCancelBtn.addEventListener("click", closePhaseEditor);
     if(phaseEditSaveBtn) phaseEditSaveBtn.addEventListener("click", savePhaseEditor);
     if(phaseEditDeleteBtn) phaseEditDeleteBtn.addEventListener("click", deletePhaseEditor);
+    if(phaseEditAttention) phaseEditAttention.addEventListener("change", togglePhaseEditAttention);
     if(phaseEditOverlay){
       phaseEditOverlay.addEventListener("click", (e)=>{ if(e.target === phaseEditOverlay) closePhaseEditor(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && phaseEditOverlay.classList.contains("show")) closePhaseEditor(); });
@@ -6816,7 +7447,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       window.close();
       setTimeout(() => {
         if(!window.closed){
-          showAlert("Nao foi possivel fechar a aba automaticamente. Feche manualmente.");
+          showAlert("Não foi possível fechar a aba automaticamente. Feche manualmente.");
         }
         allowAppClose = false;
       }, 200);
@@ -6855,28 +7486,55 @@ function getNuvemshopSupportBaseUrl(lojaText){
       });
     }
     if(backupMenuBtn){
-      backupMenuBtn.addEventListener("click", ()=>{ if(backupOverlay) backupOverlay.classList.add("show"); });
+      backupMenuBtn.addEventListener("click", ()=>{
+        if(!backupOverlay) return;
+        markOverlayForDrawerReturn(backupOverlay, [backupCloseBtn]);
+        backupOverlay.classList.add("show");
+      });
     }
     if(backupCloseBtn){
-      backupCloseBtn.addEventListener("click", ()=>{ if(backupOverlay) backupOverlay.classList.remove("show"); });
+      backupCloseBtn.addEventListener("click", ()=>{
+        if(backupOverlay) backupOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(backupOverlay, [backupCloseBtn]);
+      });
     }
     if(backupOverlay){
-      backupOverlay.addEventListener("click", (e)=>{ if(e.target === backupOverlay) backupOverlay.classList.remove("show"); });
+      backupOverlay.addEventListener("click", (e)=>{
+        if(e.target !== backupOverlay) return;
+        backupOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(backupOverlay, [backupCloseBtn]);
+      });
     }
     if(settingsBtn){
-      settingsBtn.addEventListener("click", ()=>{ if(settingsOverlay) settingsOverlay.classList.add("show"); });
+      settingsBtn.addEventListener("click", ()=>{
+        if(!settingsOverlay) return;
+        markOverlayForDrawerReturn(settingsOverlay, [settingsCloseBtn]);
+        settingsOverlay.classList.add("show");
+      });
     }
     if(settingsCloseBtn){
-      settingsCloseBtn.addEventListener("click", ()=>{ if(settingsOverlay) settingsOverlay.classList.remove("show"); });
+      settingsCloseBtn.addEventListener("click", ()=>{
+        if(settingsOverlay) settingsOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(settingsOverlay, [settingsCloseBtn]);
+      });
     }
     if(settingsOverlay){
-      settingsOverlay.addEventListener("click", (e)=>{ if(e.target === settingsOverlay) settingsOverlay.classList.remove("show"); });
-      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && settingsOverlay.classList.contains("show")) settingsOverlay.classList.remove("show"); });
+      settingsOverlay.addEventListener("click", (e)=>{
+        if(e.target !== settingsOverlay) return;
+        settingsOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(settingsOverlay, [settingsCloseBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !settingsOverlay.classList.contains("show")) return;
+        settingsOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(settingsOverlay, [settingsCloseBtn]);
+      });
     }
     if(openStoresConfigBtn){
       openStoresConfigBtn.addEventListener("click", (e)=>{
         e.preventDefault();
         if(settingsOverlay) settingsOverlay.classList.remove("show");
+        clearDrawerReturnState(settingsOverlay, [settingsCloseBtn]);
         openStoresConfig();
       });
     }
@@ -6890,18 +7548,36 @@ function getNuvemshopSupportBaseUrl(lojaText){
       quickLinkCancelBtn.addEventListener("click", (e)=>{
         e.preventDefault();
         closeQuickLinkModal();
+        handleDrawerReturnAfterClose(quickLinkOverlay, [quickLinkCancelBtn]);
       });
     }
     if(quickLinkOverlay){
-      quickLinkOverlay.addEventListener("click", (e)=>{ if(e.target === quickLinkOverlay) closeQuickLinkModal(); });
-      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && quickLinkOverlay.classList.contains("show")) closeQuickLinkModal(); });
+      quickLinkOverlay.addEventListener("click", (e)=>{
+        if(e.target !== quickLinkOverlay) return;
+        closeQuickLinkModal();
+        handleDrawerReturnAfterClose(quickLinkOverlay, [quickLinkCancelBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !quickLinkOverlay.classList.contains("show")) return;
+        closeQuickLinkModal();
+        handleDrawerReturnAfterClose(quickLinkOverlay, [quickLinkCancelBtn]);
+      });
     }
     if(storesConfigAddBtn){
       storesConfigAddBtn.addEventListener("click", (e)=>{
         e.preventDefault();
         if(storesDraft.length >= MAX_STORES) return;
-        storesDraft.push({ name:"", logoUrl:"", siteUrl:"", stampsUrl:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailAdmin:"", emailAtendimento:"", emailOpenUrl1:"", emailOpenUrl2:"" });
+        storesDraft.push({ name:"", logoUrl:"", siteUrl:"", stampsUrl:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailList: [] });
         renderStoresConfig();
+        requestAnimationFrame(()=>{
+          if(!storesConfigHost) return;
+          const cards = storesConfigHost.querySelectorAll("[data-store-index]");
+          const card = cards[cards.length - 1];
+          if(!card) return;
+          card.scrollIntoView({ behavior:"smooth", block:"start" });
+          const firstInput = card.querySelector('input[data-store-field="name"]');
+          if(firstInput) firstInput.focus();
+        });
       });
     }
     if(storesConfigSaveBtn){
@@ -6928,13 +7604,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(removedNames.length){
           const fallback = nextNames[0] || "";
           const lines = [
-            "Voce esta removendo lojas do cadastro.",
+            "Você está removendo lojas do cadastro.",
             "",
             `Lojas removidas: ${removedNames.join(", ")}`,
             "",
             "O sistema vai remover dados ligados a essas lojas:",
             "- Perguntas/Respostas e Tarefas Diarias",
-            "- Produtos e Historico do Calendario",
+            "- Produtos e Histórico do Calendário",
             "- Links da Nuvemshop",
             "",
             "Os itens ser\u00e3o deletados definitivamente.",
@@ -6973,6 +7649,18 @@ function getNuvemshopSupportBaseUrl(lojaText){
           renderStoresConfig();
           return;
         }
+        const addEmailBtn = e.target.closest("[data-email-add]");
+        if(addEmailBtn){
+          const idx = Number(addEmailBtn.getAttribute("data-email-add"));
+          if(Number.isNaN(idx) || !storesDraft[idx]) return;
+          const next = storesDraft.slice();
+          const emails = Array.isArray(next[idx].emailList) ? next[idx].emailList.slice() : [];
+          emails.push({ email:"", openUrl:"" });
+          next[idx] = { ...next[idx], emailList: emails };
+          storesDraft = next;
+          renderStoresConfig();
+          return;
+        }
         const removeExtraBtn = e.target.closest("[data-social-extra-remove]");
         if(removeExtraBtn){
           const row = removeExtraBtn.closest("[data-social-extra-row]");
@@ -6985,6 +7673,22 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const extras = Array.isArray(next[storeIdx].socialExtras) ? next[storeIdx].socialExtras.slice() : [];
           extras.splice(extraIdx, 1);
           next[storeIdx] = { ...next[storeIdx], socialExtras: extras };
+          storesDraft = next;
+          renderStoresConfig();
+          return;
+        }
+        const removeEmailBtn = e.target.closest("[data-email-remove]");
+        if(removeEmailBtn){
+          const row = removeEmailBtn.closest("[data-email-row]");
+          const card = removeEmailBtn.closest("[data-store-index]");
+          if(!row || !card) return;
+          const storeIdx = Number(card.getAttribute("data-store-index"));
+          const emailIdx = Number(removeEmailBtn.getAttribute("data-email-remove"));
+          if(Number.isNaN(storeIdx) || Number.isNaN(emailIdx) || !storesDraft[storeIdx]) return;
+          const next = storesDraft.slice();
+          const emails = Array.isArray(next[storeIdx].emailList) ? next[storeIdx].emailList.slice() : [];
+          emails.splice(emailIdx, 1);
+          next[storeIdx] = { ...next[storeIdx], emailList: emails };
           storesDraft = next;
           renderStoresConfig();
           return;
@@ -7026,6 +7730,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         e.preventDefault();
         if(!currentQuickLinksListKey) return;
         closeQuickLinksListModal();
+        clearDrawerReturnState(quickLinksListOverlay, [quickLinksListCloseBtn]);
         openQuickLinkModal(currentQuickLinksListKey, currentQuickLinksListLabel);
       });
     }
@@ -7033,11 +7738,20 @@ function getNuvemshopSupportBaseUrl(lojaText){
       quickLinksListCloseBtn.addEventListener("click", (e)=>{
         e.preventDefault();
         closeQuickLinksListModal();
+        handleDrawerReturnAfterClose(quickLinksListOverlay, [quickLinksListCloseBtn]);
       });
     }
     if(quickLinksListOverlay){
-      quickLinksListOverlay.addEventListener("click", (e)=>{ if(e.target === quickLinksListOverlay) closeQuickLinksListModal(); });
-      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && quickLinksListOverlay.classList.contains("show")) closeQuickLinksListModal(); });
+      quickLinksListOverlay.addEventListener("click", (e)=>{
+        if(e.target !== quickLinksListOverlay) return;
+        closeQuickLinksListModal();
+        handleDrawerReturnAfterClose(quickLinksListOverlay, [quickLinksListCloseBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !quickLinksListOverlay.classList.contains("show")) return;
+        closeQuickLinksListModal();
+        handleDrawerReturnAfterClose(quickLinksListOverlay, [quickLinksListCloseBtn]);
+      });
     }
     if(quickLinksListHost){
       quickLinksListHost.addEventListener("click", async (e)=>{
@@ -7099,11 +7813,20 @@ function getNuvemshopSupportBaseUrl(lojaText){
       nuvemLinksCloseBtn.addEventListener("click", (e)=>{
         e.preventDefault();
         closeNuvemLinksModal();
+        handleDrawerReturnAfterClose(nuvemLinksOverlay, [nuvemLinksCloseBtn]);
       });
     }
     if(nuvemLinksOverlay){
-      nuvemLinksOverlay.addEventListener("click", (e)=>{ if(e.target === nuvemLinksOverlay) closeNuvemLinksModal(); });
-      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && nuvemLinksOverlay.classList.contains("show")) closeNuvemLinksModal(); });
+      nuvemLinksOverlay.addEventListener("click", (e)=>{
+        if(e.target !== nuvemLinksOverlay) return;
+        closeNuvemLinksModal();
+        handleDrawerReturnAfterClose(nuvemLinksOverlay, [nuvemLinksCloseBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !nuvemLinksOverlay.classList.contains("show")) return;
+        closeNuvemLinksModal();
+        handleDrawerReturnAfterClose(nuvemLinksOverlay, [nuvemLinksCloseBtn]);
+      });
     }
     if(nuvemLinksHost){
       nuvemLinksHost.addEventListener("click", (e)=>{
@@ -7213,18 +7936,40 @@ function getNuvemshopSupportBaseUrl(lojaText){
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && storeLinksOverlay.classList.contains("show")) storeLinksOverlay.classList.remove("show"); });
     }
     if(metaInboxCloseBtn){
-      metaInboxCloseBtn.addEventListener("click", ()=>{ if(metaInboxOverlay) metaInboxOverlay.classList.remove("show"); });
+      metaInboxCloseBtn.addEventListener("click", ()=>{
+        if(metaInboxOverlay) metaInboxOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(metaInboxOverlay, [metaInboxCloseBtn]);
+      });
     }
     if(metaInboxOverlay){
-      metaInboxOverlay.addEventListener("click", (e)=>{ if(e.target === metaInboxOverlay) metaInboxOverlay.classList.remove("show"); });
-      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && metaInboxOverlay.classList.contains("show")) metaInboxOverlay.classList.remove("show"); });
+      metaInboxOverlay.addEventListener("click", (e)=>{
+        if(e.target !== metaInboxOverlay) return;
+        metaInboxOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(metaInboxOverlay, [metaInboxCloseBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !metaInboxOverlay.classList.contains("show")) return;
+        metaInboxOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(metaInboxOverlay, [metaInboxCloseBtn]);
+      });
     }
     if(emailMenuCloseBtn){
-      emailMenuCloseBtn.addEventListener("click", ()=>{ if(emailMenuOverlay) emailMenuOverlay.classList.remove("show"); });
+      emailMenuCloseBtn.addEventListener("click", ()=>{
+        if(emailMenuOverlay) emailMenuOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(emailMenuOverlay, [emailMenuCloseBtn]);
+      });
     }
     if(emailMenuOverlay){
-      emailMenuOverlay.addEventListener("click", (e)=>{ if(e.target === emailMenuOverlay) emailMenuOverlay.classList.remove("show"); });
-      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && emailMenuOverlay.classList.contains("show")) emailMenuOverlay.classList.remove("show"); });
+      emailMenuOverlay.addEventListener("click", (e)=>{
+        if(e.target !== emailMenuOverlay) return;
+        emailMenuOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(emailMenuOverlay, [emailMenuCloseBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !emailMenuOverlay.classList.contains("show")) return;
+        emailMenuOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(emailMenuOverlay, [emailMenuCloseBtn]);
+      });
       emailMenuOverlay.addEventListener("click", async (e)=>{
         const btn = e.target.closest("[data-copy-email]");
         if(!btn) return;
@@ -7266,10 +8011,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
               return;
             }
             if(key === "metaInbox" && metaInboxOverlay){
+              markOverlayForDrawerReturn(metaInboxOverlay, [metaInboxCloseBtn]);
               metaInboxOverlay.classList.add("show");
               return;
             }
             if(key === "emailMenu" && emailMenuOverlay){
+              markOverlayForDrawerReturn(emailMenuOverlay, [emailMenuCloseBtn]);
               emailMenuOverlay.classList.add("show");
               return;
             }
@@ -7389,11 +8136,28 @@ function getNuvemshopSupportBaseUrl(lojaText){
         render();
       });
     }
+    document.addEventListener("click", (e)=>{
+      const supportBtn = e.target.closest("[data-support-store],[data-cal-support-store]");
+      if(supportBtn){
+        e.preventDefault();
+        e.stopPropagation();
+        const storeName = (supportBtn.getAttribute("data-support-store") || supportBtn.getAttribute("data-cal-support-store") || "").toString().trim();
+        openNuvemshopSupportPopup(storeName);
+        return;
+      }
+      const customerBtn = e.target.closest("[data-customer-whatsapp]");
+      if(!customerBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const raw = (customerBtn.getAttribute("data-customer-whatsapp") || "").toString().trim();
+      openCustomerWhatsappPopup(raw);
+    });
 
 
     // ===== Buscar pedido (Nuvemshop) =====
     function openOrderLookup(){
       if(!orderLookupOverlay) return;
+      markOverlayForDrawerReturn(orderLookupOverlay, [orderLookupCancelBtn]);
       orderLookupOverlay.classList.add("show");
       showOrderLookupMenu();
       if(orderLookupType) orderLookupType.value = "order";
@@ -7489,18 +8253,30 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const url = buildOrdersUrl(store, q);
       window.open(url, "_blank");
       closeOrderLookup();
+      clearDrawerReturnState(orderLookupOverlay, [orderLookupCancelBtn]);
     }
 
     if(closeOrderLookupBtn){
       closeOrderLookupBtn.addEventListener("click", showOrderLookupMenu);
     }
     if(orderLookupCancelBtn){
-      orderLookupCancelBtn.addEventListener("click", closeOrderLookup);
+      orderLookupCancelBtn.addEventListener("click", ()=>{
+        closeOrderLookup();
+        handleDrawerReturnAfterClose(orderLookupOverlay, [orderLookupCancelBtn]);
+      });
     }
     if(orderLookupOverlay){
-      orderLookupOverlay.addEventListener("click", (e)=>{ if(e.target === orderLookupOverlay) closeOrderLookup(); });
+      orderLookupOverlay.addEventListener("click", (e)=>{
+        if(e.target !== orderLookupOverlay) return;
+        closeOrderLookup();
+        handleDrawerReturnAfterClose(orderLookupOverlay, [orderLookupCancelBtn]);
+      });
     }
-    document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && orderLookupOverlay && orderLookupOverlay.classList.contains("show")) closeOrderLookup(); });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key !== "Escape" || !orderLookupOverlay || !orderLookupOverlay.classList.contains("show")) return;
+      closeOrderLookup();
+      handleDrawerReturnAfterClose(orderLookupOverlay, [orderLookupCancelBtn]);
+    });
 
     if(orderLookupStore){
       orderLookupStore.addEventListener("change", ()=>{

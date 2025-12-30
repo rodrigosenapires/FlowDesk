@@ -13,6 +13,14 @@
   <header>
     <div class="wrap">
       <div class="toprow">
+        <button class="hambBtn mobileHambBtn" id="openDrawerBtnMobile" title="Menu" aria-label="Menu">
+          <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="4" y1="6" x2="20" y2="6"></line>
+            <line x1="4" y1="12" x2="20" y2="12"></line>
+            <line x1="4" y1="18" x2="20" y2="18"></line>
+          </svg>
+        </button>
+
         <div class="brandleft">
           <div class="appLogo" aria-label="Logo do app">
             <img class="logoDark" src="../Extras/logo/logo-fundo-escuro.png" alt="Buscador de Solu&ccedil;&otilde;es">
@@ -115,6 +123,61 @@
     </div>
 
     <div class="drawerBd" id="drawerBd">
+      <div class="menuCard mobileHeaderCard" id="mobileHeaderCard">
+        <div class="menuTop">
+          <div class="menuIcon"><div class="txt">|||</div></div>
+          <p class="menuTitle">A&ccedil;&otilde;es do cabe&ccedil;alho</p>
+        </div>
+        <div class="mobileHeaderActions">
+          <button class="themeBtn" type="button" data-header-proxy="orderLookupBtn" title="Buscar pedido" aria-label="Buscar pedido">
+            <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
+              <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
+              <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
+            </svg>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="sakChatBtn" title="SAK" aria-label="SAK">
+            <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
+              <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
+            </svg>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="metaInboxBtn" title="Meta" aria-label="Meta">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="5"></rect>
+              <circle cx="12" cy="12" r="4"></circle>
+              <circle cx="17" cy="7" r="1.2"></circle>
+            </svg>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="emailMenuBtn" title="E-mail" aria-label="E-mail">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="6" width="18" height="12" rx="2"></rect>
+              <path d="M3 8l9 6 9-6"></path>
+            </svg>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="themeToggleBtn" title="Tema" aria-label="Tema">
+            <span id="themeIconMobile"></span>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="backupMenuBtn" title="Backup" aria-label="Backup">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="5" y="4" width="14" height="16" rx="2"></rect>
+              <rect x="8" y="4" width="8" height="5"></rect>
+              <rect x="8" y="13" width="8" height="6" rx="1"></rect>
+            </svg>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="settingsBtn" title="Configura&ccedil;&otilde;es" aria-label="Configura&ccedil;&otilde;es">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.2a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.2a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.2a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8 1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"></path>
+            </svg>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="openRightDrawerBtn" title="Menu extra" aria-label="Menu extra">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="3"></rect>
+              <line x1="9" y1="5" x2="9" y2="19"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <!-- NAV (2 bot&otilde;es) -->
       <div class="menuCard">
         <div class="menuTop">
@@ -568,7 +631,7 @@
             <input id="tags" type="text" placeholder="Ex: instagram, link, colecao, whatsapp" />
           </div>
 
-          <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:6px;">
+          <div class="row centerRow" style="gap:10px; flex-wrap:wrap; margin-top:6px;">
             <button class="btn primary" id="saveBtn">Salvar</button>
           </div>
 
@@ -702,15 +765,15 @@
       <div class="mb">
         <div class="note" style="font-size:13px;">
           Importa&ccedil;&atilde;o: o arquivo tamb&eacute;m cont&eacute;m os bot&otilde;es do menu lateral.<br><br>
-          <b>Op&ccedil;&atilde;o 1</b> = Mesclar com os bot&otilde;es atuais<br>
-          <b>Op&ccedil;&atilde;o 2</b> = Substituir os bot&otilde;es atuais<br>
+          <b>Mesclar</b> = Mesclar com os bot&otilde;es atuais<br>
+          <b>Substituir</b> = Substituir os bot&otilde;es atuais<br>
           <b>Cancelar importa&ccedil;&atilde;o</b> = N&atilde;o importar nada
         </div>
       </div>
       <div class="mf">
         <button class="btn danger" id="importCancelBtn">Cancelar importa&ccedil;&atilde;o</button>
-        <button class="btn" id="importOption2Btn">Op&ccedil;&atilde;o 2</button>
-        <button class="btn primary" id="importOption1Btn">Op&ccedil;&atilde;o 1</button>
+        <button class="btn" id="importOption2Btn">Substituir</button>
+        <button class="btn primary" id="importOption1Btn">Mesclar</button>
       </div>
     </div>
   </div>
@@ -809,6 +872,10 @@
             <div class="label">Prazo de resolu&ccedil;&atilde;o da fase</div>
             <input type="date" id="phaseEditPrazo" />
           </div>
+          <div>
+            <div class="label">Hor&aacute;rio do prazo</div>
+            <input type="time" id="phaseEditPrazoHora" />
+          </div>
 
           <div>
             <div class="label">N&uacute;mero do Chamado Nuvemshop</div>
@@ -833,10 +900,20 @@
             <div class="label">Rastreio da fase</div>
             <input type="text" id="phaseEditRastreio" placeholder="Opcional" />
           </div>
+          <div class="attentionRow">
+            <label class="attentionToggle">
+              <input type="checkbox" id="phaseEditAttention" />
+              Atenção
+            </label>
+          </div>
+          <div class="attentionNoteWrap" id="phaseEditAttentionWrap" style="display:none;">
+            <div class="label">Observações</div>
+            <textarea id="phaseEditAttentionNote" rows="3" placeholder="Digite as observações..."></textarea>
+          </div>
         </div>
       </div>
-      <div class="mf" style="justify-content:space-between;">
-        <button class="btn danger iconBtn" id="phaseEditDeleteBtn" title="Excluir" aria-label="Excluir">
+      <div class="mf phaseEditActions">
+        <button class="btn danger iconBtn phaseEditDeleteBtn" id="phaseEditDeleteBtn" title="Excluir" aria-label="Excluir">
           <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 6h18"></path>
             <path d="M8 6V4h8v2"></path>
@@ -845,8 +922,7 @@
             <path d="M14 10v6"></path>
           </svg>
         </button>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
-          <button class="btn" id="phaseEditCancelBtn">Cancelar</button>
+        <div class="phaseEditActionsMain">
           <button class="btn primary" id="phaseEditSaveBtn">Salvar</button>
         </div>
       </div>
@@ -951,11 +1027,16 @@
           </div>
           <div>
             <div class="label">Tags</div>
-            <div class="tagFilters" id="searchTagList"></div>
-            <div class="formGrid searchTagForm">
+            <div class="searchTagForm">
               <input id="searchTagNew" type="text" placeholder="Adicionar nova tag" />
-              <button class="btn small" type="button" id="addSearchTagBtn">Adicionar tag</button>
+              <button class="btn iconBtn" type="button" id="addSearchTagBtn" title="Adicionar tag" aria-label="Adicionar tag">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
             </div>
+            <div class="tagFilters" id="searchTagList"></div>
           </div>
         </div>
       </div>
@@ -1079,7 +1160,12 @@
         <div class="formGrid" id="storesConfigHost"></div>
       </div>
       <div class="mf" style="justify-content:space-between;">
-        <button class="btn" id="storesConfigAddBtn">+ Adicionar loja</button>
+        <button class="btn iconBtn" id="storesConfigAddBtn" title="Adicionar loja" aria-label="Adicionar loja">
+          <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
         <button class="btn primary" id="storesConfigSaveBtn">Salvar</button>
       </div>
     </div>
@@ -1151,7 +1237,7 @@
           <div class="note">Exemplo: https://meusite.com.br</div>
         </div>
       </div>
-      <div class="mf" style="justify-content:space-between;">
+      <div class="mf nuvemEditActions">
         <button class="btn danger iconBtn" id="nuvemEditDeleteBtn" title="Excluir" aria-label="Excluir">
           <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 6h18"></path>
@@ -1161,7 +1247,7 @@
             <path d="M14 10v6"></path>
           </svg>
         </button>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+        <div class="nuvemEditActionsMain">
           <button class="btn" id="nuvemEditCancelBtn">Fechar</button>
           <button class="btn primary" id="nuvemEditSaveBtn">Salvar</button>
         </div>
@@ -1184,13 +1270,18 @@
 
   <!-- Modal: Meta -->
   <div class="miniOverlay" id="metaInboxOverlay">
-    <div class="miniModal metaInboxModal">
-      <div class="mh">
-        <h3>Responder aos clientes nas redes sociais</h3>
+    <div class="miniModal metaInboxModal socialHubModal">
+      <div class="mh socialHubHeader">
+        <div class="socialHubTitle">
+          <div class="socialHubEyebrow">Central social</div>
+          <h3>Atendimento nas redes</h3>
+          <div class="note socialHubSubtitle">Acesse rapidamente os canais de cada loja e responda direto no inbox.</div>
+        </div>
         <button class="btn small" id="metaInboxCloseBtn">Fechar</button>
       </div>
       <div class="mb">
-        <div class="storeLinksGrid" id="metaInboxGrid"></div>
+        
+        <div class="storeLinksGrid storeLinksGridSocial" id="metaInboxGrid"></div>
       </div>
     </div>
   </div>
@@ -1216,11 +1307,11 @@
         <button class="btn small" id="closeTaskCancelBtn">Cancelar</button>
       </div>
       <div class="mb">
-        <div class="note" style="font-size:13px;">
+        <div class="note" style="font-size:13px; text-align:center;">
           Deseja criar uma nova fase ou encerrar a tarefa?
         </div>
       </div>
-      <div class="mf" style="justify-content:flex-end;">
+      <div class="mf closeTaskActions">
         <button class="btn" id="closeTaskNewPhaseBtn">Criar nova fase</button>
         <button class="btn danger" id="closeTaskDoneBtn">Encerrar tarefa</button>
       </div>
