@@ -1634,8 +1634,6 @@
     const newMenuBtnLink = document.getElementById("newMenuBtnLink");
     const addMenuBtn = document.getElementById("addMenuBtn");
 
-    const toTopBtn = document.getElementById("toTopBtn");
-    const toBottomBtn = document.getElementById("toBottomBtn");
     const themeToggleBtn = document.getElementById("themeToggleBtn");
     const themeIcon = document.getElementById("themeIcon");
     const appCloseBtn = document.getElementById("appCloseBtn");
@@ -1675,7 +1673,6 @@
     const nuvemEditCancelBtn = document.getElementById("nuvemEditCancelBtn");
     const nuvemEditDeleteBtn = document.getElementById("nuvemEditDeleteBtn");
     const nuvemEditCloseBtn = document.getElementById("nuvemEditCloseBtn");
-    const storeLinksBtn = document.getElementById("storeLinksBtn");
     const storeLinksOverlay = document.getElementById("storeLinksOverlay");
     const storeLinksCloseBtn = document.getElementById("storeLinksCloseBtn");
     const storeLinksGrid = document.getElementById("storeLinksGrid");
@@ -1731,7 +1728,6 @@
     const closeCalendarBtn = document.getElementById("closeCalendarBtn");
     const calPrevMonth = document.getElementById("calPrevMonth");
     const calNextMonth = document.getElementById("calNextMonth");
-    const calTodayBtn = document.getElementById("calTodayBtn");
     const calMonthLabel = document.getElementById("calMonthLabel");
     const calWeekHeader = document.getElementById("calWeekHeader");
     const calGrid = document.getElementById("calGrid");
@@ -1761,7 +1757,6 @@
     // nav drawer (2 bot\u00f5es)
     const navAtalhosBtn = document.getElementById("navAtalhosBtn");
     const navToggleViewBtn = document.getElementById("navToggleViewBtn");
-    const backToSearchBtn = document.getElementById("backToSearchBtn");
     const goToTasksBtn = document.getElementById("goToTasksBtn");
     const atalhosCreateCard = document.getElementById("atalhosCreateCard");
     const drawerBd = document.getElementById("drawerBd");
@@ -2223,21 +2218,29 @@
 
     let popupResolver = null;
     let popupMode = "alert";
+    let popupActionSource = "dismiss";
 
     function openPopup(options){
       if(!popupOverlay) return Promise.resolve(false);
       const title = (options?.title || "Aviso").toString();
       const message = (options?.message || "").toString();
-      const okLabel = (options?.okLabel || "OK").toString();
+      const hasOkLabel = Object.prototype.hasOwnProperty.call(options || {}, "okLabel");
+      const okLabelRaw = hasOkLabel ? options.okLabel : "OK";
+      const okLabel = (okLabelRaw ?? "").toString();
       const cancelLabel = (options?.cancelLabel || "Cancelar").toString();
       const showCancel = Boolean(options?.showCancel);
       const useInput = Boolean(options?.input);
+      popupActionSource = "dismiss";
       popupMode = useInput ? "prompt" : (showCancel ? "confirm" : "alert");
       if(popupTitle) popupTitle.textContent = title;
       if(popupMessage) popupMessage.textContent = message;
       if(popupOkBtn) popupOkBtn.textContent = okLabel;
       if(popupCancelBtn) popupCancelBtn.textContent = cancelLabel;
       if(popupCancelBtn) popupCancelBtn.style.display = showCancel ? "inline-flex" : "none";
+      if(popupOkBtn) popupOkBtn.style.display = okLabel ? "inline-flex" : "none";
+      if(popupActions){
+        popupActions.classList.toggle("isHidden", !showCancel && !okLabel);
+      }
       if(popupInputWrap) popupInputWrap.style.display = useInput ? "block" : "none";
       if(popupInput){
         popupInput.type = (options?.inputType || "text").toString();
@@ -2581,6 +2584,34 @@
       }).join("");
     }
 
+    function openTaskSummaryPopup(ref){
+      if(!ref) return;
+      const assunto = getCalendarAssuntoFromTask(ref);
+      const texto = getLastPhaseText(ref) || "-";
+      const pedido = getEffectivePedidoFromTask(ref) || "-";
+      const dataInicial = formatDateBR(ref.data || "");
+      const prazo = formatDateBR(getEffectivePhaseDate(ref) || "");
+      const summaryItems = [
+        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Status:</span> ${escapeHtml(assunto || "-")}</div>`,
+        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Texto:</span> ${escapeHtml(texto)}</div>`,
+        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Pedido:</span> ${escapeHtml(pedido)}</div>`,
+        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Data inicial:</span> ${escapeHtml(dataInicial)}</div>`,
+        `<div class="popupSummaryItem"><span class="popupSummaryLabel">Prazo de resolu&ccedil;&atilde;o:</span> ${escapeHtml(prazo)}</div>`
+      ];
+      const summaryHtml = `
+        <div class="popupSummary">
+          ${summaryItems.join('<div class="popupSummaryDivider"></div>')}
+        </div>
+      `;
+      openPopup({
+        title: "Resumo da tarefa",
+        message: "",
+        okLabel: "",
+        showCancel: false,
+      });
+      if(popupMessage) popupMessage.innerHTML = summaryHtml;
+    }
+
     function renderCalendarDayDetails(iso){
       if(!calDayTitle || !calDayDetails) return;
       calDayTitle.textContent = iso ? `Dia: ${iso}` : "";
@@ -2644,11 +2675,30 @@
           : "";
 
         const titleGreen = (t) => `<span style="color:#38d9a9; font-weight:800;">${t}</span>`;
+        const prazoResolucao = (e.date || "").toString().trim();
+        const prazoResolucaoLabel = prazoResolucao ? formatDateBR(prazoResolucao) : "-";
+        const prazoCopyBtn = prazoResolucao
+          ? `<button class="btn small copyBtn copyBtnHidden" data-copy-text="${escapeHtml(prazoResolucaoLabel)}" title="Copiar prazo de resolu\u00e7\u00e3o" aria-label="Copiar prazo de resolu\u00e7\u00e3o" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
+          : "";
+        const phaseInfo = (() => {
+          const id = String(e.id || "");
+          const fromTasks = (tasks || []).find(t => String(t.id || "") === id);
+          const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
+          const ref = fromTasks || fromDone;
+          if(!ref) return { idx: 0, label: "-" };
+          const idx = getEffectivePhaseIndex(ref);
+          return { idx, label: String(idx + 1) };
+        })();
+        const phaseCopyBtn = (phaseInfo.label && phaseInfo.label !== "-")
+          ? `<button class="btn small copyBtn copyBtnHidden" data-copy-text="${escapeHtml(phaseInfo.label)}" title="Copiar n\u00famero da fase" aria-label="Copiar n\u00famero da fase" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
+          : "";
         const metaLines = [
           `${titleGreen("Loja:")} ${escapeHtml(loja || "-")}`,
           `${titleGreen("Cliente:")} ${escapeHtml(cliente || "-")} ${clienteCopyBtn}`,
           `${titleGreen("Pedido:")} ${pedidoHtml} ${pedidoCopyBtn}`,
-          rastreio ? `${titleGreen("Rastreio:")} ${rastreioHtml} ${rastreioCopyBtn}` : ""
+          rastreio ? `${titleGreen("Rastreio:")} ${rastreioHtml} ${rastreioCopyBtn}` : "",
+          `${titleGreen("Prazo de resolu\u00e7\u00e3o:")} ${escapeHtml(prazoResolucaoLabel)} ${prazoCopyBtn}`,
+          `${titleGreen("N\u00famero da fase:")} ${escapeHtml(phaseInfo.label)} ${phaseCopyBtn}`
         ].filter(Boolean).map(line => `<div>${line}</div>`).join("");
 
         return `
@@ -2660,7 +2710,34 @@
               ${(!e.open && lastPhaseText) ? `<div class="note" style="margin-top:6px;"><span style="color:#38d9a9; font-weight:800;">\u00daltima fase:</span> ${escapeHtml(lastPhaseText)}</div>` : ""}
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              ${suporteUrl ? `<a class="btn small" href="${escapeHtml(suporteUrl)}" target="_blank" rel="noopener">Suporte</a>` : ""}
+              <button class="btn small iconBtn" data-cal-item-summary="${escapeHtml(String(e.id || ""))}" title="Resumo" aria-label="Resumo">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="6" y1="7" x2="20" y2="7"></line>
+                  <line x1="6" y1="12" x2="20" y2="12"></line>
+                  <line x1="6" y1="17" x2="20" y2="17"></line>
+                  <circle cx="4" cy="7" r="1"></circle>
+                  <circle cx="4" cy="12" r="1"></circle>
+                  <circle cx="4" cy="17" r="1"></circle>
+                </svg>
+              </button>
+              <button class="btn small iconBtn" data-cal-item-view="${escapeHtml(String(e.id || ""))}" data-cal-phase-idx="${escapeHtml(String(phaseInfo.idx))}" title="Ver fase" aria-label="Ver fase">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
+                </svg>
+              </button>
+              ${suporteUrl ? `<a class="btn small iconBtn" href="${escapeHtml(suporteUrl)}" target="_blank" rel="noopener" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
+                <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
+                  <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
+                  <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
+                </svg>
+              </a>` : ""}
+              <button class="btn small iconBtn" data-cal-item-add="${escapeHtml(String(e.id || ""))}" title="Adicionar" aria-label="Adicionar">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
               <button class="btn small danger iconBtn" data-cal-item-del="${escapeHtml(String(e.id || ""))}" title="Excluir" aria-label="Excluir">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M3 6h18"></path>
@@ -2699,7 +2776,7 @@
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-del") || "").toString();
           if(!id) return;
-          const ok = await showConfirm("Excluir este chamado? (Ele sera removido da lista e tambem do calendario.)");
+          const ok = await showConfirm("Excluir este chamado? (Ele será removido da lista e também do calendário.)");
           if(!ok) return;
 
           // remove da lista
@@ -2713,7 +2790,92 @@
           // re-render
           renderTasks();
           renderCalendar();
-          renderCalendarDayDetails(selectedCalendarDate);
+          renderCalendarDayDetails(calSelectedISO);
+        });
+      });
+
+      calDayDetails.querySelectorAll("[data-cal-item-view]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const id = (btn.getAttribute("data-cal-item-view") || "").toString().trim();
+          const idxRaw = (btn.getAttribute("data-cal-phase-idx") || "0").toString();
+          const phaseIdx = Number.parseInt(idxRaw, 10);
+          if(!id) return;
+          closeCalendar();
+
+          tasksSearchQuery = "";
+          tasksSearchStoreValue = "";
+          tasksSearchPeriodValue = "ALL";
+          tasksSearchPeriodFromValue = "";
+          tasksSearchPeriodToValue = "";
+          tasksSearchStatusValue = "";
+          if(tasksSearch) tasksSearch.value = "";
+          if(tasksSearchStore) tasksSearchStore.value = "";
+          if(tasksSearchPeriod) tasksSearchPeriod.value = "ALL";
+          if(tasksSearchPeriodCustom) tasksSearchPeriodCustom.style.display = "none";
+          if(tasksSearchPeriodFrom) tasksSearchPeriodFrom.value = "";
+          if(tasksSearchPeriodTo) tasksSearchPeriodTo.value = "";
+          if(tasksSearchStatus) tasksSearchStatus.value = "";
+
+          tasksShowAll = true;
+          setView("tasks");
+          renderTasks();
+
+          requestAnimationFrame(()=>{
+            if(!tasksList) return;
+            const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
+            if(!card){
+              showAlert("Tarefa não encontrada na lista.");
+              return;
+            }
+            card.scrollIntoView({ behavior:"smooth", block:"center" });
+            const phasesWrap = card.querySelector(`.linksBlock[data-task-phases="${CSS.escape(id)}"]`);
+            if(phasesWrap){
+              phasesWrap.classList.add("isExpanded");
+              const phaseEl = phasesWrap.querySelector(`[data-phase-idx="${Number.isFinite(phaseIdx) ? String(phaseIdx) : "0"}"]`);
+              if(phaseEl){
+                phaseEl.classList.add("phaseFocus");
+                phaseEl.scrollIntoView({ behavior:"smooth", block:"center" });
+                setTimeout(()=> phaseEl.classList.remove("phaseFocus"), 1400);
+              }
+            }
+          });
+        });
+      });
+
+      calDayDetails.querySelectorAll("[data-cal-item-summary]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const id = (btn.getAttribute("data-cal-item-summary") || "").toString().trim();
+          if(!id) return;
+          const fromTasks = (tasks || []).find(t => String(t.id || "") === id);
+          const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
+          const ref = fromTasks || fromDone;
+          if(!ref){
+            showAlert("Tarefa não encontrada.");
+            return;
+          }
+          openTaskSummaryPopup(ref);
+        });
+      });
+
+      calDayDetails.querySelectorAll("[data-cal-item-add]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const id = (btn.getAttribute("data-cal-item-add") || "").toString().trim();
+          if(!id) return;
+          const result = await openPopup({
+            title: "Adicionar",
+            message: "O que deseja criar?",
+            okLabel: "Nova fase",
+            cancelLabel: "Nova tarefa",
+            showCancel: true,
+          });
+          if(result && popupActionSource === "ok"){
+            addPhaseFromCard(id);
+            return;
+          }
+          if(!result && popupActionSource === "cancel"){
+            clearTasksForm();
+            openTaskModal();
+          }
         });
       });
 
@@ -2858,6 +3020,11 @@
         navToggleViewBtn.textContent = "Buscador";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Di\u00e1rias";
+        if(goToTasksBtn){
+          goToTasksBtn.classList.add("isTasksView");
+          goToTasksBtn.setAttribute("title", "Voltar para o buscador");
+          goToTasksBtn.setAttribute("aria-label", "Voltar para o buscador");
+        }
 
         renderTasks();
         scrollToTop();
@@ -2871,6 +3038,11 @@
         navToggleViewBtn.textContent = "Tarefas Di\u00e1rias";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Buscador de Solu\u00e7\u00f5es";
+        if(goToTasksBtn){
+          goToTasksBtn.classList.remove("isTasksView");
+          goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
+          goToTasksBtn.setAttribute("aria-label", "Ir para tarefas di\u00e1rias");
+        }
 
         render();
         scrollToTop();
@@ -3660,11 +3832,6 @@ function fillPhaseStatusSelect(){
                 </svg>
               </button>
             </div>
-            <div class="productsHeader">
-              <div></div>
-              <div></div>
-              <div class="productsHeaderActions"></div>
-            </div>
             ${rowsHtml || emptyHtml}
           </div>
         `;
@@ -3799,7 +3966,9 @@ function fillPhaseStatusSelect(){
       const isDiario = storeNormalized.includes("di\u00e1rio nerdify") || storeNormalized.includes("diario nerdify");
 
       if(productDetailsStampsBtn){
-        productDetailsStampsBtn.textContent = getStampsButtonLabel(key, name);
+        const label = getStampsButtonLabel(key, name);
+        productDetailsStampsBtn.setAttribute("title", label);
+        productDetailsStampsBtn.setAttribute("aria-label", label);
         if(details?.stampsUrl){
           productDetailsStampsBtn.style.display = "inline-flex";
           productDetailsStampsBtn.href = details.stampsUrl;
@@ -3824,7 +3993,12 @@ function fillPhaseStatusSelect(){
               <span class="productColorSwatch" style="background:${escapeHtml(color.hex)};"></span>
               <span class="productColorName">${escapeHtml(color.name)}</span>
               <span class="productColorHex">${escapeHtml(color.hex)}</span>
-              <button class="btn small" data-copy-hex="${escapeHtml(color.hex)}">Copiar hex</button>
+              <button class="btn small iconBtn" data-copy-hex="${escapeHtml(color.hex)}" title="Copiar hex" aria-label="Copiar hex">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
             </div>
           `;
         }).join("");
@@ -4204,7 +4378,7 @@ function fillPhaseStatusSelect(){
       qImgsPreviewGrid.innerHTML = qImages.map((fn, i) => `
         <div class="qImgBox">
           <button type="button" class="qImgDelBtn" title="Remover imagem" data-qimg-remove="${i}">&times;</button>
-          <img alt="Pr\u00e9via" src="imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
+          <img alt="Pr\u00e9via" src="../imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
           <div class="qImgName">${escapeHtml(fn)}</div>
         </div>
       `).join("");
@@ -4562,7 +4736,7 @@ function fillPhaseStatusSelect(){
             <div class="label">Imagens da Pergunta <span class="count">${imgs.length} arquivo(s)</span></div>
             <div class="qImgsShowGrid">
               ${imgs.map(fn => `
-                <img alt="Imagem da pergunta" src="imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
+                <img alt="Imagem da pergunta" src="../imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
               `).join("")}
             </div>
           </div>
@@ -4661,8 +4835,8 @@ function fillPhaseStatusSelect(){
       }
 
       cardsNav.innerHTML = `
-        <button class="btn small" id="nextQuestionBtn">Ver pr\u00f3xima pergunta</button>
-        <button class="btn small" id="showAllBtn">Ver todas as perguntas</button>
+        <button class="btn small" id="nextQuestionBtn">Ver pr\u00f3xima</button>
+        <button class="btn small" id="showAllBtn">Ver todas</button>
       `;
 
       document.getElementById("nextQuestionBtn").addEventListener("click", ()=>{
@@ -4781,7 +4955,7 @@ function fillPhaseStatusSelect(){
         : ``;
 
       const imgHtml = s.imageFilename
-        ? `<img alt="Imagem do passo" src="imagens/${encodeURIComponent(s.imageFilename)}" onerror="this.style.display='none'">`
+        ? `<img alt="Imagem do passo" src="../imagens/${encodeURIComponent(s.imageFilename)}" onerror="this.style.display='none'">`
         : ``;
 
       modalBody.innerHTML = `
@@ -5081,6 +5255,20 @@ function fillPhaseStatusSelect(){
         if(d) return d;
       }
       return "";
+    }
+
+    function getEffectivePhaseIndex(t){
+      const phases = Array.isArray(t?.obs) ? t.obs : [];
+      if(!phases.length) return 0;
+      for(let i = phases.length - 1; i >= 0; i--){
+        const prazo = ((phases[i]?.prazo || "").toString()).trim();
+        if(prazo) return i;
+      }
+      for(let i = phases.length - 1; i >= 0; i--){
+        const d = ((phases[i]?.date || "").toString()).trim();
+        if(d) return i;
+      }
+      return phases.length - 1;
     }
 
     function getEffectivePhaseStatus(t){
@@ -5475,6 +5663,18 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const isActive = stateValue === PHASE_STATE_ACTIVE;
         const phaseStateHtml = `<div class="phaseState ${isActive ? "isActive" : "isDone"} phaseStateSmall"><span class="phaseDot"></span><span>${escapeHtml(stateValue)}</span></div>`;
         const showToggle = cleaned.length > 1 && o._idx === lastIdx;
+        const summaryBtn = (o._idx === lastIdx)
+          ? `<button type="button" class="btn small iconBtn" data-task-summary="${escapeHtml(safeTaskId)}" title="Resumo" aria-label="Resumo">
+               <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                 <line x1="6" y1="7" x2="20" y2="7"></line>
+                 <line x1="6" y1="12" x2="20" y2="12"></line>
+                 <line x1="6" y1="17" x2="20" y2="17"></line>
+                 <circle cx="4" cy="7" r="1"></circle>
+                 <circle cx="4" cy="12" r="1"></circle>
+                 <circle cx="4" cy="17" r="1"></circle>
+               </svg>
+             </button>`
+          : "";
         const toggleBtn = showToggle
           ? `<button type="button" class="btn small iconBtn" data-task-phases-toggle="${escapeHtml(String(taskId || ""))}" title="Ver todas as fases" aria-label="Ver todas as fases">
                <svg class="iconStroke phaseToggleIconOpen" viewBox="0 0 24 24" aria-hidden="true">
@@ -5491,7 +5691,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           : "";
 
         return `
-          <div>
+          <div class="phaseItem" data-phase-idx="${escapeHtml(String(o._idx))}">
             <div class="phaseRow">
               <div class="label" style="margin:0;">Fase ${o._idx + 1}</div>
               ${phaseStateHtml}
@@ -5499,6 +5699,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             ${metaHtml}
             ${textHtml}
             <div class="phaseBtnsRow">
+              ${summaryBtn}
               ${toggleBtn}
               ${phaseBtns}
             </div>
@@ -5816,7 +6017,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const rastEfetivo = (getEffectiveRastreioFromTask(t) || "").trim();
 
         return `
-          <div class="taskCard ${dueToday ? "taskDueToday" : ""}">
+          <div class="taskCard ${dueToday ? "taskDueToday" : ""}" data-task-id="${escapeHtml(t.id)}">
             <div class="taskTopRow">
               <div style="min-width:240px;">
                 <p class="taskTitle">${escapeHtml(title)}</p>
@@ -5834,10 +6035,28 @@ function getNuvemshopSupportBaseUrl(lojaText){
             ${renderDescBlock(t.obs, lojaText, t.id)}
 
             <div class="taskActions">
-              <button class="btn small" data-task-phase-add="${escapeHtml(t.id)}">Nova fase</button>
-              <button class="btn small" data-task-close="${escapeHtml(t.id)}">Concluir tarefa</button>
-              <a class="btn small" href="${escapeHtml(buildNuvemshopSupportUrl(lojaText, assuntoRaw, data, pedidoEfetivo, rastEfetivo))}" target="_blank" rel="noopener">Suporte Nuvemshop</a>
-              ${(buildCustomerWhatsappUrl(t.whatsapp||"")) ? `<a class="btn small" href="${escapeHtml(buildCustomerWhatsappUrl(t.whatsapp||""))}" target="_blank" rel="noopener">WhatsApp Cliente</a>` : ``}
+              <button class="btn small iconBtn" data-task-phase-add="${escapeHtml(t.id)}" title="Nova fase" aria-label="Nova fase">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+              <button class="btn small iconBtn" data-task-close="${escapeHtml(t.id)}" title="Concluir tarefa" aria-label="Concluir tarefa">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <polyline points="5 13 9 17 19 7"></polyline>
+                </svg>
+              </button>
+              <a class="btn small iconBtn" href="${escapeHtml(buildNuvemshopSupportUrl(lojaText, assuntoRaw, data, pedidoEfetivo, rastEfetivo))}" target="_blank" rel="noopener" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
+                <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
+                  <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
+                  <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
+                </svg>
+              </a>
+              ${(buildCustomerWhatsappUrl(t.whatsapp||"")) ? `<a class="btn small iconBtn" href="${escapeHtml(buildCustomerWhatsappUrl(t.whatsapp||""))}" target="_blank" rel="noopener" title="WhatsApp Cliente" aria-label="WhatsApp Cliente">
+                <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
+                  <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
+                </svg>
+              </a>` : ``}
               <button class="btn small iconBtn" data-task-edit="${escapeHtml(t.id)}" title="Editar" aria-label="Editar">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 20h9"></path>
@@ -5974,6 +6193,20 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const label = expanded ? "Ocultar fases" : "Ver todas as fases";
           btn.setAttribute("title", label);
           btn.setAttribute("aria-label", label);
+        });
+      });
+      tasksList.querySelectorAll("[data-task-summary]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const id = (btn.getAttribute("data-task-summary") || "").toString().trim();
+          if(!id) return;
+          const ref = (tasks || []).find(t => String(t.id || "") === id);
+          if(!ref){
+            showAlert("Tarefa nǜo encontrada.");
+            return;
+          }
+          openTaskSummaryPopup(ref);
         });
       });
       tasksList.querySelectorAll("[data-task-close]").forEach(btn=>{
@@ -6188,11 +6421,25 @@ function getNuvemshopSupportBaseUrl(lojaText){
     overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeModal(); });
     document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && overlay.classList.contains("show")) closeModal(); });
 
-    if(popupOkBtn) popupOkBtn.addEventListener("click", ()=> closePopup(true));
-    if(popupCancelBtn) popupCancelBtn.addEventListener("click", ()=> closePopup(false));
-    if(popupCloseBtn) popupCloseBtn.addEventListener("click", ()=> closePopup(false));
+    if(popupOkBtn) popupOkBtn.addEventListener("click", ()=>{
+      popupActionSource = "ok";
+      closePopup(true);
+    });
+    if(popupCancelBtn) popupCancelBtn.addEventListener("click", ()=>{
+      popupActionSource = "cancel";
+      closePopup(false);
+    });
+    if(popupCloseBtn) popupCloseBtn.addEventListener("click", ()=>{
+      popupActionSource = "close";
+      closePopup(false);
+    });
     if(popupOverlay){
-      popupOverlay.addEventListener("click", (e)=>{ if(e.target === popupOverlay) closePopup(false); });
+      popupOverlay.addEventListener("click", (e)=>{
+        if(e.target === popupOverlay){
+          popupActionSource = "overlay";
+          closePopup(false);
+        }
+      });
     }
     if(popupInput){
       popupInput.addEventListener("keydown", (e)=>{
@@ -6201,7 +6448,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
         closePopup(true);
       });
     }
-    document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && popupOverlay && popupOverlay.classList.contains("show")) closePopup(false); });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && popupOverlay && popupOverlay.classList.contains("show")){
+        popupActionSource = "escape";
+        closePopup(false);
+      }
+    });
 
     // drawer
     openDrawerBtn.addEventListener("click", openDrawer);
@@ -6554,8 +6806,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
 
     // scroll
-    toTopBtn.addEventListener("click", scrollToTop);
-    toBottomBtn.addEventListener("click", scrollToBottom);
 
     // theme
     themeToggleBtn.addEventListener("click", toggleTheme);
@@ -7089,16 +7339,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         renderCalendar();
       });
     }
-    if(calTodayBtn){
-      calTodayBtn.addEventListener("click", ()=>{
-        const d = new Date();
-        calViewYear = d.getFullYear();
-        calViewMonth = d.getMonth();
-        calSelectedISO = todayISO();
-        renderCalendar();
-        renderCalendarDayDetails(calSelectedISO);
-      });
-    }
     if(calGrid){
       calGrid.addEventListener("click", (e)=>{
         const cell = e.target.closest("[data-iso],[data-cal-iso]");
@@ -7335,15 +7575,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }
       closeDrawer();
     });
-    // bot\u00e3o voltar para o buscador (tela de tarefas)
-    if (backToSearchBtn) {
-    backToSearchBtn.addEventListener("click", () => {
-    setView("search");
-     });
     if(goToTasksBtn){
-      goToTasksBtn.addEventListener("click", ()=> setView("tasks"));
-    }
-
+      goToTasksBtn.addEventListener("click", ()=>{
+        setView(currentView === "tasks" ? "search" : "tasks");
+      });
     }
 
 
