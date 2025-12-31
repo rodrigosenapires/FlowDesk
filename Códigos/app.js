@@ -1542,6 +1542,11 @@
           .concat(names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
         tLoja.innerHTML = options.join("");
       }
+      if(simpleTaskStore){
+        const options = ['<option value="" selected>Escolha a loja</option>']
+          .concat(names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
+        simpleTaskStore.innerHTML = options.join("");
+      }
       if(orderLookupStore){
         const options = ['<option value="" selected>Escolha a loja</option>']
           .concat(names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
@@ -1591,7 +1596,6 @@
     function matchesCalendarStoreFilter(entry){
       const filter = (calStoreFilterValue || "").trim();
       if(!filter) return true;
-      if(entry?.extra || entry?.simple) return false;
       const loja = (entry?.loja || "").toString().trim();
       return loja === filter;
     }
@@ -1985,6 +1989,7 @@
     const simpleTaskDate = document.getElementById("simpleTaskDate");
     const simpleTaskStart = document.getElementById("simpleTaskStart");
     const simpleTaskEnd = document.getElementById("simpleTaskEnd");
+    const simpleTaskStore = document.getElementById("simpleTaskStore");
     const simpleTaskSubject = document.getElementById("simpleTaskSubject");
     const simpleTaskText = document.getElementById("simpleTaskText");
     const simpleTaskRepeat = document.getElementById("simpleTaskRepeat");
@@ -2667,6 +2672,7 @@
       if(simpleTaskDate) simpleTaskDate.value = iso;
       if(simpleTaskStart) simpleTaskStart.value = (ref?.startTime || "").toString().trim();
       if(simpleTaskEnd) simpleTaskEnd.value = (ref?.endTime || "").toString().trim();
+      if(simpleTaskStore) simpleTaskStore.value = (ref?.loja || "").toString().trim();
       if(simpleTaskSubject) simpleTaskSubject.value = (ref?.assunto || "").toString().trim();
       if(simpleTaskText) simpleTaskText.value = (ref?.extraText || "").toString().trim();
       if(simpleTaskRepeat){
@@ -2717,7 +2723,12 @@
       }
       const startTime = (simpleTaskStart?.value || "").toString().trim();
       const endTime = (simpleTaskEnd?.value || "").toString().trim();
+      const loja = (simpleTaskStore?.value || "").toString().trim();
       const repeat = (simpleTaskRepeat?.selectedOptions?.[0]?.text || "").toString().trim();
+      if(!loja){
+        showAlert("Selecione a loja.");
+        return;
+      }
       const nowIso = new Date().toISOString();
       const editingId = (simpleTaskEditId || "").trim();
       const entryId = editingId || `simple-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
@@ -2729,6 +2740,7 @@
         extraText: text,
         startTime,
         endTime,
+        loja,
         repeat,
         extra: true,
         open: prevEntry ? Boolean(prevEntry.open) : true,
@@ -2749,6 +2761,7 @@
         extraText: text,
         startTime,
         endTime,
+        loja,
         repeat,
         isExtra: true,
         createdAt: prevEntry?.createdAt || nowIso,
@@ -3177,6 +3190,7 @@
           const timeLabel = (start || end) ? `${start || "--:--"} - ${end || "--:--"}` : "Sem hor\u00e1rio";
           const repeatLabel = (e.repeat || "").toString().trim();
           const extraText = (e.extraText || "").toString().trim();
+          const lojaLabel = (e.loja || "").toString().trim();
           return `
             <div class="calDetailRow calSimpleRow" data-cal-simple-id="${escapeHtml(String(e.id || ""))}">
               <div class="dot extra"></div>
@@ -3184,6 +3198,7 @@
                 <p class="title">${escapeHtml(e.assunto || "Tarefa extra")}</p>
                 <div class="meta">
                   ${extraText ? `<div class="extraMeta"><span>Descri\u00e7\u00e3o:</span> <span class="extraValue">${escapeHtml(extraText)}</span></div>` : ""}
+                  ${lojaLabel ? `<div class="extraMeta"><span>Loja:</span> <span class="extraValue">${escapeHtml(lojaLabel)}</span></div>` : ""}
                   <div class="extraMeta"><span>Hor\u00e1rio:</span> <span class="extraValue">${escapeHtml(timeLabel)}</span></div>
                   ${repeatLabel ? `<div class="extraMeta"><span>Repeti\u00e7\u00e3o:</span> <span class="extraValue">${escapeHtml(repeatLabel)}</span></div>` : ""}
                 </div>
@@ -7087,12 +7102,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const prox = isExtra ? timeLabel : formatDateBR(effDate);
         const data = formatDateBR(t.data || "");
 
-        const lojaText = (t.loja || "Di\u00e1rio Nerdify");
-        const lojaLogoUrl = isExtra
-          ? ""
-          : (lojaText.toLowerCase().includes("shop 80")
+        const lojaTextRaw = (t.loja || "").toString().trim();
+        const lojaText = isExtra ? lojaTextRaw : (lojaTextRaw || "Di\u00e1rio Nerdify");
+        const lojaLogoUrl = lojaText
+          ? (lojaText.toLowerCase().includes("shop 80")
             ? DEFAULT_SHOP80_LOGO
-            : DEFAULT_DIARIO_LOGO);
+            : DEFAULT_DIARIO_LOGO)
+          : "";
         const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
         const assuntoRaw = (t.assunto || "").trim();
 
@@ -7146,7 +7162,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             </div>
 
             <div class="taskMeta">
-              ${isExtra ? "" : `<span class="pillMini">Loja: ${escapeHtml(lojaText)}</span>`}
+              ${lojaText ? `<span class="pillMini">Loja: ${escapeHtml(lojaText)}</span>` : ""}
               <span class="pillMini">${isExtra ? "Hor\u00e1rio" : "Pr\u00f3xima Etapa"}: <b>${escapeHtml(prox)}</b></span>
               <span class="pillMini">Data inicial: <b>${escapeHtml(data)}</b></span>
             </div>
