@@ -11,6 +11,7 @@
     const STORAGE_KEY_SIZE_TABLES = "size_tables_custom_v1";
     const STORAGE_KEY_SIZE_TABLES_OVERRIDES = "size_tables_overrides_v1";
     const STORAGE_KEY_PRODUCTS = "products_custom_v1";
+    const DAILY_REPEAT_LABEL = "Todos os dias";
 
     // >>> TAREFAS
     const STORAGE_KEY_TASKS = "tarefasDiarias_v1";
@@ -1600,6 +1601,28 @@
       return loja === filter;
     }
 
+    function shouldIncludeDailyRepeatOnDate(entry, iso){
+      if(!iso) return false;
+      const start = (entry?.date || "").toString().trim();
+      if(!start) return true;
+      return iso >= start;
+    }
+
+    function getCalendarEntriesForDate(iso, options){
+      if(!iso) return [];
+      const applyStoreFilter = options?.applyStoreFilter !== false;
+      const base = (calendarHistory || [])
+        .filter(e => e.date === iso)
+        .filter(e => !isDailyRepeatCalendarEntry(e));
+      const repeats = (calendarHistory || [])
+        .filter(isDailyRepeatCalendarEntry)
+        .filter(e => shouldIncludeDailyRepeatOnDate(e, iso))
+        .map(e => ({ ...e, date: iso }));
+      let entries = base.concat(repeats);
+      if(applyStoreFilter) entries = entries.filter(matchesCalendarStoreFilter);
+      return entries;
+    }
+
     function setCalendarFilterPanelOpen(open){
       if(!calFilterPanel) return;
       calFilterPanel.style.display = open ? "block" : "none";
@@ -2044,6 +2067,7 @@
     // tasks elements
     const tasksModeLabel = document.getElementById("tasksModeLabel");
     const tasksCount = document.getElementById("tasksCount");
+    const tasksPeriodLabel = document.getElementById("tasksPeriodLabel");
     const tasksList = document.getElementById("tasksList");
 
     const tData = document.getElementById("tData");
@@ -2439,6 +2463,18 @@
         .replaceAll(">","&gt;")
         .replaceAll('"',"&quot;")
         .replaceAll("'","&#039;");
+    }
+
+    function isDailyRepeatLabel(label){
+      return (label || "").toString().trim().toLowerCase() === DAILY_REPEAT_LABEL.toLowerCase();
+    }
+
+    function isDailyRepeatTask(t){
+      return Boolean(t?.isExtra) && isDailyRepeatLabel(t?.repeat);
+    }
+
+    function isDailyRepeatCalendarEntry(e){
+      return (e?.extra || e?.simple) && isDailyRepeatLabel(e?.repeat);
     }
 
     async function copyTextToClipboard(text, btn, doneLabel){
@@ -2929,9 +2965,7 @@
         const valid = dayNum <= daysInMonth;
         const iso = valid ? `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}` : "";
         const entries = valid
-          ? (calendarHistory || [])
-              .filter(e => e.date === iso)
-              .filter(matchesCalendarStoreFilter)
+          ? getCalendarEntriesForDate(iso)
               .sort((a,b) => {
                 if(Boolean(a.open) !== Boolean(b.open)) return a.open ? -1 : 1;
                 return (a.assunto||"").localeCompare(b.assunto||"");
@@ -2962,14 +2996,24 @@
         const isToday = c.iso && (c.iso === todayIso);
         const isSelected = c.iso && (c.iso === calSelectedISO);
 
-        const entriesCount = (c.entries || []).length;
-        const list = entriesCount > 1
-          ? `<div class="calItem open" title="${entriesCount} tarefas">${entriesCount} tarefas</div>`
-          : (c.entries || []).map(e => {
+        const normalEntries = (c.entries || []).filter(e => !(e.extra || e.simple));
+        const extraEntries = (c.entries || []).filter(e => (e.extra || e.simple));
+        const normalCount = normalEntries.length;
+        const extraCount = extraEntries.length;
+        const normalList = normalCount > 1
+          ? `<div class="calItem open" title="${normalCount} tarefas">${normalCount} tarefas</div>`
+          : normalEntries.map(e => {
               const cls = e.open ? "open" : "closed";
               return `<div class="calItem ${cls}" title="${escapeHtml(e.assunto)}">${escapeHtml(e.assunto)}</div>`;
             }).join("");
+        const extraList = extraCount > 1
+          ? `<div class="calItem extra" title="${extraCount} tarefas extras">${extraCount} extras</div>`
+          : extraEntries.map(e => {
+              return `<div class="calItem extra" title="${escapeHtml(e.assunto)}">${escapeHtml(e.assunto)}</div>`;
+            }).join("");
+        const list = [normalList, extraList].filter(Boolean).join("");
 
+        const entriesCount = normalCount + extraCount;
         const countAttr = entriesCount ? ` data-count="${entriesCount}"` : "";
         const cellAttrs = c.iso ? `data-iso="${c.iso}" data-cal-iso="${c.iso}" tabindex="0"` : "";
         return `
@@ -3016,8 +3060,10 @@
           continue;
         }
         const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
-        const entriesCount = (calendarHistory || []).filter(e => e.date === iso).length;
-        cells.push({ blank:false, dayNum, iso, entriesCount });
+        const entries = getCalendarEntriesForDate(iso, { applyStoreFilter:false });
+        const normalCount = entries.filter(e => !(e.extra || e.simple)).length;
+        const extraCount = entries.filter(e => (e.extra || e.simple)).length;
+        cells.push({ blank:false, dayNum, iso, normalCount, extraCount });
       }
 
       miniCalendarGrid.innerHTML = cells.map(c => {
@@ -3025,13 +3071,20 @@
           return `<div class="miniCalCell isBlank" aria-hidden="true"></div>`;
         }
         const isToday = c.iso === todayIso;
-        const countHtml = c.entriesCount
-          ? `<span class="miniCalCount">${c.entriesCount}</span>`
+        const normalHtml = c.normalCount
+          ? `<span class="miniCalCount miniCalCountMain">${c.normalCount}</span>`
           : "";
+        const extraHtml = c.extraCount
+          ? `<span class="miniCalCount miniCalCountExtra">${c.extraCount}</span>`
+          : "";
+        const ariaLabel = `Dia ${c.dayNum}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
         return `
-          <button class="miniCalCell ${isToday ? "isToday" : ""}" type="button" data-mini-iso="${c.iso}">
+          <button class="miniCalCell ${isToday ? "isToday" : ""}" type="button" data-mini-iso="${c.iso}" aria-label="${ariaLabel}">
             <span class="miniCalDay">${c.dayNum}</span>
-            ${countHtml}
+            <span class="miniCalCounts">
+              ${normalHtml}
+              ${extraHtml}
+            </span>
           </button>
         `;
       }).join("");
@@ -3166,9 +3219,7 @@
       }
       if(calSide) calSide.classList.add("isVisible");
 
-      const entries = (calendarHistory || [])
-        .filter(e => e.date === iso)
-        .filter(matchesCalendarStoreFilter)
+      const entries = getCalendarEntriesForDate(iso)
         .sort((a,b) => {
           const ta = getDueTimestamp(a.date, a.startTime || a.prazoHora);
           const tb = getDueTimestamp(b.date, b.startTime || b.prazoHora);
@@ -7023,18 +7074,37 @@ function getNuvemshopSupportBaseUrl(lojaText){
       return true;
     }
 
-    function renderTasks(){
-      if(currentView !== "tasks") return;
+    function getTasksPeriodLabel(){
+      const period = (tasksSearchPeriodValue || "").trim() || "ALL";
+      if(period === "ALL") return "Per\u00edodo: Todos";
+      if(period === "TODAY") return "Per\u00edodo: Hoje";
+      if(period === "NEXT7") return "Per\u00edodo: Pr\u00f3ximos 7 dias";
+      if(period === "NEXT30") return "Per\u00edodo: Pr\u00f3ximos 30 dias";
+      if(period === "MONTH") return "Per\u00edodo: Este m\u00eas";
+      if(period === "CUSTOM"){
+        const from = (tasksSearchPeriodFromValue || "").trim();
+        const to = (tasksSearchPeriodToValue || "").trim();
+        const fromLabel = from ? formatDateBR(from) : "";
+        const toLabel = to ? formatDateBR(to) : "";
+        if(fromLabel && toLabel) return `Per\u00edodo: ${fromLabel} \u2192 ${toLabel}`;
+        if(fromLabel) return `Per\u00edodo: A partir de ${fromLabel}`;
+        if(toLabel) return `Per\u00edodo: At\u00e9 ${toLabel}`;
+        return "Per\u00edodo: Personalizado";
+      }
+      return "Per\u00edodo: -";
+    }
 
+    function getFilteredTasks(){
       const q = (tasksSearchQuery || "").trim().toLowerCase();
       const storeFilter = (tasksSearchStoreValue || "").trim();
       const periodFilter = (tasksSearchPeriodValue || "").trim();
       const statusFilter = (tasksSearchStatusValue || "").trim();
-      const filtered = tasks.filter(t => {
+      return tasks.filter(t => {
         if(storeFilter && storeFilter !== "ALL"){
           const loja = (t.loja || "").toString().trim();
           if(loja !== storeFilter) return false;
         }
+        if(isDailyRepeatTask(t)) return true;
         if(statusFilter){
           const st = (getEffectivePhaseStatus(t) || "").toString().trim();
           if(!st || st !== statusFilter) return false;
@@ -7059,8 +7129,19 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const bb = (b.assunto || "").toString();
         return aa.localeCompare(bb);
       });
+    }
+
+    function renderTasks(){
+      if(currentView !== "tasks") return;
+
+      const filtered = getFilteredTasks();
 
       tasksCount.textContent = `${filtered.length} item(ns)`;
+      if(tasksPeriodLabel){
+        const label = getTasksPeriodLabel();
+        tasksPeriodLabel.textContent = label;
+        tasksPeriodLabel.style.display = label ? "block" : "none";
+      }
 
       if(!filtered.length){
         tasksList.innerHTML = `<div class="note">Nenhuma tarefa encontrada.</div>`;
@@ -7089,6 +7170,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
 
       tasksList.innerHTML = show.map(t => {
         const isExtra = Boolean(t.isExtra);
+        const repeatLabel = (t.repeat || "").toString().trim();
+        const hasDailyRepeat = isDailyRepeatTask(t);
         const effDate = getEffectivePhaseDate(t) || (t.proxEtapa || "").trim();
         const dueToday = (effDate && effDate === today);
         const colors = statusColors(t.status);
@@ -7155,7 +7238,17 @@ function getNuvemshopSupportBaseUrl(lojaText){
           <div class="taskCard ${dueToday ? "taskDueToday" : ""} ${isExtra ? "taskExtra" : ""}" data-task-id="${escapeHtml(t.id)}">
             <div class="taskTopRow">
               <div class="taskMainInfo">
-                <p class="taskTitle ${isExtra ? "extraTitle" : ""}">${escapeHtml(title)}</p>
+                <div class="taskTitleRow">
+                  <p class="taskTitle ${isExtra ? "extraTitle" : ""}">${escapeHtml(title)}</p>
+                  ${hasDailyRepeat ? `<span class="taskRepeatIcon" title="Repeti\u00e7\u00e3o: ${escapeHtml(repeatLabel)}" aria-label="Repeti\u00e7\u00e3o: ${escapeHtml(repeatLabel)}">
+                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                      <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                    </svg>
+                  </span>` : ""}
+                </div>
                 <div class="note taskSubMeta" style="margin-top:6px;">${subtitleHtml}</div>
               </div>
               ${logoHtml ? `<div class="taskLogoWrap">${logoHtml}</div>` : ""}
@@ -9345,30 +9438,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(tasksNextBtn){
       tasksNextBtn.addEventListener("click", ()=>{
-        const q = (tasksSearchQuery || "").trim().toLowerCase();
-        const storeFilter = (tasksSearchStoreValue || "").trim();
-        const periodFilter = (tasksSearchPeriodValue || "").trim();
-        const statusFilter = (tasksSearchStatusValue || "").trim();
-        const filtered = tasks.filter(t => {
-          if(storeFilter && storeFilter !== "ALL"){
-            const loja = (t.loja || "").toString().trim();
-            if(loja !== storeFilter) return false;
-          }
-          if(statusFilter){
-            const st = (getEffectivePhaseStatus(t) || "").toString().trim();
-            if(!st || st !== statusFilter) return false;
-          }
-          if(periodFilter && periodFilter !== "ALL"){
-            const effDate = (getEffectivePhaseDate(t) || "").toString().trim();
-            if(!matchesPeriod(effDate, periodFilter)) return false;
-          }
-        if(!q) return true;
-        const cliente = (t.cliente || "").toString().toLowerCase();
-        const pedidoBase = (t.pedido || "").toString().toLowerCase();
-        const pedidoEfetivo = getEffectivePedidoFromTask(t).toLowerCase();
-        const assunto = (t.assunto || "").toString().toLowerCase();
-        return cliente.includes(q) || pedidoBase.includes(q) || pedidoEfetivo.includes(q) || assunto.includes(q);
-        });
+        const filtered = getFilteredTasks();
         if(!filtered.length) return;
         tasksShowAll = false;
         tasksSingleIndex = (tasksSingleIndex + 1) % filtered.length;

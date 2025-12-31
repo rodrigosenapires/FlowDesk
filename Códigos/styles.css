@@ -506,6 +506,13 @@
     #viewTasks .card .hd #openTaskModalBtn{justify-self:center}
     .resultsCard .hd .count,
     #viewTasks .card .hd .count{justify-self:end}
+    #viewTasks .card .hd .taskHeaderMeta{
+      justify-self:end;
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:2px;
+    }
 
     .btn{
       border:1px solid color-mix(in srgb, var(--line) 92%, transparent);
@@ -2522,6 +2529,24 @@
       grid-template-columns: repeat(7, minmax(0, 1fr));
       gap:6px;
     }
+    .miniCalWeekHeader{
+      display:grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap:6px;
+      margin-bottom:6px;
+      font-size:10px;
+      font-weight:800;
+      text-align:center;
+      opacity:.7;
+      color: color-mix(in srgb, var(--text) 85%, transparent);
+    }
+    .miniCalWeekHeader > div{
+      padding:4px 2px;
+      border-radius:8px;
+      border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg) 60%, transparent);
+    }
+    body.light .miniCalWeekHeader > div{ background: color-mix(in srgb, var(--card) 90%, transparent); }
     .miniCalCell{
       border:1px solid color-mix(in srgb, var(--line) 75%, transparent);
       background: color-mix(in srgb, var(--bg) 70%, transparent);
@@ -2530,9 +2555,8 @@
       min-height:54px;
       position:relative;
       display:flex;
-      flex-direction:column;
-      align-items:flex-start;
-      justify-content:space-between;
+      align-items:center;
+      justify-content:center;
       font-size:11px;
       color: color-mix(in srgb, var(--text) 90%, transparent);
       cursor:pointer;
@@ -2545,21 +2569,39 @@
       background:transparent;
       cursor:default;
     }
-    .miniCalDay{
-      font-weight:900;
-    }
     .miniCalCount{
-      align-self:center;
-      min-width:18px;
-      height:18px;
-      border-radius:999px;
+      min-width:16px;
+      height:16px;
       display:inline-flex;
       align-items:center;
       justify-content:center;
       font-size:10px;
       font-weight:900;
       color:#0b1220;
+      border-radius:999px;
+    }
+    .miniCalDay{
+      position:absolute;
+      top:6px;
+      left:6px;
+      font-weight:900;
+      color: color-mix(in srgb, var(--text) 90%, transparent);
+    }
+    .miniCalCounts{
+      display:flex;
+      gap:6px;
+      align-items:center;
+      justify-content:center;
+      position:absolute;
+      left:50%;
+      bottom:6px;
+      transform:translateX(-50%);
+    }
+    .miniCalCountMain{
       background:#38d9a9;
+    }
+    .miniCalCountExtra{
+      background:#ff922b;
     }
     .miniCalCell.isToday{
       border-color: color-mix(in srgb, var(--brand) 60%, var(--line));
@@ -2637,6 +2679,19 @@
       color: color-mix(in srgb, var(--brand2) 80%, var(--text));
       overflow-wrap:anywhere;
       word-break:break-word;
+    }
+    .taskTitleRow{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .taskRepeatIcon{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:20px;
+      height:20px;
+      color:#ff922b;
     }
     .taskTitle.extraTitle{
       color:#ff922b;
@@ -2948,6 +3003,10 @@
     }
     .calItem.open{ color:#0f8f5f; border-color: color-mix(in srgb, #0f8f5f 35%, var(--line)); }
     .calItem.closed{ color:#e03131; border-color: color-mix(in srgb, #e03131 35%, var(--line)); }
+    .calItem.extra{
+      color:#ff922b;
+      border-color: color-mix(in srgb, #ff922b 35%, var(--line));
+    }
 
     .calSide{
       border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
@@ -2955,6 +3014,9 @@
       border-radius:16px;
       padding:12px;
       display:none;
+    }
+    #calAddSimpleBtn{
+      border-color:#ff922b;
     }
     .calSide.isVisible{ display:block; }
     body.light .calSide{ background: color-mix(in srgb, var(--card) 92%, transparent); }

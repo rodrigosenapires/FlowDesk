@@ -533,6 +533,15 @@
               </div>
             </div>
             <div class="bd">
+              <div class="miniCalWeekHeader" aria-hidden="true">
+                <div>Seg</div>
+                <div>Ter</div>
+                <div>Qua</div>
+                <div>Qui</div>
+                <div>Sex</div>
+                <div>S&aacute;b</div>
+                <div>Dom</div>
+              </div>
               <div class="miniCalendarGrid" id="miniCalendarGrid"></div>
             </div>
           </section>
@@ -557,7 +566,10 @@
                   </svg>
                 </button>
               </div>
-              <div class="count" id="tasksCount"></div>
+              <div class="taskHeaderMeta">
+                <div class="count" id="tasksPeriodLabel"></div>
+                <div class="count" id="tasksCount"></div>
+              </div>
             </div>
             <div class="bd">
               <div class="taskList" id="tasksList"></div>
