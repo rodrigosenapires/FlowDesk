@@ -401,6 +401,28 @@
       color:var(--text);
       font-size:14px;
     }
+    .searchInputWrap{
+      position:relative;
+      flex:1;
+      min-width:0;
+    }
+    .searchInputWrap .icon{
+      position:absolute;
+      left:12px;
+      top:50%;
+      transform:translateY(-50%);
+      pointer-events:none;
+      width:16px;
+      height:16px;
+    }
+    .searchInputWrap .icon svg{
+      width:16px;
+      height:16px;
+      display:block;
+    }
+    .searchInputWrap input{
+      padding-left:calc(12px + 16px + 4px);
+    }
     .hint{
       margin-top:10px;
       color:var(--muted);
@@ -578,6 +600,23 @@
       font-family:var(--sans);
       font-size:13px;
       resize:vertical;
+    }
+    .searchInputWrap{
+      --search-icon-left:12px;
+      --search-icon-size:16px;
+      --search-icon-gap:4px;
+    }
+    .searchInputWrap .icon{
+      left:var(--search-icon-left);
+      width:var(--search-icon-size);
+      height:var(--search-icon-size);
+    }
+    .searchInputWrap .icon svg{
+      width:var(--search-icon-size);
+      height:var(--search-icon-size);
+    }
+    .searchInputWrap input{
+      padding-left:calc(var(--search-icon-left) + var(--search-icon-size) + var(--search-icon-gap));
     }
     body.light textarea, body.light input[type="text"], body.light input[type="date"], body.light input[type="time"], body.light select{
       background: color-mix(in srgb, var(--card) 90%, transparent);
@@ -1464,6 +1503,11 @@
       box-shadow:var(--shadow);
       overflow:hidden;
     }
+    .popupModal{
+      max-height:90vh;
+      display:flex;
+      flex-direction:column;
+    }
     .productModal{
       width:min(900px, 96vw);
       max-height:90vh;
@@ -1502,7 +1546,32 @@
     }
     .miniModal .mh h3{margin:0;font-size:14px;font-weight:950}
     .miniModal .mb{padding:14px}
-    .popupModal .mb{padding:8px 14px}
+    .popupModal .mb{
+      padding:8px 14px;
+      overflow:auto;
+      max-height:calc(90vh - 120px);
+    }
+    .popupModal.isCentered{
+      display:flex;
+      flex-direction:column;
+    }
+    .popupModal.isCentered .mh{
+      margin-top:4px;
+    }
+    .popupModal.isCentered .mb{
+      margin-bottom:auto;
+    }
+    .popupModal.isMessageCentered{
+      display:flex;
+      flex-direction:column;
+    }
+    .popupModal.isMessageCentered .mb{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex:1 1 auto;
+      min-height:0;
+    }
     #backupOverlay .miniModal .mb{
       display:flex;
       justify-content:center;
@@ -1521,6 +1590,17 @@
     #sizeTablesOverlay .miniModal .mb{
       overflow:auto;
       max-height:calc(90vh - 70px);
+    }
+    #closeTaskOverlay .miniModal{
+      display:flex;
+      flex-direction:column;
+    }
+    #closeTaskOverlay .miniModal .mb{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex:1 1 auto;
+      min-height:0;
     }
     #sizeTablesOverlay .sizeTablesHint{
       margin-bottom:16px;
@@ -1587,56 +1667,76 @@
       text-align:center;
       white-space:pre-wrap;
       overflow-wrap:anywhere;
+      margin-top:8px;
+      margin-bottom:20px;
     }
     .popupSummary{
       display:flex;
       flex-direction:column;
-      gap:16px;
+      gap:14px;
       text-align:left;
       padding-bottom:14px;
     }
     .summaryPhase{
       display:flex;
       flex-direction:column;
+      gap:10px;
+      padding:12px;
+      border-radius:14px;
+      border:1px solid color-mix(in srgb, var(--line) 65%, transparent);
+      background: color-mix(in srgb, var(--bg) 62%, transparent);
     }
-    .summaryRow{
-      display:grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap:16px;
+    .summaryPhaseHeader{
+      display:flex;
       align-items:center;
-    }
-    .summaryRow > div{
-      padding-bottom:10px;
-      border-bottom:1px dashed color-mix(in srgb, var(--line) 65%, transparent);
-    }
-    .summaryRow.summaryDates{
-      margin-top:12px;
-    }
-    .summaryRow.summaryDates > div{
+      justify-content:space-between;
+      gap:10px;
+      padding-bottom:8px;
       border-bottom:1px dashed color-mix(in srgb, var(--line) 60%, transparent);
     }
-    .summaryRow.summaryDates{
-      margin-top:10px;
+    .summaryPhaseTitle{
+      font-weight:900;
+      font-size:12px;
+      letter-spacing:.4px;
+      text-transform:uppercase;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg) 70%, transparent);
     }
-    .summaryText{
-      margin-top:10px;
-      display:block;
-      gap:16px;
-      text-align:center;
+    .summaryPhaseStatus{
+      font-weight:900;
+      font-size:13px;
+      color: color-mix(in srgb, var(--text) 96%, transparent);
+      text-align:right;
     }
-    .summaryText .popupSummaryLabel{
-      padding-bottom:0;
-      border-bottom:none;
+    .summaryMetaGrid{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap:10px 16px;
     }
-    .summaryTextValue{
-      padding-bottom:0;
-      border-bottom:none;
+    .summaryMetaItem{
+      font-size:12px;
+      color: color-mix(in srgb, var(--text) 92%, transparent);
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid color-mix(in srgb, var(--line) 65%, transparent);
+      background: color-mix(in srgb, var(--bg) 70%, transparent);
     }
-    .summaryTextValue{
-      grid-column:auto;
-      min-width:0;
+    .summaryNote{
+      font-size:12px;
+      line-height:1.35;
+      color: color-mix(in srgb, var(--text) 92%, transparent);
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px dashed color-mix(in srgb, var(--line) 60%, transparent);
+      background: color-mix(in srgb, var(--bg) 70%, transparent);
+      text-align:left;
+      white-space:pre-wrap;
       overflow-wrap:anywhere;
-      display:block;
     }
     .popupSummaryLabel{
       font-weight:900;
@@ -1644,8 +1744,8 @@
     }
     .popupSummaryDivider{
       height:1px;
-      background: rgba(255,255,255,0.7);
-      opacity:.7;
+      background: color-mix(in srgb, var(--line) 70%, transparent);
+      opacity:.8;
     }
     .popupSummaryItem{
       padding:0;
@@ -1664,7 +1764,54 @@
       font-family:var(--sans);
       font-size:13px;
     }
+    .popupTextarea{
+      width:100%;
+      min-height:220px;
+      padding:12px 12px;
+      border-radius:12px;
+      border:1px solid color-mix(in srgb, var(--line) 92%, transparent);
+      background: color-mix(in srgb, var(--bg) 75%, transparent);
+      color:var(--text);
+      outline:none;
+      font-family:var(--sans);
+      font-size:13px;
+      resize:vertical;
+    }
+    .popupShortcutHint{
+      margin-top:8px;
+      font-size:11px;
+      color:var(--muted);
+      text-align:center;
+    }
+    .popupQuickPick{
+      margin-top:10px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg) 70%, transparent);
+    }
+    .popupQuickPickTitle{
+      font-size:12px;
+      font-weight:900;
+      color:var(--muted);
+    }
+    .popupQuickPickOptions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      justify-content:center;
+    }
+    .popupQuickPickOptions .btn{
+      padding:6px 10px;
+      font-size:12px;
+    }
     body.light .popupInput{
+      background: color-mix(in srgb, var(--card) 90%, transparent);
+    }
+    body.light .popupTextarea{
       background: color-mix(in srgb, var(--card) 90%, transparent);
     }
     .orderLookupMenu{
@@ -2575,6 +2722,21 @@
       flex-direction:column;
       border:0;
     }
+    .calModal .mh{
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      align-items:center;
+    }
+    .calModal .mh h3{
+      justify-self:start;
+    }
+    .calModal .mh .calNavRow{
+      justify-content:center;
+      margin:0 auto;
+    }
+    .calModal .mh .calCloseBtn{
+      justify-self:end;
+    }
     .calModal .mb{
       overflow:auto;
       max-height:calc(90vh - 70px);
@@ -2612,8 +2774,18 @@
       grid-template-columns: repeat(7, 1fr);
       gap:8px;
     }
+    .calNavRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
+      align-items:center;
+    }
+    .calNavRow #calMonthLabel{
+      min-width:160px;
+      text-align:center;
+    }
     .calGridNote{
-      grid-column:1 / -1;
       height:75px;
       border:1px solid color-mix(in srgb, var(--line) 65%, transparent);
       border-radius:14px;
@@ -2625,6 +2797,11 @@
       align-items:center;
       justify-content:center;
       text-align:center;
+      margin-top:10px;
+      width:100%;
+    }
+    .calGrid .calGridNote{
+      grid-column:1 / -1;
     }
 
     .calCell{
@@ -2764,51 +2941,34 @@
       }
       .searchrow{
         display:grid;
-        grid-template-columns:1fr auto auto;
-        grid-template-rows:auto auto;
+        grid-template-columns:auto 1fr;
+        align-items:center;
         column-gap:10px;
-        row-gap:16px;
+        row-gap:0;
         padding:10px 12px;
         position:relative;
         width:100%;
       }
-      .searchrow .icon{
-        grid-column:1;
+      .searchInputWrap{
+        grid-column:2;
         grid-row:1;
-        position:absolute;
-        left:12px;
-        top:12px;
-        z-index:2;
+        width:100%;
       }
       .searchrow .filterBtn{
-        grid-column:1 / -1;
-        grid-row:2;
-        width:100%;
-        display:inline-flex;
+        grid-column:1;
+        grid-row:1;
+        width:40px;
+        height:40px;
+        padding:0;
+        border-radius:10px;
+        justify-self:start;
       }
       .searchrow input{
-        grid-column:1 / -1;
-        grid-row:1;
         width:100%;
         padding-left:36px;
       }
-      .searchrow .filterBtn{
-        grid-column:2;
-        grid-row:2;
-        width:44px;
-        height:44px;
-        padding:0;
-        border-radius:12px;
-        justify-self:end;
-      }
       .searchrow #searchClearBtn{
-        grid-column:3;
-        grid-row:2;
-        width:auto;
-        padding:8px 12px;
-        font-size:12px;
-        border-radius:10px;
-        height:auto;
+        display:none;
       }
       .resultsCard .hd,
       #viewTasks .card .hd{
@@ -2971,6 +3131,30 @@
       .calGrid{
         gap:6px;
       }
+      .calNavRow{
+        justify-content:center;
+        margin-left:0;
+        width:100%;
+        margin-top:10px;
+      }
+      .calModal .mh{
+        grid-template-columns:1fr auto;
+      }
+      .phaseEditActions{
+        position:static;
+        flex-direction:column;
+        gap:10px;
+        align-items:stretch;
+      }
+      .phaseEditActionsMain{
+        margin:0;
+        justify-content:center;
+      }
+      .phaseEditDeleteBtn{
+        position:static;
+        transform:none;
+        align-self:flex-start;
+      }
       .calCell{
         padding:6px;
       }
@@ -2999,6 +3183,13 @@
       .calDetailRow{
         flex-direction:column;
         align-items:flex-start;
+      }
+      .miniCalCount{
+        min-width:0;
+        height:auto;
+        border-radius:0;
+        color:#38d9a9;
+        background:transparent;
       }
       .calDetailRow .txt{
         width:100%;
@@ -3037,6 +3228,9 @@
       }
       .calDayDetails{
         gap:8px;
+      }
+      .summaryMetaGrid{
+        grid-template-columns:1fr;
       }
     }
     .calDetailRow .dot{ width:10px; height:10px; border-radius:999px; margin-top:3px; }

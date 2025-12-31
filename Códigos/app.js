@@ -1124,6 +1124,41 @@
       if(nuvemLinksOverlay) nuvemLinksOverlay.classList.remove("show");
     }
 
+    function openHeaderNuvemshopSupport(){
+      const list = (stores && stores.length) ? stores : DEFAULT_STORES;
+      const options = (list || [])
+        .map(s => ({ name: (s?.name || "").toString().trim() }))
+        .filter(s => s.name)
+        .map(s => ({ name: s.name, url: getNuvemshopSupportBaseUrl(s.name) }))
+        .filter(s => s.url);
+      if(!options.length){
+        showAlert("Nenhum suporte configurado.");
+        return;
+      }
+      if(options.length === 1){
+        window.open(options[0].url, "_blank", "noopener");
+        return;
+      }
+      openPopup({ title: "Suporte Nuvemshop", message: "", okLabel: "", showCancel: false });
+      if(!popupMessage) return;
+      const buttons = options.map(o => (
+        `<button class="btn small" type="button" data-support-link="${escapeHtml(o.url)}">${escapeHtml(o.name)}</button>`
+      )).join("");
+      popupMessage.innerHTML = `
+        <div class="popupQuickPick">
+          <div class="popupQuickPickTitle">Escolha a loja</div>
+          <div class="popupQuickPickOptions">${buttons}</div>
+        </div>
+      `;
+      popupMessage.querySelectorAll("[data-support-link]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const url = (btn.getAttribute("data-support-link") || "").trim();
+          if(url) window.open(url, "_blank", "noopener");
+          closePopup(false);
+        });
+      });
+    }
+
     function openNuvemEditModal(store, id, isNew){
       nuvemEditStore = (store || "").toString();
       nuvemEditId = (id || "").toString();
@@ -1745,17 +1780,112 @@
     const closeTaskDoneBtn = document.getElementById("closeTaskDoneBtn");
     const closeTaskCancelBtn = document.getElementById("closeTaskCancelBtn");
     const popupOverlay = document.getElementById("popupOverlay");
+    const popupModal = popupOverlay ? popupOverlay.querySelector(".popupModal") : null;
     const popupTitle = document.getElementById("popupTitle");
     const popupMessage = document.getElementById("popupMessage");
     const popupInputWrap = document.getElementById("popupInputWrap");
     const popupInput = document.getElementById("popupInput");
+    const popupTextarea = document.getElementById("popupTextarea");
+    const popupShortcutHint = document.getElementById("popupShortcutHint");
     const popupCloseBtn = document.getElementById("popupCloseBtn");
     const popupCancelBtn = document.getElementById("popupCancelBtn");
     const popupOkBtn = document.getElementById("popupOkBtn");
     const popupActions = document.getElementById("popupActions");
+    let popupShortcutContext = null;
+
+    function getTaskRefById(taskId){
+      const id = (taskId || "").toString().trim();
+      if(!id) return null;
+      return (tasks || []).find(t => String(t.id || "") === id)
+        || (tasksDone || []).find(t => String(t.id || "") === id)
+        || null;
+    }
+
+    function collectUniqueStrings(values){
+      const out = [];
+      const seen = new Set();
+      (values || []).forEach(val => {
+        const txt = (val || "").toString().trim();
+        if(!txt || seen.has(txt)) return;
+        seen.add(txt);
+        out.push(txt);
+      });
+      return out;
+    }
+
+    function buildPopupShortcutContext(taskId){
+      const ref = getTaskRefById(taskId);
+      if(!ref) return { taskId:"", pedidos:[], rastreios:[] };
+      const obs = Array.isArray(ref.obs) ? ref.obs : [];
+      const pedidos = collectUniqueStrings([
+        ref.pedido,
+        getEffectivePedidoFromTask(ref),
+        ...obs.map(o => o?.novoPedido),
+        ...obs.map(o => o?.pedido)
+      ]);
+      const rastreios = collectUniqueStrings([
+        ref.rastreio,
+        getEffectiveRastreioFromTask(ref),
+        ...obs.map(o => o?.rastreio)
+      ]);
+      return { taskId: String(ref.id || ""), pedidos, rastreios };
+    }
+
+    function clearPopupQuickPick(){
+      if(!popupInputWrap) return;
+      const existing = popupInputWrap.querySelector("#popupQuickPick");
+      if(existing) existing.remove();
+    }
+
+    function getActivePopupInput(){
+      if(popupTextarea && popupTextarea.style.display !== "none") return popupTextarea;
+      return popupInput;
+    }
+
+    function insertPopupValue(value){
+      const input = getActivePopupInput();
+      if(!input) return;
+      const text = (value || "").toString();
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      const before = input.value.slice(0, start);
+      const after = input.value.slice(end);
+      input.value = before + text + after;
+      const cursor = before.length + text.length;
+      input.setSelectionRange(cursor, cursor);
+      input.focus();
+    }
+
+    function showPopupQuickPick({ items, label, onPick }){
+      if(!popupInputWrap) return;
+      clearPopupQuickPick();
+      const wrap = document.createElement("div");
+      wrap.className = "popupQuickPick";
+      wrap.id = "popupQuickPick";
+      const title = document.createElement("div");
+      title.className = "popupQuickPickTitle";
+      title.textContent = label;
+      const options = document.createElement("div");
+      options.className = "popupQuickPickOptions";
+      items.forEach(item => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn small";
+        btn.textContent = item;
+        btn.addEventListener("click", ()=>{
+          onPick(item);
+          clearPopupQuickPick();
+        });
+        options.appendChild(btn);
+      });
+      wrap.appendChild(title);
+      wrap.appendChild(options);
+      popupInputWrap.appendChild(wrap);
+    }
 
     // buscar pedido (Nuvemshop)
     const orderLookupBtn = document.getElementById("orderLookupBtn");
+    const sakChatBtn = document.getElementById("sakChatBtn");
     const orderLookupOverlay = document.getElementById("orderLookupOverlay");
     const closeOrderLookupBtn = document.getElementById("closeOrderLookupBtn");
     const orderLookupCancelBtn = document.getElementById("orderLookupCancelBtn");
@@ -1778,6 +1908,9 @@
     const calMonthLabel = document.getElementById("calMonthLabel");
     const calWeekHeader = document.getElementById("calWeekHeader");
     const calGrid = document.getElementById("calGrid");
+    const calGridNote = document.getElementById("calGridNote");
+    const calNavRow = document.getElementById("calNavRow");
+    const calNavSlot = document.getElementById("calNavSlot");
     const calDayTitle = document.getElementById("calDayTitle");
     const calDayDetails = document.getElementById("calDayDetails");
     const calSide = document.getElementById("calSide");
@@ -2281,6 +2414,8 @@
       const cancelLabel = (options?.cancelLabel || "Cancelar").toString();
       const showCancel = Boolean(options?.showCancel);
       const useInput = Boolean(options?.input);
+      const centerMessage = Boolean(options?.centerMessage);
+      const multiline = Boolean(options?.multiline);
       popupActionSource = "dismiss";
       popupMode = useInput ? "prompt" : (showCancel ? "confirm" : "alert");
       if(popupTitle) popupTitle.textContent = title;
@@ -2293,14 +2428,31 @@
         popupActions.classList.toggle("isHidden", !showCancel && !okLabel);
       }
       if(popupInputWrap) popupInputWrap.style.display = useInput ? "block" : "none";
-      if(popupInput){
+      if(popupModal){
+        popupModal.classList.toggle("isCentered", Boolean(useInput));
+        popupModal.classList.toggle("isMessageCentered", centerMessage);
+      }
+      clearPopupQuickPick();
+      if(popupInput) popupInput.style.display = multiline ? "none" : "block";
+      if(popupTextarea) popupTextarea.style.display = multiline ? "block" : "none";
+      if(popupShortcutHint){
+        popupShortcutHint.textContent = options?.shortcutsHint
+          ? "Atalhos: Ctrl+P pedido | Ctrl+O rastreio"
+          : "";
+        popupShortcutHint.style.display = options?.shortcutsHint ? "block" : "none";
+      }
+      if(multiline && popupTextarea){
+        popupTextarea.value = (options?.inputValue || "").toString();
+        popupTextarea.placeholder = (options?.inputPlaceholder || "").toString();
+      }else if(popupInput){
         popupInput.type = (options?.inputType || "text").toString();
         popupInput.value = (options?.inputValue || "").toString();
         popupInput.placeholder = (options?.inputPlaceholder || "").toString();
       }
       popupOverlay.classList.add("show");
-      if(useInput && popupInput){
-        setTimeout(()=> popupInput.focus(), 60);
+      if(useInput){
+        const input = getActivePopupInput();
+        if(input) setTimeout(()=> input.focus(), 60);
       }
       return new Promise(resolve => {
         popupResolver = resolve;
@@ -2311,8 +2463,9 @@
       if(!popupOverlay) return;
       popupOverlay.classList.remove("show");
       if(popupResolver){
-        if(popupMode === "prompt"){
-          const value = result ? (popupInput ? popupInput.value : "") : null;
+      if(popupMode === "prompt"){
+          const activeInput = getActivePopupInput();
+          const value = result ? (activeInput ? activeInput.value : "") : null;
           popupResolver(value);
         }else{
           popupResolver(Boolean(result));
@@ -2325,7 +2478,17 @@
         popupInput.type = "text";
         popupInput.placeholder = "";
       }
+      if(popupTextarea){
+        popupTextarea.value = "";
+        popupTextarea.placeholder = "";
+      }
       if(popupInputWrap) popupInputWrap.style.display = "none";
+      if(popupModal){
+        popupModal.classList.remove("isCentered");
+        popupModal.classList.remove("isMessageCentered");
+      }
+      popupShortcutContext = null;
+      clearPopupQuickPick();
     }
 
     function showAlert(message, title){
@@ -2333,7 +2496,7 @@
     }
 
     function showConfirm(message, title){
-      return openPopup({ title: title || "Confirmar", message, showCancel: true });
+      return openPopup({ title: title || "Confirmar", message, showCancel: true, centerMessage: true });
     }
 
     function showPrompt(message, title, options){
@@ -2513,11 +2676,30 @@
       }
       calWeekHeader.dataset.built = "1";
     }
+    function isMobileCalendarLayout(){
+      return window.matchMedia && window.matchMedia("(max-width:720px)").matches;
+    }
+
+    function syncCalendarNavPlacement(){
+      if(!calNavRow) return;
+      const mobile = isMobileCalendarLayout();
+      if(mobile && calNavSlot && calNavRow.parentElement !== calNavSlot){
+        calNavSlot.appendChild(calNavRow);
+      }
+      if(!mobile && calendarOverlay){
+        const header = calendarOverlay.querySelector(".mh");
+        if(header && calNavRow.parentElement !== header){
+          header.appendChild(calNavRow);
+        }
+      }
+    }
+
     function renderCalendar(){
       if(!calendarOverlay || !calGrid || !calMonthLabel) return;
 
       // sempre sincroniza para garantir cores corretas
       syncCalendarOpenFlags();
+      syncCalendarNavPlacement();
 
       buildWeekHeader();
       calMonthLabel.textContent = monthLabelPT(calViewYear, calViewMonth);
@@ -2546,7 +2728,13 @@
       }
 
       const showGridNote = !calSelectedISO;
-      const gridNoteHtml = showGridNote
+      const isMobileLayout = isMobileCalendarLayout();
+      if(calGridNote){
+        const shouldShowMobileNote = showGridNote && isMobileLayout;
+        calGridNote.textContent = shouldShowMobileNote ? "Clique em um dia para ver os assuntos." : "";
+        calGridNote.style.display = shouldShowMobileNote ? "flex" : "none";
+      }
+      const gridNoteHtml = (!isMobileLayout && showGridNote)
         ? `<div class="calGridNote">Clique em um dia para ver os assuntos.</div>`
         : "";
 
@@ -2651,25 +2839,26 @@
         prazo: getEffectivePhaseDate(ref) || "",
         text: getLastPhaseText(ref) || ""
       }];
-      const summaryItems = phases.map(p => {
+      const summaryItems = phases.map((p, idx) => {
         const status = (p?.status || "").toString().trim() || "-";
         const pedido = (p?.novoPedido || getEffectivePedidoFromTask(ref) || "-").toString().trim() || "-";
+        const cliente = (ref?.cliente || "-").toString().trim() || "-";
         const dataInicial = formatDateBR(p?.date || "");
         const prazo = formatDateBR(p?.prazo || "");
         const texto = (p?.text || "").toString().trim() || "-";
         return `
           <div class="summaryPhase">
-            <div class="summaryRow summaryTop">
-              <div><span class="popupSummaryLabel">Status:</span> ${escapeHtml(status)}</div>
-              <div><span class="popupSummaryLabel">Pedido:</span> ${escapeHtml(pedido)}</div>
+            <div class="summaryPhaseHeader">
+              <div class="summaryPhaseTitle">Fase ${idx + 1}</div>
+              <div class="summaryPhaseStatus">${escapeHtml(status)}</div>
             </div>
-            <div class="summaryRow summaryDates">
-              <div><span class="popupSummaryLabel">Data inicial:</span> ${escapeHtml(dataInicial)}</div>
-              <div><span class="popupSummaryLabel">Prazo de resolu&ccedil;&atilde;o:</span> ${escapeHtml(prazo)}</div>
+            <div class="summaryMetaGrid">
+              <div class="summaryMetaItem"><span class="popupSummaryLabel">Pedido</span> ${escapeHtml(pedido)}</div>
+              <div class="summaryMetaItem"><span class="popupSummaryLabel">Cliente</span> ${escapeHtml(cliente)}</div>
+              <div class="summaryMetaItem"><span class="popupSummaryLabel">Data inicial</span> ${escapeHtml(dataInicial)}</div>
+              <div class="summaryMetaItem"><span class="popupSummaryLabel">Prazo de resolu&ccedil;&atilde;o</span> ${escapeHtml(prazo)}</div>
             </div>
-            <div class="summaryText">
-              <span class="summaryTextValue">${escapeHtml(texto)}</span>
-            </div>
+            <div class="summaryNote">${escapeHtml(texto)}</div>
           </div>
         `;
       });
@@ -2693,12 +2882,13 @@
       openPopup({ title: "Aten\u00e7\u00e3o", message: text, okLabel: "", showCancel: false });
     }
 
-    async function openNuvemshopSupportPopup(storeName){
+    async function openNuvemshopSupportPopup(storeName, taskId){
       const base = getNuvemshopSupportBaseUrl(storeName);
       if(!base){
         showAlert("WhatsApp do suporte da Nuvemshop n\u00e3o informado.");
         return;
       }
+      popupShortcutContext = taskId ? buildPopupShortcutContext(taskId) : null;
       const message = await openPopup({
         title: "Suporte Nuvemshop",
         message: "Digite a mensagem:",
@@ -2706,6 +2896,8 @@
         cancelLabel: "Cancelar",
         showCancel: true,
         input: true,
+        multiline: true,
+        shortcutsHint: true,
         inputType: "text",
         inputValue: "",
         inputPlaceholder: "Escreva sua mensagem"
@@ -2720,12 +2912,13 @@
       window.open(url, "_blank", "noopener");
     }
 
-    async function openCustomerWhatsappPopup(raw){
+    async function openCustomerWhatsappPopup(raw, taskId){
       const base = buildCustomerWhatsappUrl(raw || "");
       if(!base){
         showAlert("Nenhum n\u00famero de WhatsApp informado.");
         return;
       }
+      popupShortcutContext = taskId ? buildPopupShortcutContext(taskId) : null;
       const message = await openPopup({
         title: "WhatsApp do cliente",
         message: "Digite a mensagem:",
@@ -2733,6 +2926,8 @@
         cancelLabel: "Cancelar",
         showCancel: true,
         input: true,
+        multiline: true,
+        shortcutsHint: true,
         inputType: "text",
         inputValue: "",
         inputPlaceholder: "Escreva sua mensagem"
@@ -2747,9 +2942,10 @@
       window.open(url, "_blank", "noopener");
     }
 
-    function renderCalendarDayDetails(iso){
+    function renderCalendarDayDetails(iso, options){
       if(!calDayTitle || !calDayDetails) return;
       calDayTitle.textContent = iso ? `Dia: ${iso}` : "";
+      const shouldScroll = Boolean(options && options.scrollToFirst);
 
       if(!iso){
         calDayDetails.innerHTML = "";
@@ -2971,6 +3167,14 @@
         });
       });
 
+      if(shouldScroll){
+        const firstRow = calDayDetails.querySelector(".calDetailRow");
+        const target = firstRow || calDayDetails;
+        setTimeout(()=>{
+          target.scrollIntoView({ behavior:"smooth", block:"start" });
+        }, 0);
+      }
+
       calDayDetails.querySelectorAll("[data-cal-item-view]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const id = (btn.getAttribute("data-cal-item-view") || "").toString().trim();
@@ -3089,6 +3293,7 @@
             okLabel: "Nova fase",
             cancelLabel: "Nova tarefa",
             showCancel: true,
+            centerMessage: true,
           });
           if(result && popupActionSource === "ok"){
             addPhaseFromCard(id);
@@ -5927,6 +6132,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(!phaseEditAttentionWrap) return;
       const show = Boolean(phaseEditAttention && phaseEditAttention.checked);
       phaseEditAttentionWrap.style.display = show ? "block" : "none";
+      if(show && phaseEditAttentionNote){
+        setTimeout(()=>{
+          phaseEditAttentionNote.scrollIntoView({ behavior:"smooth", block:"start" });
+          phaseEditAttentionNote.focus();
+        }, 0);
+      }
     }
 
     function openPhaseEditor({ taskId, mode, index }){
@@ -6807,7 +7018,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
           e.preventDefault();
           e.stopPropagation();
           const storeName = (btn.getAttribute("data-support-store") || "").toString().trim();
-          openNuvemshopSupportPopup(storeName);
+          const card = btn.closest(".taskCard");
+          const taskId = card ? (card.getAttribute("data-task-id") || "").trim() : "";
+          openNuvemshopSupportPopup(storeName, taskId);
         });
         tasksList.dataset.supportBound = "1";
       }
@@ -7050,9 +7263,57 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     if(popupInput){
       popupInput.addEventListener("keydown", (e)=>{
+        const key = (e.key || "").toLowerCase();
+        if(e.ctrlKey && (key === "p" || key === "o")){
+          if(!popupShortcutContext) return;
+          e.preventDefault();
+          const list = key === "p" ? (popupShortcutContext.pedidos || []) : (popupShortcutContext.rastreios || []);
+          if(!list.length){
+            showAlert(key === "p" ? "Nenhum pedido encontrado para esta tarefa." : "Nenhum rastreio encontrado para esta tarefa.");
+            return;
+          }
+          if(list.length === 1){
+            insertPopupValue(list[0]);
+            return;
+          }
+          showPopupQuickPick({
+            items: list,
+            label: key === "p" ? "Escolha o pedido" : "Escolha o rastreio",
+            onPick: insertPopupValue
+          });
+          return;
+        }
         if(e.key !== "Enter") return;
         e.preventDefault();
         closePopup(true);
+      });
+    }
+    if(popupTextarea){
+      popupTextarea.addEventListener("keydown", (e)=>{
+        const key = (e.key || "").toLowerCase();
+        if(e.ctrlKey && (key === "p" || key === "o")){
+          if(!popupShortcutContext) return;
+          e.preventDefault();
+          const list = key === "p" ? (popupShortcutContext.pedidos || []) : (popupShortcutContext.rastreios || []);
+          if(!list.length){
+            showAlert(key === "p" ? "Nenhum pedido encontrado para esta tarefa." : "Nenhum rastreio encontrado para esta tarefa.");
+            return;
+          }
+          if(list.length === 1){
+            insertPopupValue(list[0]);
+            return;
+          }
+          showPopupQuickPick({
+            items: list,
+            label: key === "p" ? "Escolha o pedido" : "Escolha o rastreio",
+            onPick: insertPopupValue
+          });
+          return;
+        }
+        if(e.key === "Enter" && e.ctrlKey){
+          e.preventDefault();
+          closePopup(true);
+        }
       });
     }
     document.addEventListener("keydown", (e)=>{
@@ -7807,7 +8068,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
       });
     }
     if(orderLookupBtn){
-      orderLookupBtn.addEventListener("click", openNuvemLinksModal);
+      orderLookupBtn.addEventListener("click", openHeaderNuvemshopSupport);
+    }
+    if(sakChatBtn){
+      sakChatBtn.addEventListener("click", openHeaderNuvemshopSupport);
     }
     if(nuvemLinksCloseBtn){
       nuvemLinksCloseBtn.addEventListener("click", (e)=>{
@@ -8052,6 +8316,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
       calendarOverlay.addEventListener("click", (e)=>{ if(e.target === calendarOverlay) closeCalendar(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && calendarOverlay.classList.contains("show")) closeCalendar(); });
     }
+    window.addEventListener("resize", ()=>{
+      syncCalendarNavPlacement();
+      renderCalendar();
+    });
     if(miniCalendarGrid){
       miniCalendarGrid.addEventListener("click", (e)=>{
         const btn = e.target.closest("[data-mini-iso]");
@@ -8069,7 +8337,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         calSelectedISO = iso;
         openCalendar();
-        renderCalendarDayDetails(iso);
+        renderCalendarDayDetails(iso, { scrollToFirst:true });
       });
     }
     if(calPrevMonth){
@@ -8100,7 +8368,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         calSelectedISO = iso;
         renderCalendar();
-        renderCalendarDayDetails(iso);
+        renderCalendarDayDetails(iso, { scrollToFirst:true });
       });
       calGrid.addEventListener("keydown", (e)=>{
         if(e.key !== "Enter" && e.key !== " ") return;
@@ -8117,7 +8385,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         calSelectedISO = iso;
         renderCalendar();
-        renderCalendarDayDetails(iso);
+        renderCalendarDayDetails(iso, { scrollToFirst:true });
       });
     }
     if(searchClearBtn){
@@ -8142,7 +8410,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
         e.preventDefault();
         e.stopPropagation();
         const storeName = (supportBtn.getAttribute("data-support-store") || supportBtn.getAttribute("data-cal-support-store") || "").toString().trim();
-        openNuvemshopSupportPopup(storeName);
+        let taskId = "";
+        const calRow = supportBtn.closest(".calDetailRow");
+        if(calRow){
+          taskId = (calRow.getAttribute("data-cal-item-id") || "").trim();
+        }else{
+          const card = supportBtn.closest(".taskCard");
+          taskId = card ? (card.getAttribute("data-task-id") || "").trim() : "";
+        }
+        openNuvemshopSupportPopup(storeName, taskId);
         return;
       }
       const customerBtn = e.target.closest("[data-customer-whatsapp]");
@@ -8150,7 +8426,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
       e.preventDefault();
       e.stopPropagation();
       const raw = (customerBtn.getAttribute("data-customer-whatsapp") || "").toString().trim();
-      openCustomerWhatsappPopup(raw);
+      let taskId = "";
+      const calRow = customerBtn.closest(".calDetailRow");
+      if(calRow){
+        taskId = (calRow.getAttribute("data-cal-item-id") || "").trim();
+      }else{
+        const card = customerBtn.closest(".taskCard");
+        taskId = card ? (card.getAttribute("data-task-id") || "").trim() : "";
+      }
+      openCustomerWhatsappPopup(raw, taskId);
     });
 
 
