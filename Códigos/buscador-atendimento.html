@@ -97,7 +97,10 @@
       <div class="searchrowWrap">
         <div class="searchrow" id="searchRow">
           <button class="btn small filterBtn" id="searchFilterBtn" title="Filtros" aria-label="Filtros">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h18l-7 8v6l-4 2v-8z"></path>
+            </svg>
+            <svg class="iconFilled" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 4h18l-7 8v6l-4 2v-8z"></path>
             </svg>
           </button>
@@ -515,7 +518,19 @@
                  <line x1="10" y1="14" x2="3" y2="21"></line>
                </svg>
               </button>
-              <div class="count" id="miniCalendarLabel"></div>
+              <div class="miniCalHeaderNav">
+                <button class="btn small iconBtn" id="miniCalPrev" title="M&ecirc;s anterior" aria-label="M&ecirc;s anterior">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <div class="count" id="miniCalendarLabel"></div>
+                <button class="btn small iconBtn" id="miniCalNext" title="Pr&oacute;ximo m&ecirc;s" aria-label="Pr&oacute;ximo m&ecirc;s">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="bd">
               <div class="miniCalendarGrid" id="miniCalendarGrid"></div>
@@ -528,12 +543,20 @@
           <aside class="card">
             <div class="hd">
               <h2>Lista de tarefas</h2>
-              <button class="btn small iconBtn" id="openTaskModalBtn" title="Adicionar tarefa" aria-label="Adicionar tarefa">
-                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-              </button>
+              <div class="taskHeaderActions">
+                <button class="btn small iconBtn taskAddBtnMain" id="openTaskModalBtn" title="Adicionar tarefa" aria-label="Adicionar tarefa">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+                <button class="btn small iconBtn taskAddBtnExtra" id="openExtraTaskModalBtn" title="Adicionar tarefa extra" aria-label="Adicionar tarefa extra">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+              </div>
               <div class="count" id="tasksCount"></div>
             </div>
             <div class="bd">
@@ -941,7 +964,23 @@
           <div class="count" id="calMonthLabel">M&ecirc;s/Ano</div>
           <button class="btn small" id="calNextMonth">&#x25B6;</button>
         </div>
-        <button class="btn small primary calCloseBtn" id="closeCalendarBtn">Fechar</button>
+        <div class="calHeaderActions">
+          <button class="btn small iconBtn filterBtn" id="calFilterBtn" title="Filtrar por loja" aria-label="Filtrar por loja">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h18l-7 8v6l-4 2v-8z"></path>
+            </svg>
+            <svg class="iconFilled" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h18l-7 8v6l-4 2v-8z"></path>
+            </svg>
+          </button>
+          <button class="btn small primary calCloseBtn" id="closeCalendarBtn">Fechar</button>
+          <div class="calFilterPanel" id="calFilterPanel" style="display:none;">
+            <div class="label">Filtrar por loja</div>
+            <select id="calStoreFilter" title="Filtrar por loja">
+              <option value="" selected>Todas as lojas</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="mb">
         <div class="calLayout">
@@ -953,13 +992,72 @@
           </div>
 
           <div class="calSide" id="calSide">
-            <div class="label" id="calDayTitle" style="margin:0 0 10px 0;">Selecione um dia</div>
+            <div class="calSideHeader">
+              <div class="label" id="calDayTitle" style="margin:0;">Selecione um dia</div>
+              <button class="btn small iconBtn" id="calAddSimpleBtn" title="Adicionar tarefa extra" aria-label="Adicionar tarefa extra">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
             <div class="calDayDetails" id="calDayDetails"></div>
             <button class="btn small danger" id="calClearDayBtn" style="width:100%; margin-top:10px; display:none;">Limpar dia</button>
           </div>
         </div>
       </div>
     </div>
+    </div>
+  </div>
+
+  <!-- Modal: Tarefa simples -->
+  <div class="miniOverlay" id="simpleTaskOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Tarefa extra</h3>
+        <button class="btn small" id="simpleTaskCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Data</div>
+            <input type="date" id="simpleTaskDate" />
+          </div>
+          <div class="row" style="gap:10px;">
+            <div style="flex:1;">
+              <div class="label">Hor&aacute;rio de in&iacute;cio</div>
+              <input type="time" id="simpleTaskStart" />
+            </div>
+            <div style="flex:1;">
+              <div class="label">Hor&aacute;rio de fim</div>
+              <input type="time" id="simpleTaskEnd" />
+            </div>
+          </div>
+          <div>
+            <div class="label">Assunto</div>
+            <input type="text" id="simpleTaskSubject" placeholder="Digite o assunto..." />
+          </div>
+          <div>
+            <div class="label">Tarefa</div>
+            <textarea id="simpleTaskText" rows="3" placeholder="Digite a descricao..."></textarea>
+          </div>
+          <div>
+            <div class="label">Repeti&ccedil;&atilde;o</div>
+            <select id="simpleTaskRepeat">
+              <option value="nao_repite">N&atilde;o se repete</option>
+              <option value="todos_dias">Todos os dias</option>
+              <option value="semanal_quarta">Semanal: cada quarta-feira</option>
+              <option value="mensal_ultima_quarta">Mensal nos(as) &uacute;ltimos(as) quarta-feira</option>
+              <option value="anual_dez_31">Anual em dezembro 31</option>
+              <option value="dias_uteis">Todos os dias da semana (segunda a sexta-feira)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="simpleTaskCancelBtn">Cancelar</button>
+        <button class="btn primary" id="simpleTaskSaveBtn">Salvar</button>
+      </div>
     </div>
   </div>
 

@@ -1562,11 +1562,65 @@
         if(titles[1] && list[1]) titles[1].textContent = list[1].name || "";
       }
 
+      updateCalendarStoreFilterOptions();
       buildProductsGrid();
 
       nuvemLinks = normalizeNuvemLinks(nuvemLinks);
       localStorage.setItem(STORAGE_KEY_NUVEM_LINKS, JSON.stringify(nuvemLinks));
       renderNuvemLinks();
+    }
+
+    function updateCalendarStoreFilterOptions(){
+      if(!calStoreFilter) return;
+      const names = getStoreNames();
+      const current = (calStoreFilterValue || "").trim();
+      const opts = ['<option value="" selected>Todas as lojas</option>'];
+      names.forEach(name => {
+        opts.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+      });
+      calStoreFilter.innerHTML = opts.join("");
+      if(current && names.includes(current)){
+        calStoreFilter.value = current;
+      }else{
+        calStoreFilter.value = "";
+        calStoreFilterValue = "";
+      }
+      updateFilterButtonsState();
+    }
+
+    function matchesCalendarStoreFilter(entry){
+      const filter = (calStoreFilterValue || "").trim();
+      if(!filter) return true;
+      if(entry?.extra || entry?.simple) return false;
+      const loja = (entry?.loja || "").toString().trim();
+      return loja === filter;
+    }
+
+    function setCalendarFilterPanelOpen(open){
+      if(!calFilterPanel) return;
+      calFilterPanel.style.display = open ? "block" : "none";
+    }
+
+    function truncateHalfWithEllipsis(text){
+      const raw = (text || "").toString();
+      return raw;
+    }
+
+    function updateFilterButtonsState(){
+      const searchStore = (searchStoreSelect ? (searchStoreSelect.value || "").trim() : "");
+      const searchActive = Boolean(searchTagsFilter.length) || (searchStore && searchStore !== "ALL");
+      const tasksActive = Boolean((tasksSearchStoreValue || "").trim())
+        || (tasksSearchPeriodValue || "").trim() !== "ALL"
+        || Boolean((tasksSearchStatusValue || "").trim())
+        || Boolean((tasksSearchPeriodFromValue || "").trim())
+        || Boolean((tasksSearchPeriodToValue || "").trim());
+      if(searchFilterBtn){
+        const active = currentView === "tasks" ? tasksActive : searchActive;
+        searchFilterBtn.classList.toggle("isActive", active);
+      }
+      if(calFilterBtn){
+        calFilterBtn.classList.toggle("isActive", Boolean((calStoreFilterValue || "").trim()));
+      }
     }
 
     /***********************
@@ -1612,6 +1666,7 @@
     const questionCloseBtn = document.getElementById("questionCloseBtn");
     const questionModalTitle = document.getElementById("questionModalTitle");
     const openTaskModalBtn = document.getElementById("openTaskModalBtn");
+    const openExtraTaskModalBtn = document.getElementById("openExtraTaskModalBtn");
     const taskOverlay = document.getElementById("taskOverlay");
     const taskCloseBtn = document.getElementById("taskCloseBtn");
 
@@ -1906,6 +1961,9 @@
     const calPrevMonth = document.getElementById("calPrevMonth");
     const calNextMonth = document.getElementById("calNextMonth");
     const calMonthLabel = document.getElementById("calMonthLabel");
+    const calFilterBtn = document.getElementById("calFilterBtn");
+    const calFilterPanel = document.getElementById("calFilterPanel");
+    const calStoreFilter = document.getElementById("calStoreFilter");
     const calWeekHeader = document.getElementById("calWeekHeader");
     const calGrid = document.getElementById("calGrid");
     const calGridNote = document.getElementById("calGridNote");
@@ -1914,8 +1972,22 @@
     const calDayTitle = document.getElementById("calDayTitle");
     const calDayDetails = document.getElementById("calDayDetails");
     const calSide = document.getElementById("calSide");
+    const calAddSimpleBtn = document.getElementById("calAddSimpleBtn");
     const miniCalendarGrid = document.getElementById("miniCalendarGrid");
     const miniCalendarLabel = document.getElementById("miniCalendarLabel");
+    const miniCalPrev = document.getElementById("miniCalPrev");
+    const miniCalNext = document.getElementById("miniCalNext");
+
+    const simpleTaskOverlay = document.getElementById("simpleTaskOverlay");
+    const simpleTaskCloseBtn = document.getElementById("simpleTaskCloseBtn");
+    const simpleTaskCancelBtn = document.getElementById("simpleTaskCancelBtn");
+    const simpleTaskSaveBtn = document.getElementById("simpleTaskSaveBtn");
+    const simpleTaskDate = document.getElementById("simpleTaskDate");
+    const simpleTaskStart = document.getElementById("simpleTaskStart");
+    const simpleTaskEnd = document.getElementById("simpleTaskEnd");
+    const simpleTaskSubject = document.getElementById("simpleTaskSubject");
+    const simpleTaskText = document.getElementById("simpleTaskText");
+    const simpleTaskRepeat = document.getElementById("simpleTaskRepeat");
 
     // modal: editar/adicionar fase (no card)
     const phaseEditOverlay = document.getElementById("phaseEditOverlay");
@@ -2096,6 +2168,7 @@
     let calViewYear = new Date().getFullYear();
     let calViewMonth = new Date().getMonth(); // 0-11
     let calSelectedISO = "";
+    let calStoreFilterValue = "";
 
     
     const PHASE_STATE_ACTIVE = "Ativa";
@@ -2525,6 +2598,7 @@
       let changed = false;
 
       for(const t of list){
+        if(t?.isExtra) continue;
         const id = String(t.id || "");
         if(!id) continue;
         const prev = map.get(id);
@@ -2582,6 +2656,134 @@
       }
 
       if(changed) saveCalendarHistory([...map.values()]);
+    }
+
+    let simpleTaskEditId = "";
+    function openSimpleTaskModal(date, existing){
+      if(!simpleTaskOverlay) return;
+      const ref = existing || null;
+      const iso = (ref?.date || date || calSelectedISO || todayISO()).toString().trim();
+      simpleTaskEditId = ref ? String(ref.id || "") : "";
+      if(simpleTaskDate) simpleTaskDate.value = iso;
+      if(simpleTaskStart) simpleTaskStart.value = (ref?.startTime || "").toString().trim();
+      if(simpleTaskEnd) simpleTaskEnd.value = (ref?.endTime || "").toString().trim();
+      if(simpleTaskSubject) simpleTaskSubject.value = (ref?.assunto || "").toString().trim();
+      if(simpleTaskText) simpleTaskText.value = (ref?.extraText || "").toString().trim();
+      if(simpleTaskRepeat){
+        const repeatRaw = (ref?.repeat || "").toString().trim();
+        let matched = false;
+        if(repeatRaw){
+          const options = Array.from(simpleTaskRepeat.options || []);
+          const optByText = options.find(opt => (opt.text || "").toString().trim() === repeatRaw);
+          if(optByText){
+            simpleTaskRepeat.value = optByText.value;
+            matched = true;
+          }else{
+            const optByValue = options.find(opt => (opt.value || "").toString().trim() === repeatRaw);
+            if(optByValue){
+              simpleTaskRepeat.value = optByValue.value;
+              matched = true;
+            }
+          }
+        }
+        if(!matched) simpleTaskRepeat.value = "nao_repite";
+      }
+      simpleTaskOverlay.classList.add("show");
+      setTimeout(()=>{ if(simpleTaskSubject) simpleTaskSubject.focus(); }, 40);
+    }
+
+    function closeSimpleTaskModal(){
+      if(!simpleTaskOverlay) return;
+      simpleTaskOverlay.classList.remove("show");
+      simpleTaskEditId = "";
+    }
+
+    function saveSimpleTask(){
+      if(!simpleTaskDate || !simpleTaskText || !simpleTaskSubject) return;
+      const date = (simpleTaskDate.value || "").toString().trim();
+      const subject = (simpleTaskSubject.value || "").toString().trim();
+      const text = (simpleTaskText.value || "").toString().trim();
+      if(!date){
+        showAlert("Informe a data.");
+        return;
+      }
+      if(!subject){
+        showAlert("Digite o assunto.");
+        return;
+      }
+      if(!text){
+        showAlert("Digite a descricao.");
+        return;
+      }
+      const startTime = (simpleTaskStart?.value || "").toString().trim();
+      const endTime = (simpleTaskEnd?.value || "").toString().trim();
+      const repeat = (simpleTaskRepeat?.selectedOptions?.[0]?.text || "").toString().trim();
+      const nowIso = new Date().toISOString();
+      const editingId = (simpleTaskEditId || "").trim();
+      const entryId = editingId || `simple-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+      const prevEntry = (calendarHistory || []).find(e => String(e.id || "") === entryId);
+      const entry = {
+        id: entryId,
+        date,
+        assunto: subject,
+        extraText: text,
+        startTime,
+        endTime,
+        repeat,
+        extra: true,
+        open: prevEntry ? Boolean(prevEntry.open) : true,
+        createdAt: prevEntry?.createdAt || nowIso,
+        updatedAt: nowIso,
+      };
+      const next = (calendarHistory || []).filter(e => String(e.id || "") !== entryId);
+      next.push(entry);
+      saveCalendarHistory(next);
+      renderCalendar();
+      calSelectedISO = date;
+      renderCalendarDayDetails(date, { scrollToFirst:true });
+      const extraTask = {
+        id: entryId,
+        data: date,
+        proxEtapa: date,
+        assunto: subject,
+        extraText: text,
+        startTime,
+        endTime,
+        repeat,
+        isExtra: true,
+        createdAt: prevEntry?.createdAt || nowIso,
+        updatedAt: nowIso,
+      };
+      const list = (tasks || []).slice();
+      const idx = list.findIndex(t => String(t.id || "") === entryId);
+      if(idx >= 0){
+        list[idx] = { ...list[idx], ...extraTask };
+      }else{
+        list.unshift(extraTask);
+      }
+      tasksSingleIndex = 0;
+      saveTasks(list);
+      closeSimpleTaskModal();
+    }
+
+    async function closeExtraTask(taskId){
+      const id = (taskId || "").trim();
+      if(!id) return;
+      const t = (tasks || []).find(x => String(x.id || "") === id);
+      if(!t) return;
+      const ok = await showConfirm("Encerrar esta tarefa extra?");
+      if(!ok) return;
+      const nowIso = new Date().toISOString();
+      tasks = (tasks || []).filter(x => String(x.id || "") !== id);
+      saveTasks(tasks);
+      const prev = (calendarHistory || []).find(e => String(e.id || "") === id);
+      if(prev){
+        const next = (calendarHistory || []).filter(e => String(e.id || "") !== id);
+        next.push({ ...prev, open:false, updatedAt: nowIso });
+        saveCalendarHistory(next);
+        renderCalendar();
+        renderCalendarDayDetails(calSelectedISO);
+      }
     }
 
     function upsertCalendarFromTask(t){
@@ -2716,6 +2918,7 @@
         const entries = valid
           ? (calendarHistory || [])
               .filter(e => e.date === iso)
+              .filter(matchesCalendarStoreFilter)
               .sort((a,b) => {
                 if(Boolean(a.open) !== Boolean(b.open)) return a.open ? -1 : 1;
                 return (a.assunto||"").localeCompare(b.assunto||"");
@@ -2789,28 +2992,19 @@
       syncCalendarOpenFlags();
       miniCalendarLabel.textContent = monthLabelPT(calViewYear, calViewMonth);
 
-      const first = new Date(calViewYear, calViewMonth, 1);
       const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
-      const firstDayIdx = (first.getDay() + 6) % 7;
       const todayIso = todayISO();
       const cells = [];
 
-      for(let i=0; i<42; i++){
-        const dayNum = i - firstDayIdx + 1;
-        if(dayNum < 1 || dayNum > daysInMonth){
+      for(let i=0; i<35; i++){
+        const dayNum = i + 1;
+        if(dayNum > daysInMonth){
           cells.push({ blank:true });
           continue;
         }
         const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
         const entriesCount = (calendarHistory || []).filter(e => e.date === iso).length;
         cells.push({ blank:false, dayNum, iso, entriesCount });
-      }
-
-      while(cells.length >= 7){
-        const tail = cells.slice(cells.length - 7);
-        const allBlank = tail.every(x => x.blank);
-        if(!allBlank) break;
-        cells.splice(cells.length - 7, 7);
       }
 
       miniCalendarGrid.innerHTML = cells.map(c => {
@@ -2945,6 +3139,11 @@
     function renderCalendarDayDetails(iso, options){
       if(!calDayTitle || !calDayDetails) return;
       calDayTitle.textContent = iso ? `Dia: ${iso}` : "";
+      if(calAddSimpleBtn){
+        calAddSimpleBtn.disabled = !iso;
+        calAddSimpleBtn.style.opacity = iso ? "1" : "0.5";
+        calAddSimpleBtn.style.pointerEvents = iso ? "auto" : "none";
+      }
       const shouldScroll = Boolean(options && options.scrollToFirst);
 
       if(!iso){
@@ -2956,9 +3155,10 @@
 
       const entries = (calendarHistory || [])
         .filter(e => e.date === iso)
+        .filter(matchesCalendarStoreFilter)
         .sort((a,b) => {
-          const ta = getDueTimestamp(a.date, a.prazoHora);
-          const tb = getDueTimestamp(b.date, b.prazoHora);
+          const ta = getDueTimestamp(a.date, a.startTime || a.prazoHora);
+          const tb = getDueTimestamp(b.date, b.startTime || b.prazoHora);
           if(ta !== tb) return ta - tb;
           return (a.assunto||"").localeCompare(b.assunto||"");
         });
@@ -2971,6 +3171,49 @@
       const copyIconSmall = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
 
       const html = entries.map(e => {
+        if(e.extra || e.simple){
+          const start = (e.startTime || "").toString().trim();
+          const end = (e.endTime || "").toString().trim();
+          const timeLabel = (start || end) ? `${start || "--:--"} - ${end || "--:--"}` : "Sem hor\u00e1rio";
+          const repeatLabel = (e.repeat || "").toString().trim();
+          const extraText = (e.extraText || "").toString().trim();
+          return `
+            <div class="calDetailRow calSimpleRow" data-cal-simple-id="${escapeHtml(String(e.id || ""))}">
+              <div class="dot extra"></div>
+              <div class="txt">
+                <p class="title">${escapeHtml(e.assunto || "Tarefa extra")}</p>
+                <div class="meta">
+                  ${extraText ? `<div class="extraMeta"><span>Descri\u00e7\u00e3o:</span> <span class="extraValue">${escapeHtml(extraText)}</span></div>` : ""}
+                  <div class="extraMeta"><span>Hor\u00e1rio:</span> <span class="extraValue">${escapeHtml(timeLabel)}</span></div>
+                  ${repeatLabel ? `<div class="extraMeta"><span>Repeti\u00e7\u00e3o:</span> <span class="extraValue">${escapeHtml(repeatLabel)}</span></div>` : ""}
+                </div>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn small iconBtn" data-cal-simple-view="${escapeHtml(String(e.id || ""))}" title="Ver na lista" aria-label="Ver na lista">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
+                  </svg>
+                </button>
+                <button class="btn small iconBtn" data-cal-simple-edit="${escapeHtml(String(e.id || ""))}" title="Editar" aria-label="Editar">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5l4 4L7 21l-4 1 1-4 12.5-14.5z"></path>
+                  </svg>
+                </button>
+                <button class="btn small danger iconBtn" data-cal-simple-del="${escapeHtml(String(e.id || ""))}" title="Excluir" aria-label="Excluir">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 6h18"></path>
+                    <path d="M8 6V4h8v2"></path>
+                    <rect x="6" y="6" width="12" height="14" rx="2"></rect>
+                    <path d="M10 10v6"></path>
+                    <path d="M14 10v6"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          `;
+        }
         const cls = e.open ? "open" : "closed";
         const loja = (e.loja || "").trim();
         const pedido = (e.pedido || "").trim();
@@ -3167,6 +3410,80 @@
         });
       });
 
+      calDayDetails.querySelectorAll("[data-cal-simple-del]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const id = (btn.getAttribute("data-cal-simple-del") || "").toString().trim();
+          if(!id) return;
+          const ok = await showConfirm("Excluir esta tarefa simples?");
+          if(!ok) return;
+          calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
+          saveCalendarHistory(calendarHistory);
+          const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
+          if(extraIdx >= 0){
+            tasks.splice(extraIdx, 1);
+            saveTasks(tasks);
+          }
+          renderCalendar();
+          renderCalendarDayDetails(calSelectedISO);
+        });
+      });
+      calDayDetails.querySelectorAll("[data-cal-simple-edit]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const id = (btn.getAttribute("data-cal-simple-edit") || "").toString().trim();
+          if(!id) return;
+          const entry = (calendarHistory || []).find(item => String(item.id || "") === id);
+          if(!entry){
+            showAlert("Tarefa extra n\u00e3o encontrada.");
+            return;
+          }
+          openSimpleTaskModal(entry.date || calSelectedISO || todayISO(), entry);
+        });
+      });
+      calDayDetails.querySelectorAll("[data-cal-simple-view]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const id = (btn.getAttribute("data-cal-simple-view") || "").toString().trim();
+          if(!id) return;
+          const ref = (tasks || []).find(t => String(t.id || "") === id);
+          if(!ref){
+            showAlert("Tarefa extra n\u00e3o encontrada na lista.");
+            return;
+          }
+          closeCalendar();
+
+          tasksSearchQuery = "";
+          tasksSearchStoreValue = "";
+          tasksSearchPeriodValue = "ALL";
+          tasksSearchPeriodFromValue = "";
+          tasksSearchPeriodToValue = "";
+          tasksSearchStatusValue = "";
+          if(tasksSearch) tasksSearch.value = "";
+          if(tasksSearchStore) tasksSearchStore.value = "";
+          if(tasksSearchPeriod) tasksSearchPeriod.value = "ALL";
+          if(tasksSearchPeriodCustom) tasksSearchPeriodCustom.style.display = "none";
+          if(tasksSearchPeriodFrom) tasksSearchPeriodFrom.value = "";
+          if(tasksSearchPeriodTo) tasksSearchPeriodTo.value = "";
+          if(tasksSearchStatus) tasksSearchStatus.value = "";
+
+          tasksShowAll = true;
+          setView("tasks");
+          renderTasks();
+
+          requestAnimationFrame(()=>{
+            if(!tasksList) return;
+            const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
+            if(!card){
+              showAlert("Tarefa extra n\u00e3o encontrada na lista.");
+              return;
+            }
+            card.scrollIntoView({ behavior:"smooth", block:"center" });
+          });
+        });
+      });
+
       if(shouldScroll){
         const firstRow = calDayDetails.querySelector(".calDetailRow");
         const target = firstRow || calDayDetails;
@@ -3327,7 +3644,10 @@
       calendarOverlay.classList.add("show");
       // garante estado consistente
       syncCalendarOpenFlags();
+      updateCalendarStoreFilterOptions();
+      setCalendarFilterPanelOpen(false);
       renderCalendar();
+      renderMiniCalendar();
       // se ainda n\u00e3o selecionou nada, mostra instru\u00e7\u00e3o
       if(calDayDetails && !calDayDetails.innerHTML.trim()){
         renderCalendarDayDetails("");
@@ -3341,6 +3661,7 @@
       calSelectedISO = "";
       if(calDayTitle) calDayTitle.textContent = "";
       if(calDayDetails) calDayDetails.innerHTML = "";
+      setCalendarFilterPanelOpen(false);
     }
     function safeJsonParse(text){
       try{ return JSON.parse(text); }catch(e){ return null; }
@@ -3455,6 +3776,7 @@
 
         renderTasks();
         scrollToTop();
+        updateFilterButtonsState();
       }else{
         if(searchInput) searchInput.placeholder = "Digite uma palavra-chave (ex: troca, prazo, rastreio, pix, tamanho...)";
         if(searchInput){
@@ -3473,6 +3795,7 @@
 
         render();
         scrollToTop();
+        updateFilterButtonsState();
       }
     }
 
@@ -3747,6 +4070,11 @@ function fillPhaseStatusSelect(){
         status: (t?.status || "").toString(),
         proxEtapa: (t?.proxEtapa || "").toString(),
         obs: obsArr,
+        startTime: (t?.startTime || "").toString(),
+        endTime: (t?.endTime || "").toString(),
+        repeat: (t?.repeat || "").toString(),
+        extraText: (t?.extraText || t?.text || "").toString(),
+        isExtra: Boolean(t?.isExtra),
         createdAt: (t?.createdAt || "").toString(),
         updatedAt: (t?.updatedAt || "").toString(),
         });
@@ -3792,8 +4120,13 @@ function fillPhaseStatusSelect(){
           cliente: (e.cliente || "").toString(),
           lastPhaseText: (e.lastPhaseText || "").toString(),
           prazoHora: (e.prazoHora || "").toString(),
+          startTime: (e.startTime || "").toString(),
+          endTime: (e.endTime || "").toString(),
+          repeat: (e.repeat || "").toString(),
+          extraText: (e.extraText || e.text || "").toString(),
           whatsapp: (e.whatsapp || "").toString(),
           phaseIdx: Number.isFinite(e.phaseIdx) ? e.phaseIdx : Number.parseInt((e.phaseIdx || "0").toString(), 10) || 0,
+          extra: Boolean(e.extra || e.simple),
           open: Boolean(e.open),
           createdAt: (e.createdAt || "").toString(),
           updatedAt: (e.updatedAt || "").toString(),
@@ -6099,6 +6432,42 @@ function getNuvemshopSupportBaseUrl(lojaText){
       openPhaseEditor({ taskId:id, mode:"add", index:-1 });
     }
 
+    function openExtraTaskInCalendar(taskId){
+      const id = (taskId || "").trim();
+      if(!id) return;
+      const ref = (tasks || []).find(t => String(t.id || "") === id);
+      if(!ref) return;
+      const date = (ref.data || ref.proxEtapa || "").toString().trim();
+      if(!date){
+        showAlert("Esta tarefa extra n\u00e3o possui data.");
+        return;
+      }
+      const parts = date.split("-");
+      if(parts.length === 3){
+        const y = Number(parts[0]);
+        const m = Number(parts[1]) - 1;
+        if(Number.isFinite(y) && Number.isFinite(m)){
+          calViewYear = y;
+          calViewMonth = m;
+        }
+      }
+      if(calStoreFilter){
+        calStoreFilterValue = "";
+        calStoreFilter.value = "";
+      }
+      calSelectedISO = date;
+      openCalendar();
+      renderCalendarDayDetails(date, { scrollToFirst:true });
+      requestAnimationFrame(()=>{
+        if(!calDayDetails) return;
+        const row = calDayDetails.querySelector(`[data-cal-simple-id="${CSS.escape(id)}"]`);
+        if(!row) return;
+        row.classList.add("isFocus");
+        row.scrollIntoView({ behavior:"smooth", block:"center" });
+        setTimeout(()=> row.classList.remove("isFocus"), 1400);
+      });
+    }
+
     let pendingCloseTaskId = "";
     function openCloseTaskModal(taskId){
       const id = (taskId || "").trim();
@@ -6588,8 +6957,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const ok = await showConfirm(`Remover este caso?\n\nCliente: ${t.cliente || "-"}\nPedido: ${t.pedido || "-"}\nAssunto: ${t.assunto || "-"}\n\nConfirmar?`);
       if(!ok) return;
 
-      // marca o assunto como removido no calend\u00e1rio (vermelho)
-      markCalendarClosed(t);
+      if(t.isExtra){
+        calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== String(id));
+        saveCalendarHistory(calendarHistory);
+      }else{
+        // marca o assunto como removido no calend\u00e1rio (vermelho)
+        markCalendarClosed(t);
+      }
 
       const next = tasks.filter(x => x.id !== id);
       saveTasks(next);
@@ -6658,7 +7032,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const cliente = (t.cliente || "").toString().toLowerCase();
         const pedidoBase = (t.pedido || "").toString().toLowerCase();
         const pedidoEfetivo = getEffectivePedidoFromTask(t).toLowerCase();
-        return cliente.includes(q) || pedidoBase.includes(q) || pedidoEfetivo.includes(q);
+        const assunto = (t.assunto || "").toString().toLowerCase();
+        return cliente.includes(q) || pedidoBase.includes(q) || pedidoEfetivo.includes(q) || assunto.includes(q);
       }).sort((a,b) => {
         const da = (getEffectivePhaseDate(a) || "").trim();
         const db = (getEffectivePhaseDate(b) || "").trim();
@@ -6698,6 +7073,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const today = todayISO();
 
       tasksList.innerHTML = show.map(t => {
+        const isExtra = Boolean(t.isExtra);
         const effDate = getEffectivePhaseDate(t) || (t.proxEtapa || "").trim();
         const dueToday = (effDate && effDate === today);
         const colors = statusColors(t.status);
@@ -6705,17 +7081,22 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const statusStyle = `background: linear-gradient(90deg, ${colors.a}, ${colors.b});`;
         const fonteText = (t.fonte || "-");
         const statusText = (t.status || "-");
-        const prox = formatDateBR(effDate);
+        const startTime = (t.startTime || "").toString().trim();
+        const endTime = (t.endTime || "").toString().trim();
+        const timeLabel = (startTime || endTime) ? `${startTime || "--:--"} - ${endTime || "--:--"}` : "-";
+        const prox = isExtra ? timeLabel : formatDateBR(effDate);
         const data = formatDateBR(t.data || "");
 
         const lojaText = (t.loja || "Di\u00e1rio Nerdify");
-        const lojaLogoUrl = lojaText.toLowerCase().includes("shop 80")
-          ? DEFAULT_SHOP80_LOGO
-          : DEFAULT_DIARIO_LOGO;
+        const lojaLogoUrl = isExtra
+          ? ""
+          : (lojaText.toLowerCase().includes("shop 80")
+            ? DEFAULT_SHOP80_LOGO
+            : DEFAULT_DIARIO_LOGO);
         const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
         const assuntoRaw = (t.assunto || "").trim();
 
-        const title = (assuntoRaw || "Caso");
+        const title = isExtra ? (assuntoRaw || "Tarefa extra") : (assuntoRaw || "Caso");
         const pedidoUrl = getNuvemshopOrderUrl(lojaText, pedidoEfetivo);
 
         const pedidoNumHtml = pedidoEfetivo
@@ -6741,10 +7122,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
             `</svg></button>`
           : "";
 
-        const subtitleParts = [pedidoHtml, clienteHtml].filter(Boolean);
-        const subtitleHtml = subtitleParts.length
-          ? subtitleParts.map((line)=> `<div class="taskSubLine">${line}</div>`).join("")
-          : `<div class="taskSubLine">-</div>`;
+        const extraText = (t.extraText || "").toString().trim();
+        const subtitleParts = isExtra ? [] : [pedidoHtml, clienteHtml].filter(Boolean);
+        const subtitleHtml = isExtra
+          ? (extraText ? `<div class="taskSubLine">${escapeHtml(extraText)}</div>` : `<div class="taskSubLine">-</div>`)
+          : (subtitleParts.length
+            ? subtitleParts.map((line)=> `<div class="taskSubLine">${line}</div>`).join("")
+            : `<div class="taskSubLine">-</div>`);
         const logoHtml = lojaLogoUrl
           ? `<img src="${escapeHtml(lojaLogoUrl)}" alt="${escapeHtml(lojaText)}" style="height:22px; width:auto; display:block;" />`
           : "";
@@ -6752,42 +7136,47 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const rastEfetivo = (getEffectiveRastreioFromTask(t) || "").trim();
 
         return `
-          <div class="taskCard ${dueToday ? "taskDueToday" : ""}" data-task-id="${escapeHtml(t.id)}">
+          <div class="taskCard ${dueToday ? "taskDueToday" : ""} ${isExtra ? "taskExtra" : ""}" data-task-id="${escapeHtml(t.id)}">
             <div class="taskTopRow">
               <div class="taskMainInfo">
-                <p class="taskTitle">${escapeHtml(title)}</p>
+                <p class="taskTitle ${isExtra ? "extraTitle" : ""}">${escapeHtml(title)}</p>
                 <div class="note taskSubMeta" style="margin-top:6px;">${subtitleHtml}</div>
               </div>
               ${logoHtml ? `<div class="taskLogoWrap">${logoHtml}</div>` : ""}
             </div>
 
             <div class="taskMeta">
-              <span class="pillMini">Loja: ${escapeHtml(lojaText)}</span>
-              <span class="pillMini">Próxima Etapa: <b>${escapeHtml(prox)}</b></span>
+              ${isExtra ? "" : `<span class="pillMini">Loja: ${escapeHtml(lojaText)}</span>`}
+              <span class="pillMini">${isExtra ? "Hor\u00e1rio" : "Pr\u00f3xima Etapa"}: <b>${escapeHtml(prox)}</b></span>
               <span class="pillMini">Data inicial: <b>${escapeHtml(data)}</b></span>
             </div>
 
             ${renderDescBlock(t.obs, lojaText, t.id)}
 
             <div class="taskActions">
-              <button class="btn small iconBtn" data-task-phase-add="${escapeHtml(t.id)}" title="Nova fase" aria-label="Nova fase">
+              ${isExtra ? `<button class="btn small iconBtn" data-task-extra-calendar="${escapeHtml(t.id)}" title="Ver no calend\u00e1rio" aria-label="Ver no calend\u00e1rio">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
+                </svg>
+              </button>` : `<button class="btn small iconBtn" data-task-phase-add="${escapeHtml(t.id)}" title="Nova fase" aria-label="Nova fase">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-              </button>
+              </button>`}
               <button class="btn small iconBtn" data-task-close="${escapeHtml(t.id)}" title="Concluir tarefa" aria-label="Concluir tarefa">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <polyline points="5 13 9 17 19 7"></polyline>
                 </svg>
               </button>
-              <button class="btn small iconBtn" type="button" data-support-store="${escapeHtml(lojaText)}" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
+              ${isExtra ? "" : `<button class="btn small iconBtn" type="button" data-support-store="${escapeHtml(lojaText)}" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
                 <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
                   <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
                   <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
                 </svg>
-              </button>
-              ${(buildCustomerWhatsappUrl(t.whatsapp||"")) ? `<button class="btn small iconBtn" type="button" data-customer-whatsapp="${escapeHtml(t.whatsapp || "")}" title="WhatsApp Cliente" aria-label="WhatsApp Cliente">
+              </button>`}
+              ${(!isExtra && buildCustomerWhatsappUrl(t.whatsapp||"")) ? `<button class="btn small iconBtn" type="button" data-customer-whatsapp="${escapeHtml(t.whatsapp || "")}" title="WhatsApp Cliente" aria-label="WhatsApp Cliente">
                 <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
                   <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
                 </svg>
@@ -6814,7 +7203,22 @@ function getNuvemshopSupportBaseUrl(lojaText){
 
       tasksList.querySelectorAll("[data-task-edit]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
-          const id = btn.getAttribute("data-task-edit");
+          const id = (btn.getAttribute("data-task-edit") || "").trim();
+          if(!id) return;
+          const ref = (tasks || []).find(t => String(t.id || "") === id);
+          if(ref && ref.isExtra){
+            const entry = {
+              id,
+              date: (ref.data || ref.proxEtapa || "").toString().trim(),
+              assunto: (ref.assunto || "").toString().trim(),
+              extraText: (ref.extraText || "").toString().trim(),
+              startTime: (ref.startTime || "").toString().trim(),
+              endTime: (ref.endTime || "").toString().trim(),
+              repeat: (ref.repeat || "").toString().trim(),
+            };
+            openSimpleTaskModal(entry.date || todayISO(), entry);
+            return;
+          }
           editTask(id);
         });
       });
@@ -7005,9 +7409,21 @@ function getNuvemshopSupportBaseUrl(lojaText){
           openAttentionPopup(info.note);
         });
       });
+      tasksList.querySelectorAll("[data-task-extra-calendar]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation();
+          const id = (btn.getAttribute("data-task-extra-calendar") || "").trim();
+          openExtraTaskInCalendar(id);
+        });
+      });
       tasksList.querySelectorAll("[data-task-close]").forEach(btn=>{
         btn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation();
           const id = (btn.getAttribute("data-task-close") || "").trim();
+          if(!id) return;
+          const ref = (tasks || []).find(t => String(t.id || "") === id);
+          if(ref && ref.isExtra){
+            closeExtraTask(id);
+            return;
+          }
           openCloseTaskModal(id);
         });
       });
@@ -7083,6 +7499,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         showAllCards = false;
         currentSingleIndex = 0;
         render();
+        updateFilterButtonsState();
       });
     }
     if(searchFilterBtn){
@@ -7112,6 +7529,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         showAllCards = false;
         currentSingleIndex = 0;
         render();
+        updateFilterButtonsState();
       });
     }
     if(searchFiltersClearBtn){
@@ -7124,6 +7542,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         showAllCards = false;
         currentSingleIndex = 0;
         render();
+        updateFilterButtonsState();
       });
     }
 
@@ -7136,6 +7555,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(searchTagNew) searchTagNew.value = "";
         searchTagsFilter = Array.from(new Set([...searchTagsFilter, value]));
         renderSearchTags();
+        updateFilterButtonsState();
       });
     }
     if(searchTagList){
@@ -7148,6 +7568,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         searchTagsFilter = searchTagsFilter.filter(t => t !== tag);
         saveSearchTags((searchTags || []).filter(t => t !== tag));
         renderSearchTags();
+        updateFilterButtonsState();
       });
     }
     if(searchTagNew){
@@ -7226,6 +7647,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
         openTaskModal();
       });
     }
+    if(openExtraTaskModalBtn){
+      openExtraTaskModalBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        openSimpleTaskModal(todayISO());
+      });
+    }
     if(taskCloseBtn) taskCloseBtn.addEventListener("click", closeTaskModal);
     if(taskOverlay){
       taskOverlay.addEventListener("click", (e)=>{ if(e.target === taskOverlay) closeTaskModal(); });
@@ -7260,6 +7687,56 @@ function getNuvemshopSupportBaseUrl(lojaText){
           closePopup(false);
         }
       });
+    }
+    if(calAddSimpleBtn){
+      calAddSimpleBtn.addEventListener("click", ()=>{
+        if(!calSelectedISO){
+          showAlert("Selecione um dia.");
+          return;
+        }
+        openSimpleTaskModal(calSelectedISO);
+      });
+    }
+    if(calStoreFilter){
+      calStoreFilter.addEventListener("change", ()=>{
+        calStoreFilterValue = (calStoreFilter.value || "").trim();
+        renderCalendar();
+        renderCalendarDayDetails(calSelectedISO);
+        setCalendarFilterPanelOpen(false);
+        updateFilterButtonsState();
+      });
+    }
+    if(calFilterBtn){
+      calFilterBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        if(!calFilterPanel) return;
+        const isOpen = calFilterPanel.style.display === "block";
+        setCalendarFilterPanelOpen(!isOpen);
+      });
+    }
+    if(miniCalPrev){
+      miniCalPrev.addEventListener("click", (e)=>{
+        e.preventDefault();
+        calViewMonth -= 1;
+        if(calViewMonth < 0){ calViewMonth = 11; calViewYear -= 1; }
+        renderMiniCalendar();
+      });
+    }
+    if(miniCalNext){
+      miniCalNext.addEventListener("click", (e)=>{
+        e.preventDefault();
+        calViewMonth += 1;
+        if(calViewMonth > 11){ calViewMonth = 0; calViewYear += 1; }
+        renderMiniCalendar();
+      });
+    }
+    if(simpleTaskCloseBtn) simpleTaskCloseBtn.addEventListener("click", closeSimpleTaskModal);
+    if(simpleTaskCancelBtn) simpleTaskCancelBtn.addEventListener("click", closeSimpleTaskModal);
+    if(simpleTaskSaveBtn) simpleTaskSaveBtn.addEventListener("click", saveSimpleTask);
+    if(simpleTaskOverlay){
+      simpleTaskOverlay.addEventListener("click", (e)=>{ if(e.target === simpleTaskOverlay) closeSimpleTaskModal(); });
+      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && simpleTaskOverlay.classList.contains("show")) closeSimpleTaskModal(); });
     }
     if(popupInput){
       popupInput.addEventListener("keydown", (e)=>{
@@ -8313,8 +8790,19 @@ function getNuvemshopSupportBaseUrl(lojaText){
       closeCalendarBtn.addEventListener("click", closeCalendar);
     }
     if(calendarOverlay){
-      calendarOverlay.addEventListener("click", (e)=>{ if(e.target === calendarOverlay) closeCalendar(); });
-      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && calendarOverlay.classList.contains("show")) closeCalendar(); });
+      calendarOverlay.addEventListener("click", (e)=>{
+        if(e.target === calendarOverlay) closeCalendar();
+        if(calFilterPanel && calFilterPanel.style.display === "block"){
+          const isPanel = e.target.closest("#calFilterPanel");
+          const isBtn = e.target.closest("#calFilterBtn");
+          if(!isPanel && !isBtn){
+            setCalendarFilterPanelOpen(false);
+          }
+        }
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key === "Escape" && calendarOverlay.classList.contains("show")) closeCalendar();
+      });
     }
     window.addEventListener("resize", ()=>{
       syncCalendarNavPlacement();
@@ -8713,6 +9201,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
       });
     }
     if(tasksSearchStore){
@@ -8721,6 +9210,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
       });
     }
     if(tasksSearchPeriod){
@@ -8732,6 +9222,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
       });
     }
     if(tasksSearchPeriodFrom){
@@ -8740,6 +9231,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
       });
     }
     if(tasksSearchPeriodTo){
@@ -8748,6 +9240,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
       });
     }
     if(tasksSearchStatus){
@@ -8765,6 +9258,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
       });
     }
     if(tasksFilterBtn && tasksFiltersOverlay){
@@ -8790,6 +9284,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksSingleIndex = 0;
         renderTasks();
         tasksFiltersOverlay.classList.remove("show");
+        updateFilterButtonsState();
       });
     }
     if(tasksFiltersClearBtn){
@@ -8808,6 +9303,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
       });
     }
     if(tasksSearchClearBtn){
@@ -8828,6 +9324,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
       });
     }
     if(tasksNextBtn){
@@ -8849,11 +9346,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
             const effDate = (getEffectivePhaseDate(t) || "").toString().trim();
             if(!matchesPeriod(effDate, periodFilter)) return false;
           }
-          if(!q) return true;
-          const cliente = (t.cliente || "").toString().toLowerCase();
-          const pedidoBase = (t.pedido || "").toString().toLowerCase();
-          const pedidoEfetivo = getEffectivePedidoFromTask(t).toLowerCase();
-          return cliente.includes(q) || pedidoBase.includes(q) || pedidoEfetivo.includes(q);
+        if(!q) return true;
+        const cliente = (t.cliente || "").toString().toLowerCase();
+        const pedidoBase = (t.pedido || "").toString().toLowerCase();
+        const pedidoEfetivo = getEffectivePedidoFromTask(t).toLowerCase();
+        const assunto = (t.assunto || "").toString().toLowerCase();
+        return cliente.includes(q) || pedidoBase.includes(q) || pedidoEfetivo.includes(q) || assunto.includes(q);
         });
         if(!filtered.length) return;
         tasksShowAll = false;

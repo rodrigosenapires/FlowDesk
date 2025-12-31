@@ -2528,6 +2528,7 @@
       border-radius:10px;
       padding:6px;
       min-height:54px;
+      position:relative;
       display:flex;
       flex-direction:column;
       align-items:flex-start;
@@ -2604,11 +2605,14 @@
     .taskCard{
       padding:12px;
       border-radius:14px;
-      border:1px solid rgba(255,255,255,0.9);
+      border:1px solid #38d9a9;
       background: color-mix(in srgb, var(--bg) 65%, transparent);
       position:relative;
     }
     body.light .taskCard{background: color-mix(in srgb, var(--card) 92%, transparent)}
+    .taskCard.taskExtra{
+      border-color:#ff922b;
+    }
 
     .taskTopRow{
       display:flex;
@@ -2632,6 +2636,11 @@
       font-size:15px;
       line-height:1.25;
       color: color-mix(in srgb, var(--brand2) 80%, var(--text));
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
+    .taskTitle.extraTitle{
+      color:#ff922b;
     }
 
     .taskMeta{
@@ -2652,6 +2661,18 @@
       align-items:center;
       flex-wrap:wrap;
       gap:6px;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
+
+    #calStoreFilter{
+      padding:6px 10px;
+      border-radius:10px;
+      border:1px solid color-mix(in srgb, var(--line) 75%, transparent);
+      background: color-mix(in srgb, var(--bg) 70%, transparent);
+      color: var(--text);
+      font-weight:800;
+      font-size:12px;
     }
     .taskSubLine:not(:first-child)::before{
       content:"-";
@@ -2714,6 +2735,43 @@
     .taskActions::before{ top:0; }
     .taskActions::after{ top:8px; }
 
+    .filterBtn .iconFilled{ display:none; fill:currentColor; width:20px; height:20px; }
+    .filterBtn.isActive .iconStroke{ display:none; }
+    .filterBtn.isActive .iconFilled{ display:inline; }
+
+    .miniCalHeaderNav{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .miniCalHeaderNav .count{
+      min-width:110px;
+      text-align:center;
+    }
+    .taskHeaderActions{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .taskAddBtnMain{
+      border:1px solid #38d9a9;
+      box-shadow:0 0 0 1px color-mix(in srgb, #38d9a9 45%, transparent);
+    }
+    .taskAddBtnExtra{
+      border:1px solid #ff922b;
+      box-shadow:0 0 0 1px color-mix(in srgb, #ff922b 45%, transparent);
+    }
+    #miniCalPrev,
+    #miniCalNext{
+      background:transparent;
+      border:0;
+      box-shadow:none;
+    }
+    #miniCalPrev:hover,
+    #miniCalNext:hover{
+      background:transparent;
+    }
+
     /* ===== CALENDÁRIO (visualização) ===== */
     .calModal{
       width:min(1020px, 100%);
@@ -2736,6 +2794,35 @@
     }
     .calModal .mh .calCloseBtn{
       justify-self:end;
+    }
+    .calHeaderActions{
+      position:relative;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      justify-self:end;
+    }
+    .calFilterPanel{
+      position:absolute;
+      top:calc(100% + 8px);
+      right:0;
+      z-index:5;
+      min-width:220px;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid color-mix(in srgb, var(--line) 75%, transparent);
+      background: color-mix(in srgb, var(--bg) 85%, transparent);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+      display:none;
+    }
+    .calFilterPanel .label{
+      margin-bottom:6px;
+      font-size:12px;
+      opacity:.8;
+      font-weight:800;
+    }
+    .calFilterPanel #calStoreFilter{
+      width:100%;
     }
     .calModal .mb{
       overflow:auto;
@@ -2872,6 +2959,13 @@
     }
     .calSide.isVisible{ display:block; }
     body.light .calSide{ background: color-mix(in srgb, var(--card) 92%, transparent); }
+    .calSideHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin:0 0 10px 0;
+    }
     .calDayDetails{ display:flex; flex-direction:column; gap:10px; }
 
     .calDetailRow{
@@ -3236,8 +3330,15 @@
     .calDetailRow .dot{ width:10px; height:10px; border-radius:999px; margin-top:3px; }
     .calDetailRow .dot.open{ background:#0f8f5f; }
     .calDetailRow .dot.closed{ background:#e03131; }
+    .calDetailRow .dot.extra{ background:#ff922b; }
     .calDetailRow .txt{ flex:1; min-width:220px; }
     .calDetailRow .txt .title{ font-weight:950; margin-top:8px; font-size:13px; }
+    .calDetailRow .txt .extraMeta{ color:#ff922b; }
+    .calDetailRow .txt .extraMeta .extraValue{
+      color:var(--text);
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
     .calDetailRow .txt .meta{
       margin:4px 0 0 0;
       font-size:12px;
