@@ -2037,6 +2037,10 @@
     const simpleTaskSubject = document.getElementById("simpleTaskSubject");
     const simpleTaskText = document.getElementById("simpleTaskText");
     const simpleTaskRepeat = document.getElementById("simpleTaskRepeat");
+    const recurrenceOverlay = document.getElementById("recurrenceOverlay");
+    const recurrenceCloseBtn = document.getElementById("recurrenceCloseBtn");
+    const recurrenceCancelBtn = document.getElementById("recurrenceCancelBtn");
+    const recurrenceDoneBtn = document.getElementById("recurrenceDoneBtn");
 
     // modal: editar/adicionar fase (no card)
     const phaseEditOverlay = document.getElementById("phaseEditOverlay");
@@ -3022,6 +3026,7 @@
     }
 
     let simpleTaskEditId = "";
+    let lastSimpleTaskRepeatValue = "nao_repite";
     function updateSimpleTaskRepeatLabels(iso){
       if(!simpleTaskRepeat) return;
       const options = Array.from(simpleTaskRepeat.options || []);
@@ -3072,6 +3077,7 @@
           }
         }
         if(!matched) simpleTaskRepeat.value = "nao_repite";
+        lastSimpleTaskRepeatValue = simpleTaskRepeat.value;
       }
       simpleTaskOverlay.classList.add("show");
       setTimeout(()=>{ if(simpleTaskSubject) simpleTaskSubject.focus(); }, 40);
@@ -3081,6 +3087,16 @@
       if(!simpleTaskOverlay) return;
       simpleTaskOverlay.classList.remove("show");
       simpleTaskEditId = "";
+    }
+
+    function openRecurrenceModal(){
+      if(!recurrenceOverlay) return;
+      recurrenceOverlay.classList.add("show");
+    }
+
+    function closeRecurrenceModal(){
+      if(!recurrenceOverlay) return;
+      recurrenceOverlay.classList.remove("show");
     }
 
     function saveSimpleTask(){
@@ -8347,9 +8363,27 @@ function getNuvemshopSupportBaseUrl(lojaText){
         updateSimpleTaskRepeatLabels(iso);
       });
     }
+    if(simpleTaskRepeat){
+      simpleTaskRepeat.addEventListener("change", ()=>{
+        const value = (simpleTaskRepeat.value || "").toString().trim();
+        if(value === "personalizar"){
+          openRecurrenceModal();
+          simpleTaskRepeat.value = lastSimpleTaskRepeatValue || "nao_repite";
+          return;
+        }
+        lastSimpleTaskRepeatValue = value || "nao_repite";
+      });
+    }
     if(simpleTaskOverlay){
       simpleTaskOverlay.addEventListener("click", (e)=>{ if(e.target === simpleTaskOverlay) closeSimpleTaskModal(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && simpleTaskOverlay.classList.contains("show")) closeSimpleTaskModal(); });
+    }
+    if(recurrenceCloseBtn) recurrenceCloseBtn.addEventListener("click", closeRecurrenceModal);
+    if(recurrenceCancelBtn) recurrenceCancelBtn.addEventListener("click", closeRecurrenceModal);
+    if(recurrenceDoneBtn) recurrenceDoneBtn.addEventListener("click", closeRecurrenceModal);
+    if(recurrenceOverlay){
+      recurrenceOverlay.addEventListener("click", (e)=>{ if(e.target === recurrenceOverlay) closeRecurrenceModal(); });
+      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && recurrenceOverlay.classList.contains("show")) closeRecurrenceModal(); });
     }
     if(popupInput){
       popupInput.addEventListener("keydown", (e)=>{

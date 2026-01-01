@@ -1068,6 +1068,7 @@
               <option value="mensal_ultima">Mensal nos(as) &uacute;ltimos(as) quarta-feira</option>
               <option value="anual">Anual em dezembro 31</option>
               <option value="dias_uteis">Todos os dias da semana (segunda a sexta-feira)</option>
+              <option value="personalizar">Personalizar...</option>
             </select>
           </div>
         </div>
@@ -1075,6 +1076,67 @@
       <div class="mf">
         <button class="btn" id="simpleTaskCancelBtn">Cancelar</button>
         <button class="btn primary" id="simpleTaskSaveBtn">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Recorrencia personalizada -->
+  <div class="miniOverlay" id="recurrenceOverlay">
+    <div class="miniModal recurrenceModal">
+      <div class="mh">
+        <h3>Recorrencia personalizada</h3>
+        <button class="btn small" id="recurrenceCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="recurrenceGroup">
+          <div>
+            <div class="label">Repetir a cada:</div>
+            <div class="recurrenceInline">
+              <input type="number" min="1" value="1" class="recurrenceStepInput" />
+              <select class="recurrenceSelect">
+                <option value="week">semana</option>
+                <option value="month">mes</option>
+                <option value="year">ano</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <div class="label">Repetir:</div>
+            <div class="recurrenceDays">
+              <button type="button" class="recurrenceDayBtn">S</button>
+              <button type="button" class="recurrenceDayBtn">T</button>
+              <button type="button" class="recurrenceDayBtn">Q</button>
+              <button type="button" class="recurrenceDayBtn">Q</button>
+              <button type="button" class="recurrenceDayBtn">S</button>
+              <button type="button" class="recurrenceDayBtn">S</button>
+              <button type="button" class="recurrenceDayBtn">D</button>
+            </div>
+          </div>
+          <div>
+            <div class="label">Termina em</div>
+            <div class="recurrenceEndGroup">
+              <label class="recurrenceOptionRow">
+                <input type="radio" name="recurrenceEnd" checked />
+                <span>Nunca</span>
+              </label>
+              <label class="recurrenceOptionRow">
+                <input type="radio" name="recurrenceEnd" />
+                <span>Em</span>
+                <input type="date" class="recurrenceDateInput" />
+              </label>
+              <label class="recurrenceOptionRow">
+                <input type="radio" name="recurrenceEnd" />
+                <span>Apos</span>
+                <input type="number" min="1" class="recurrenceCountInput" placeholder="13" />
+                <span class="note">ocorrencias</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="recurrenceCancelBtn">Cancelar</button>
+        <button class="btn primary" id="recurrenceDoneBtn">Concluir</button>
       </div>
     </div>
   </div>

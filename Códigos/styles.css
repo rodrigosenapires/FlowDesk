@@ -1653,6 +1653,77 @@
       border-top:1px solid color-mix(in srgb, var(--line) 70%, transparent);
       display:flex;gap:10px;justify-content:center;flex-wrap:wrap;
     }
+    .recurrenceModal{
+      width:min(420px, 94vw);
+    }
+    .recurrenceGroup{
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    .recurrenceInline{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .recurrenceStepInput{
+      width:70px;
+      text-align:center;
+    }
+    .recurrenceSelect{
+      min-width:120px;
+    }
+    .recurrenceDays{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .recurrenceDayBtn{
+      width:30px;
+      height:30px;
+      border-radius:999px;
+      border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background:color-mix(in srgb, var(--bg) 75%, transparent);
+      color:color-mix(in srgb, var(--text) 92%, transparent);
+      font-weight:800;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .recurrenceDayBtn.isActive{
+      background:var(--accent);
+      color:#fff;
+      border-color:transparent;
+    }
+    .recurrenceEndGroup{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .recurrenceOptionRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:13px;
+      color:color-mix(in srgb, var(--text) 92%, transparent);
+    }
+    .recurrenceDateInput{
+      min-width:150px;
+    }
+    .recurrenceCountInput{
+      width:90px;
+      text-align:center;
+    }
+    .recurrenceModal input[type="number"]{
+      appearance:auto;
+      -moz-appearance:auto;
+      -webkit-appearance:auto;
+    }
+    .recurrenceModal input[type="number"]::-webkit-inner-spin-button,
+    .recurrenceModal input[type="number"]::-webkit-outer-spin-button{
+      opacity:1;
+    }
     #popupActions.mf{
       justify-content:center !important;
     }
