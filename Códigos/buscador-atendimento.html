@@ -1092,7 +1092,7 @@
           <div>
             <div class="label">Repetir a cada:</div>
             <div class="recurrenceInline">
-              <input type="number" min="1" value="1" class="recurrenceStepInput" />
+              <input type="number" min="1" value="1" class="recurrenceStepInput" id="recurrenceStepInput" />
               <select class="recurrenceSelect" id="recurrenceFrequency">
                 <option value="day">dia</option>
                 <option value="week">semana</option>
@@ -1110,31 +1110,31 @@
           <div>
             <div class="label">Repetir:</div>
             <div class="recurrenceDays" id="recurrenceWeekdays">
-              <button type="button" class="recurrenceDayBtn">S</button>
-              <button type="button" class="recurrenceDayBtn">T</button>
-              <button type="button" class="recurrenceDayBtn">Q</button>
-              <button type="button" class="recurrenceDayBtn">Q</button>
-              <button type="button" class="recurrenceDayBtn">S</button>
-              <button type="button" class="recurrenceDayBtn">S</button>
-              <button type="button" class="recurrenceDayBtn">D</button>
+              <button type="button" class="recurrenceDayBtn" data-weekday="1">S</button>
+              <button type="button" class="recurrenceDayBtn" data-weekday="2">T</button>
+              <button type="button" class="recurrenceDayBtn" data-weekday="3">Q</button>
+              <button type="button" class="recurrenceDayBtn" data-weekday="4">Q</button>
+              <button type="button" class="recurrenceDayBtn" data-weekday="5">S</button>
+              <button type="button" class="recurrenceDayBtn" data-weekday="6">S</button>
+              <button type="button" class="recurrenceDayBtn" data-weekday="0">D</button>
             </div>
           </div>
           <div>
             <div class="label">Termina em</div>
             <div class="recurrenceEndGroup">
               <label class="recurrenceOptionRow">
-                <input type="radio" name="recurrenceEnd" checked />
+                <input type="radio" name="recurrenceEnd" id="recurrenceEndNever" checked />
                 <span>Nunca</span>
               </label>
               <label class="recurrenceOptionRow">
-                <input type="radio" name="recurrenceEnd" />
+                <input type="radio" name="recurrenceEnd" id="recurrenceEndDate" />
                 <span>Em</span>
-                <input type="date" class="recurrenceDateInput" />
+                <input type="date" class="recurrenceDateInput" id="recurrenceEndDateInput" />
               </label>
               <label class="recurrenceOptionRow">
-                <input type="radio" name="recurrenceEnd" />
+                <input type="radio" name="recurrenceEnd" id="recurrenceEndCount" />
                 <span>Apos</span>
-                <input type="number" min="1" class="recurrenceCountInput" placeholder="13" />
+                <input type="number" min="1" class="recurrenceCountInput" id="recurrenceEndCountInput" placeholder="13" />
                 <span class="note">ocorrencias</span>
               </label>
             </div>

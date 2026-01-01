@@ -1637,6 +1637,10 @@
         }
         if(isAnnualRepeatCalendarEntry(entry)){
           if(shouldIncludeAnnualRepeatOnDate(entry, iso)) repeats.push({ ...entry, date: iso });
+          return;
+        }
+        if(isCustomRepeatCalendarEntry(entry)){
+          if(shouldIncludeCustomRepeatOnDate(entry, iso)) repeats.push({ ...entry, date: iso });
         }
       });
       let entries = base.concat(repeats);
@@ -2041,10 +2045,16 @@
     const recurrenceCloseBtn = document.getElementById("recurrenceCloseBtn");
     const recurrenceCancelBtn = document.getElementById("recurrenceCancelBtn");
     const recurrenceDoneBtn = document.getElementById("recurrenceDoneBtn");
+    const recurrenceStepInput = document.getElementById("recurrenceStepInput");
     const recurrenceFrequency = document.getElementById("recurrenceFrequency");
     const recurrenceWeekdays = document.getElementById("recurrenceWeekdays");
     const recurrenceMonthlyWrap = document.getElementById("recurrenceMonthlyWrap");
     const recurrenceMonthlyOptions = document.getElementById("recurrenceMonthlyOptions");
+    const recurrenceEndNever = document.getElementById("recurrenceEndNever");
+    const recurrenceEndDate = document.getElementById("recurrenceEndDate");
+    const recurrenceEndCount = document.getElementById("recurrenceEndCount");
+    const recurrenceEndDateInput = document.getElementById("recurrenceEndDateInput");
+    const recurrenceEndCountInput = document.getElementById("recurrenceEndCountInput");
 
     // modal: editar/adicionar fase (no card)
     const phaseEditOverlay = document.getElementById("phaseEditOverlay");
@@ -2514,6 +2524,13 @@
       return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
     }
 
+    function getDaysDiff(startIso, endIso){
+      const a = new Date(`${startIso}T00:00:00`);
+      const b = new Date(`${endIso}T00:00:00`);
+      if(Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return NaN;
+      return Math.floor((b - a) / 86400000);
+    }
+
     function getNextBusinessDayISO(iso){
       if(!iso) return "";
       const d = new Date(`${iso}T00:00:00`);
@@ -2553,6 +2570,7 @@
       "sexta-feira",
       "s\u00e1bado"
     ];
+    const WEEKDAY_LABELS_SHORT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
     const MONTH_LABELS_PT = [
       "janeiro",
       "fevereiro",
@@ -2666,6 +2684,294 @@
       const weekday = getWeekdayLabelFromIndex(idx);
       const ordinal = getMonthlyOrdinalWordFromISO(iso);
       return weekday ? `Mensal no(a) ${ordinal} ${weekday}` : "Mensal no(a)";
+    }
+
+    function getDefaultRecurrenceDraft(iso){
+      const startIso = iso || todayISO();
+      return {
+        interval: 1,
+        unit: "day",
+        weekdays: [getWeekdayIndexFromISO(startIso)],
+        monthlyMode: "by_day"
+      };
+    }
+
+    function setRecurrenceDraftFromEntry(entry, iso){
+      const base = getDefaultRecurrenceDraft(iso);
+      if(entry?.repeatUnit){
+        base.unit = entry.repeatUnit;
+      }
+      if(Number.isFinite(entry?.repeatEvery)){
+        base.interval = entry.repeatEvery;
+      }
+      if(Array.isArray(entry?.repeatWeekdays) && entry.repeatWeekdays.length){
+        base.weekdays = entry.repeatWeekdays.slice();
+      }
+      if(entry?.repeatMonthlyMode){
+        base.monthlyMode = entry.repeatMonthlyMode;
+      }
+      recurrenceDraft = base;
+    }
+
+    function applyRecurrenceDraftToUI(){
+      if(recurrenceStepInput){
+        recurrenceStepInput.value = String(recurrenceDraft.interval || 1);
+      }
+      if(recurrenceFrequency){
+        recurrenceFrequency.value = recurrenceDraft.unit || "day";
+      }
+      if(recurrenceMonthlyOptions){
+        recurrenceMonthlyOptions.value = recurrenceDraft.monthlyMode || "by_day";
+      }
+      if(recurrenceWeekdays){
+        const selected = new Set(recurrenceDraft.weekdays || []);
+        recurrenceWeekdays.querySelectorAll(".recurrenceDayBtn").forEach(btn=>{
+          const idx = Number.parseInt((btn.getAttribute("data-weekday") || ""), 10);
+          btn.classList.toggle("isActive", Number.isFinite(idx) && selected.has(idx));
+        });
+      }
+      syncRecurrenceWeekdaysVisibility();
+    }
+
+    function saveRecurrenceDraftFromUI(){
+      const intervalRaw = Number.parseInt((recurrenceStepInput?.value || "").toString(), 10);
+      const interval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? intervalRaw : 1;
+      const unit = (recurrenceFrequency?.value || "day").toString().trim();
+      const monthlyMode = (recurrenceMonthlyOptions?.value || "by_day").toString().trim();
+      let weekdays = [];
+      if(recurrenceWeekdays){
+        recurrenceWeekdays.querySelectorAll(".recurrenceDayBtn.isActive").forEach(btn=>{
+          const idx = Number.parseInt((btn.getAttribute("data-weekday") || ""), 10);
+          if(Number.isFinite(idx)) weekdays.push(idx);
+        });
+      }
+      if(unit === "week" && !weekdays.length){
+        const fallback = getWeekdayIndexFromISO((simpleTaskDate?.value || "").toString().trim() || todayISO());
+        weekdays = Number.isFinite(fallback) ? [fallback] : [];
+      }
+      recurrenceDraft = { interval, unit, weekdays, monthlyMode };
+      saveRecurrenceEndDraftFromUI();
+    }
+
+    function getCustomRepeatLabel(config){
+      if(!config || !config.unit) return "Personalizado";
+      const interval = Number.isFinite(config.interval) ? config.interval : 1;
+      if(config.unit === "day"){
+        return `Personalizado: a cada ${interval} dia${interval > 1 ? "s" : ""}`;
+      }
+      if(config.unit === "week"){
+        const days = (config.weekdays || [])
+          .map(idx => WEEKDAY_LABELS_SHORT[idx] || "")
+          .filter(Boolean)
+          .join(", ");
+        const base = `Personalizado: a cada ${interval} semana${interval > 1 ? "s" : ""}`;
+        return days ? `${base} (${days})` : base;
+      }
+      if(config.unit === "month"){
+        return `Personalizado: a cada ${interval} m\u00eas${interval > 1 ? "es" : ""}`;
+      }
+      if(config.unit === "year"){
+        return `Personalizado: a cada ${interval} ano${interval > 1 ? "s" : ""}`;
+      }
+      return "Personalizado";
+    }
+
+    function getCustomMonthlyTarget(entry){
+      const start = (entry?.date || "").toString().trim();
+      if(!start) return { day:null, weekday:null, ordinal:null, isLast:false };
+      const day = Number.parseInt(start.split("-")[2] || "", 10);
+      const weekday = getRepeatWeekdayFromEntry(entry);
+      const ordinalInfo = getRepeatMonthlyOrdinalFromEntry(entry);
+      return { day, weekday, ordinal: ordinalInfo?.ordinal || null, isLast: Boolean(ordinalInfo?.isLast) };
+    }
+
+    function shouldIncludeCustomRepeatOnDate(entry, iso){
+      if(!shouldIncludeRepeatWindow(entry, iso)) return false;
+      const unit = (entry?.repeatUnit || "").toString().trim();
+      const interval = Number.isFinite(entry?.repeatEvery) ? entry.repeatEvery : 1;
+      const start = (entry?.date || "").toString().trim();
+      if(!unit || !start) return false;
+
+      if(unit === "day"){
+        const diff = getDaysDiff(start, iso);
+        return Number.isFinite(diff) && diff >= 0 && diff % interval === 0;
+      }
+      if(unit === "week"){
+        const diff = getDaysDiff(start, iso);
+        if(!Number.isFinite(diff) || diff < 0) return false;
+        const weekIndex = Math.floor(diff / 7);
+        if(weekIndex % interval !== 0) return false;
+        const weekday = getWeekdayIndexFromISO(iso);
+        const selected = Array.isArray(entry?.repeatWeekdays) && entry.repeatWeekdays.length
+          ? entry.repeatWeekdays
+          : [getWeekdayIndexFromISO(start)];
+        return selected.includes(weekday);
+      }
+      if(unit === "month"){
+        const startDate = new Date(`${start}T00:00:00`);
+        const date = new Date(`${iso}T00:00:00`);
+        if(Number.isNaN(startDate.getTime()) || Number.isNaN(date.getTime())) return false;
+        const monthsDiff = (date.getFullYear() * 12 + date.getMonth()) - (startDate.getFullYear() * 12 + startDate.getMonth());
+        if(monthsDiff < 0 || monthsDiff % interval !== 0) return false;
+        const mode = (entry?.repeatMonthlyMode || "by_day").toString().trim();
+        if(mode === "by_day"){
+          return date.getDate() === startDate.getDate();
+        }
+        const target = getCustomMonthlyTarget(entry);
+        const weekday = getWeekdayIndexFromISO(iso);
+        if(!Number.isFinite(target.weekday) || weekday !== target.weekday) return false;
+        if(target.isLast){
+          return isLastWeekdayOfMonth(iso, target.weekday);
+        }
+        const occurrence = getMonthlyWeekdayOccurrenceIndex(iso);
+        return Number.isFinite(occurrence) && Number.isFinite(target.ordinal) && occurrence === target.ordinal;
+      }
+      if(unit === "year"){
+        const startDate = new Date(`${start}T00:00:00`);
+        const date = new Date(`${iso}T00:00:00`);
+        if(Number.isNaN(startDate.getTime()) || Number.isNaN(date.getTime())) return false;
+        const yearsDiff = date.getFullYear() - startDate.getFullYear();
+        if(yearsDiff < 0 || yearsDiff % interval !== 0) return false;
+        return date.getMonth() === startDate.getMonth() && date.getDate() === startDate.getDate();
+      }
+      return false;
+    }
+
+    function syncRecurrenceEndInputs(){
+      if(!recurrenceEndNever || !recurrenceEndDate || !recurrenceEndCount) return;
+      if(recurrenceEndDateInput){
+        recurrenceEndDateInput.disabled = !recurrenceEndDate.checked;
+      }
+      if(recurrenceEndCountInput){
+        recurrenceEndCountInput.disabled = !recurrenceEndCount.checked;
+      }
+    }
+
+    function setRecurrenceEndDraftFromEntry(entry){
+      const endDate = (entry?.repeatUntil || entry?.repeatEnd || "").toString().trim();
+      const count = Number.isFinite(entry?.repeatCount) ? entry.repeatCount : null;
+      if(endDate){
+        recurrenceEndDraft = { mode:"date", date:endDate, count:null };
+      }else if(Number.isFinite(count) && count > 0){
+        recurrenceEndDraft = { mode:"count", date:"", count };
+      }else{
+        recurrenceEndDraft = { mode:"never", date:"", count:null };
+      }
+    }
+
+    function applyRecurrenceEndDraftToUI(){
+      if(recurrenceEndNever) recurrenceEndNever.checked = recurrenceEndDraft.mode === "never";
+      if(recurrenceEndDate) recurrenceEndDate.checked = recurrenceEndDraft.mode === "date";
+      if(recurrenceEndCount) recurrenceEndCount.checked = recurrenceEndDraft.mode === "count";
+      if(recurrenceEndDateInput) recurrenceEndDateInput.value = recurrenceEndDraft.date || "";
+      if(recurrenceEndCountInput){
+        recurrenceEndCountInput.value = recurrenceEndDraft.count ? String(recurrenceEndDraft.count) : "";
+      }
+      syncRecurrenceEndInputs();
+    }
+
+    function saveRecurrenceEndDraftFromUI(){
+      if(recurrenceEndDate && recurrenceEndDate.checked){
+        recurrenceEndDraft = { mode:"date", date:(recurrenceEndDateInput?.value || "").toString().trim(), count:null };
+        return;
+      }
+      if(recurrenceEndCount && recurrenceEndCount.checked){
+        const raw = Number.parseInt((recurrenceEndCountInput?.value || "").toString(), 10);
+        recurrenceEndDraft = { mode:"count", date:"", count: Number.isFinite(raw) ? raw : null };
+        return;
+      }
+      recurrenceEndDraft = { mode:"never", date:"", count:null };
+    }
+
+    function getMonthlyWeekdayOccurrenceDate(year, month, weekday, ordinalInfo){
+      const first = new Date(year, month, 1);
+      const firstWeekday = (first.getDay() - weekday + 7) % 7;
+      let day = 1 + firstWeekday;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      if(ordinalInfo?.isLast){
+        const last = new Date(year, month + 1, 0);
+        const diff = (last.getDay() - weekday + 7) % 7;
+        day = last.getDate() - diff;
+      }else if(Number.isFinite(ordinalInfo?.ordinal)){
+        day = day + (ordinalInfo.ordinal - 1) * 7;
+        if(day > daysInMonth) return "";
+      }else{
+        return "";
+      }
+      return `${year}-${pad2(month+1)}-${pad2(day)}`;
+    }
+
+    function computeRepeatUntilByCount(startIso, repeatValue, repeatWeekday, repeatOrdinal, repeatCount, customConfig){
+      if(!startIso || !Number.isFinite(repeatCount) || repeatCount <= 0) return "";
+      if(repeatCount === 1) return startIso;
+      if(repeatValue === "todos_dias"){
+        return addDaysISO(startIso, repeatCount - 1);
+      }
+      if(repeatValue === "dias_uteis"){
+        let iso = startIso;
+        let count = 1;
+        while(count < repeatCount){
+          iso = addDaysISO(iso, 1);
+          const weekday = getWeekdayIndexFromISO(iso);
+          if(weekday >= 1 && weekday <= 5){
+            count += 1;
+          }
+        }
+        return iso;
+      }
+      if(repeatValue === "semanal"){
+        return addDaysISO(startIso, (repeatCount - 1) * 7);
+      }
+      if(repeatValue === "mensal_ultima"){
+        const base = new Date(`${startIso}T00:00:00`);
+        if(Number.isNaN(base.getTime())) return "";
+        let year = base.getFullYear();
+        let month = base.getMonth();
+        let occurrence = 1;
+        let iso = startIso;
+        while(occurrence < repeatCount){
+          month += 1;
+          if(month > 11){ month = 0; year += 1; }
+          const nextIso = getMonthlyWeekdayOccurrenceDate(year, month, repeatWeekday, getRepeatMonthlyOrdinalFromEntry({ repeatOrdinal }));
+          if(nextIso){
+            iso = nextIso;
+            occurrence += 1;
+          }else{
+            break;
+          }
+        }
+        return iso;
+      }
+      if(repeatValue === "anual"){
+        const base = new Date(`${startIso}T00:00:00`);
+        if(Number.isNaN(base.getTime())) return "";
+        const year = base.getFullYear() + (repeatCount - 1);
+        const month = base.getMonth();
+        const day = base.getDate();
+        const d = new Date(year, month, day);
+        return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+      }
+      if(repeatValue === "personalizar" && customConfig?.unit){
+        let iso = startIso;
+        let count = 1;
+        let guard = 0;
+        const entry = {
+          date: startIso,
+          repeatUnit: customConfig.unit,
+          repeatEvery: customConfig.interval,
+          repeatWeekdays: customConfig.weekdays,
+          repeatMonthlyMode: customConfig.monthlyMode
+        };
+        while(count < repeatCount && guard < 10000){
+          iso = addDaysISO(iso, 1);
+          guard += 1;
+          if(shouldIncludeCustomRepeatOnDate(entry, iso)){
+            count += 1;
+          }
+        }
+        return iso;
+      }
+      return "";
     }
 
     function getSimpleTaskAnnualLabelByDate(iso){
@@ -2814,12 +3120,17 @@
       return (e?.extra || e?.simple) && isAnnualRepeatLabel(e?.repeat);
     }
 
+    function isCustomRepeatCalendarEntry(e){
+      return (e?.extra || e?.simple) && Boolean((e?.repeatUnit || "").toString().trim());
+    }
+
     function isCalendarRepeatEntry(e){
       return isDailyRepeatCalendarEntry(e)
         || isWeeklyRepeatCalendarEntry(e)
         || isMonthlyLastWeekdayCalendarEntry(e)
         || isWeekdaysRepeatCalendarEntry(e)
-        || isAnnualRepeatCalendarEntry(e);
+        || isAnnualRepeatCalendarEntry(e)
+        || isCustomRepeatCalendarEntry(e);
     }
 
     async function copyTextToClipboard(text, btn, doneLabel){
@@ -3046,6 +3357,9 @@
 
     let simpleTaskEditId = "";
     let lastSimpleTaskRepeatValue = "nao_repite";
+    let recurrenceEndDraft = { mode:"never", date:"", count:null };
+    let recurrenceDraft = { interval:1, unit:"day", weekdays:[], monthlyMode:"by_day" };
+    let recurrenceModalConfirmed = false;
     function updateSimpleTaskRepeatLabels(iso){
       if(!simpleTaskRepeat) return;
       const options = Array.from(simpleTaskRepeat.options || []);
@@ -3062,6 +3376,13 @@
       const ref = existing || null;
       const iso = (ref?.date || date || calSelectedISO || todayISO()).toString().trim();
       simpleTaskEditId = ref ? String(ref.id || "") : "";
+      if(ref){
+        setRecurrenceEndDraftFromEntry(ref);
+        setRecurrenceDraftFromEntry(ref, iso);
+      }else{
+        recurrenceEndDraft = { mode:"never", date:"", count:null };
+        recurrenceDraft = getDefaultRecurrenceDraft(iso);
+      }
       if(simpleTaskDate) simpleTaskDate.value = iso;
       if(simpleTaskStart) simpleTaskStart.value = (ref?.startTime || "").toString().trim();
       if(simpleTaskEnd) simpleTaskEnd.value = (ref?.endTime || "").toString().trim();
@@ -3087,6 +3408,9 @@
           }else if(isAnnualRepeatLabel(repeatRaw)){
             simpleTaskRepeat.value = "anual";
             matched = true;
+          }else if(ref?.repeatUnit){
+            simpleTaskRepeat.value = "personalizar";
+            matched = true;
           }else{
             const optByValue = options.find(opt => (opt.value || "").toString().trim() === repeatRaw);
             if(optByValue){
@@ -3111,6 +3435,20 @@
     function openRecurrenceModal(){
       if(!recurrenceOverlay) return;
       const iso = (simpleTaskDate?.value || "").toString().trim() || todayISO();
+      if(simpleTaskEditId){
+        const entry = (calendarHistory || []).find(item => String(item.id || "") === simpleTaskEditId);
+        if(entry){
+          setRecurrenceEndDraftFromEntry(entry);
+          setRecurrenceDraftFromEntry(entry, iso);
+        }else{
+          recurrenceDraft = getDefaultRecurrenceDraft(iso);
+        }
+      }else{
+        recurrenceEndDraft = { mode:"never", date:"", count:null };
+        recurrenceDraft = getDefaultRecurrenceDraft(iso);
+      }
+      applyRecurrenceDraftToUI();
+      applyRecurrenceEndDraftToUI();
       updateRecurrenceMonthlyOptions(iso);
       syncRecurrenceWeekdaysVisibility();
       recurrenceOverlay.classList.add("show");
@@ -3119,6 +3457,9 @@
     function closeRecurrenceModal(){
       if(!recurrenceOverlay) return;
       recurrenceOverlay.classList.remove("show");
+      if(!recurrenceModalConfirmed && simpleTaskRepeat){
+        simpleTaskRepeat.value = lastSimpleTaskRepeatValue || "nao_repite";
+      }
     }
 
     function syncRecurrenceWeekdaysVisibility(){
@@ -3168,13 +3509,23 @@
         const adjusted = getNextBusinessDayISO(date);
         if(adjusted) date = adjusted;
       }
+      const customConfig = repeatValue === "personalizar"
+        ? {
+            interval: recurrenceDraft.interval,
+            unit: recurrenceDraft.unit,
+            weekdays: recurrenceDraft.weekdays,
+            monthlyMode: recurrenceDraft.monthlyMode
+          }
+        : null;
       const repeat = repeatValue === "semanal"
         ? getSimpleTaskWeeklyLabelByDate(date)
         : (repeatValue === "mensal_ultima"
           ? getSimpleTaskMonthlyLabelByDate(date)
           : (repeatValue === "anual"
             ? getSimpleTaskAnnualLabelByDate(date)
-            : (simpleTaskRepeat?.selectedOptions?.[0]?.text || "").toString().trim()));
+            : (repeatValue === "personalizar"
+              ? getCustomRepeatLabel(customConfig)
+              : (simpleTaskRepeat?.selectedOptions?.[0]?.text || "").toString().trim())));
       if(!loja){
         showAlert("Selecione a loja.");
         return;
@@ -3183,13 +3534,38 @@
       const editingId = (simpleTaskEditId || "").trim();
       const entryId = editingId || `simple-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
       const prevEntry = (calendarHistory || []).find(e => String(e.id || "") === entryId);
-      const repeatWeekday = (repeatValue === "semanal" || repeatValue === "mensal_ultima")
+      let repeatWeekday = (repeatValue === "semanal" || repeatValue === "mensal_ultima")
         ? (Number.isFinite(prevEntry?.repeatWeekday) ? prevEntry.repeatWeekday : getWeekdayIndexFromISO(date))
         : null;
       const monthlyInfo = repeatValue === "mensal_ultima" ? getMonthlyOrdinalFromISO(date) : null;
-      const repeatOrdinal = repeatValue === "mensal_ultima"
+      let repeatOrdinal = repeatValue === "mensal_ultima"
         ? (prevEntry?.repeatOrdinal ?? (monthlyInfo?.isLast ? "last" : monthlyInfo?.ordinal))
         : null;
+      if(customConfig?.unit === "month" && customConfig?.monthlyMode === "by_weekday"){
+        repeatWeekday = getWeekdayIndexFromISO(date);
+        const info = getMonthlyOrdinalFromISO(date);
+        repeatOrdinal = info?.isLast ? "last" : info?.ordinal;
+      }
+      let repeatUntil = "";
+      let repeatCount = null;
+      if(repeatValue !== "nao_repite"){
+        if(recurrenceEndDraft.mode === "date"){
+          repeatUntil = (recurrenceEndDraft.date || "").toString().trim();
+        }else if(recurrenceEndDraft.mode === "count"){
+          const count = Number.isFinite(recurrenceEndDraft.count) ? recurrenceEndDraft.count : null;
+          repeatCount = count;
+          if(count){
+            repeatUntil = computeRepeatUntilByCount(
+              date,
+              repeatValue,
+              repeatWeekday,
+              repeatOrdinal,
+              count,
+              customConfig
+            );
+          }
+        }
+      }
       const entry = {
         id: entryId,
         date,
@@ -3201,6 +3577,12 @@
         repeat,
         repeatWeekday,
         repeatOrdinal,
+        repeatEvery: customConfig?.interval || null,
+        repeatUnit: customConfig?.unit || "",
+        repeatWeekdays: Array.isArray(customConfig?.weekdays) ? customConfig.weekdays.slice() : [],
+        repeatMonthlyMode: (customConfig?.monthlyMode || "").toString(),
+        repeatUntil,
+        repeatCount,
         extra: true,
         open: prevEntry ? Boolean(prevEntry.open) : true,
         createdAt: prevEntry?.createdAt || nowIso,
@@ -3224,6 +3606,12 @@
         repeat,
         repeatWeekday,
         repeatOrdinal,
+        repeatEvery: customConfig?.interval || null,
+        repeatUnit: customConfig?.unit || "",
+        repeatWeekdays: Array.isArray(customConfig?.weekdays) ? customConfig.weekdays.slice() : [],
+        repeatMonthlyMode: (customConfig?.monthlyMode || "").toString(),
+        repeatUntil,
+        repeatCount,
         isExtra: true,
         createdAt: prevEntry?.createdAt || nowIso,
         updatedAt: nowIso,
@@ -4677,7 +5065,22 @@ function fillPhaseStatusSelect(){
             : (Number.isFinite(Number.parseInt((t?.repeatOrdinal || "").toString(), 10))
               ? Number.parseInt((t?.repeatOrdinal || "").toString(), 10)
               : null)),
+        repeatEvery: Number.isFinite(t?.repeatEvery)
+          ? t.repeatEvery
+          : (Number.isFinite(Number.parseInt((t?.repeatEvery || "").toString(), 10))
+            ? Number.parseInt((t?.repeatEvery || "").toString(), 10)
+            : null),
+        repeatUnit: (t?.repeatUnit || "").toString(),
+        repeatWeekdays: Array.isArray(t?.repeatWeekdays)
+          ? t.repeatWeekdays.map(v => Number.parseInt(v, 10)).filter(v => Number.isFinite(v))
+          : [],
+        repeatMonthlyMode: (t?.repeatMonthlyMode || "").toString(),
         repeatUntil: (t?.repeatUntil || t?.repeatEnd || "").toString(),
+        repeatCount: Number.isFinite(t?.repeatCount)
+          ? t.repeatCount
+          : (Number.isFinite(Number.parseInt((t?.repeatCount || "").toString(), 10))
+            ? Number.parseInt((t?.repeatCount || "").toString(), 10)
+            : null),
         repeatExclusions: Array.isArray(t?.repeatExclusions)
           ? t.repeatExclusions.map(v => (v || "").toString().trim()).filter(Boolean)
           : [],
@@ -4743,7 +5146,22 @@ function fillPhaseStatusSelect(){
               : (Number.isFinite(Number.parseInt((e?.repeatOrdinal || "").toString(), 10))
                 ? Number.parseInt((e?.repeatOrdinal || "").toString(), 10)
                 : null)),
+          repeatEvery: Number.isFinite(e?.repeatEvery)
+            ? e.repeatEvery
+            : (Number.isFinite(Number.parseInt((e?.repeatEvery || "").toString(), 10))
+              ? Number.parseInt((e?.repeatEvery || "").toString(), 10)
+              : null),
+          repeatUnit: (e?.repeatUnit || "").toString(),
+          repeatWeekdays: Array.isArray(e?.repeatWeekdays)
+            ? e.repeatWeekdays.map(v => Number.parseInt(v, 10)).filter(v => Number.isFinite(v))
+            : [],
+          repeatMonthlyMode: (e?.repeatMonthlyMode || "").toString(),
           repeatUntil: (e?.repeatUntil || e?.repeatEnd || "").toString(),
+          repeatCount: Number.isFinite(e?.repeatCount)
+            ? e.repeatCount
+            : (Number.isFinite(Number.parseInt((e?.repeatCount || "").toString(), 10))
+              ? Number.parseInt((e?.repeatCount || "").toString(), 10)
+              : null),
           repeatExclusions: Array.isArray(e?.repeatExclusions)
             ? e.repeatExclusions.map(v => (v || "").toString().trim()).filter(Boolean)
             : [],
@@ -8412,8 +8830,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       simpleTaskRepeat.addEventListener("change", ()=>{
         const value = (simpleTaskRepeat.value || "").toString().trim();
         if(value === "personalizar"){
+          recurrenceModalConfirmed = false;
           openRecurrenceModal();
-          simpleTaskRepeat.value = lastSimpleTaskRepeatValue || "nao_repite";
           return;
         }
         lastSimpleTaskRepeatValue = value || "nao_repite";
@@ -8425,7 +8843,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     if(recurrenceCloseBtn) recurrenceCloseBtn.addEventListener("click", closeRecurrenceModal);
     if(recurrenceCancelBtn) recurrenceCancelBtn.addEventListener("click", closeRecurrenceModal);
-    if(recurrenceDoneBtn) recurrenceDoneBtn.addEventListener("click", closeRecurrenceModal);
+    if(recurrenceDoneBtn) recurrenceDoneBtn.addEventListener("click", ()=>{
+      recurrenceModalConfirmed = true;
+      saveRecurrenceDraftFromUI();
+      lastSimpleTaskRepeatValue = "personalizar";
+      closeRecurrenceModal();
+    });
     if(recurrenceFrequency){
       recurrenceFrequency.addEventListener("change", syncRecurrenceWeekdaysVisibility);
     }
@@ -8436,6 +8859,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
         });
       });
     }
+    if(recurrenceEndNever) recurrenceEndNever.addEventListener("change", syncRecurrenceEndInputs);
+    if(recurrenceEndDate) recurrenceEndDate.addEventListener("change", syncRecurrenceEndInputs);
+    if(recurrenceEndCount) recurrenceEndCount.addEventListener("change", syncRecurrenceEndInputs);
     if(recurrenceOverlay){
       recurrenceOverlay.addEventListener("click", (e)=>{ if(e.target === recurrenceOverlay) closeRecurrenceModal(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && recurrenceOverlay.classList.contains("show")) closeRecurrenceModal(); });
