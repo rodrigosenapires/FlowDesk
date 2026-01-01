@@ -2506,6 +2506,19 @@
       return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
     }
 
+    function getNextBusinessDayISO(iso){
+      if(!iso) return "";
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return "";
+      const day = d.getDay();
+      if(day === 6){ // sabado
+        d.setDate(d.getDate() + 2);
+      }else if(day === 0){ // domingo
+        d.setDate(d.getDate() + 1);
+      }
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    }
+
     function getRepeatExclusions(entry){
       return Array.isArray(entry?.repeatExclusions)
         ? entry.repeatExclusions.map(v => (v || "").toString().trim()).filter(Boolean)
@@ -3072,7 +3085,7 @@
 
     function saveSimpleTask(){
       if(!simpleTaskDate || !simpleTaskText || !simpleTaskSubject) return;
-      const date = (simpleTaskDate.value || "").toString().trim();
+      let date = (simpleTaskDate.value || "").toString().trim();
       const subject = (simpleTaskSubject.value || "").toString().trim();
       const text = (simpleTaskText.value || "").toString().trim();
       if(!date){
@@ -3091,6 +3104,10 @@
       const endTime = (simpleTaskEnd?.value || "").toString().trim();
       const loja = (simpleTaskStore?.value || "").toString().trim();
       const repeatValue = (simpleTaskRepeat?.value || "").toString().trim();
+      if(repeatValue === "dias_uteis"){
+        const adjusted = getNextBusinessDayISO(date);
+        if(adjusted) date = adjusted;
+      }
       const repeat = repeatValue === "semanal"
         ? getSimpleTaskWeeklyLabelByDate(date)
         : (repeatValue === "mensal_ultima"
