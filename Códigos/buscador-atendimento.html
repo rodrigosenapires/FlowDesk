@@ -551,23 +551,25 @@
           <!-- Lista -->
           <aside class="card">
             <div class="hd">
-              <h2>Lista de tarefas</h2>
-              <div class="taskHeaderActions">
-                <button class="btn small iconBtn taskAddBtnMain" id="openTaskModalBtn" title="Adicionar tarefa" aria-label="Adicionar tarefa">
-                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                </button>
-                <button class="btn small iconBtn taskAddBtnExtra" id="openExtraTaskModalBtn" title="Adicionar tarefa extra" aria-label="Adicionar tarefa extra">
-                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                </button>
-              </div>
-              <div class="taskHeaderMeta">
+              <div class="taskHeaderTitle">
+                <h2>Lista de tarefas</h2>
                 <div class="count" id="tasksPeriodLabel"></div>
+              </div>
+              <div class="taskHeaderActions">
+                <div class="taskHeaderButtons">
+                  <button class="btn small iconBtn taskAddBtnMain" id="openTaskModalBtn" title="Adicionar tarefa" aria-label="Adicionar tarefa">
+                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                  </button>
+                  <button class="btn small iconBtn taskAddBtnExtra" id="openExtraTaskModalBtn" title="Adicionar tarefa extra" aria-label="Adicionar tarefa extra">
+                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                  </button>
+                </div>
                 <div class="count" id="tasksCount"></div>
               </div>
             </div>
@@ -1006,12 +1008,20 @@
           <div class="calSide" id="calSide">
             <div class="calSideHeader">
               <div class="label" id="calDayTitle" style="margin:0;">Selecione um dia</div>
-              <button class="btn small iconBtn" id="calAddSimpleBtn" title="Adicionar tarefa extra" aria-label="Adicionar tarefa extra">
-                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-              </button>
+              <div class="calSideActions">
+                <button class="btn small iconBtn taskAddBtnMain" id="calAddTaskBtn" title="Adicionar tarefa" aria-label="Adicionar tarefa">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+                <button class="btn small iconBtn" id="calAddSimpleBtn" title="Adicionar tarefa extra" aria-label="Adicionar tarefa extra">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="calDayDetails" id="calDayDetails"></div>
             <button class="btn small danger" id="calClearDayBtn" style="width:100%; margin-top:10px; display:none;">Limpar dia</button>

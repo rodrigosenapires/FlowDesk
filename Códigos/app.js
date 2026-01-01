@@ -2025,6 +2025,7 @@
     const calDayDetails = document.getElementById("calDayDetails");
     const calSide = document.getElementById("calSide");
     const calAddSimpleBtn = document.getElementById("calAddSimpleBtn");
+    const calAddTaskBtn = document.getElementById("calAddTaskBtn");
     const miniCalendarGrid = document.getElementById("miniCalendarGrid");
     const miniCalendarLabel = document.getElementById("miniCalendarLabel");
     const miniCalPrev = document.getElementById("miniCalPrev");
@@ -2206,6 +2207,7 @@
 
     // view state
     let currentView = "search"; // "search" | "tasks"
+    let taskModalFromCalendar = false;
 
     // close flow
     let allowAppClose = false;
@@ -3798,9 +3800,15 @@
 
       const todayIso = todayISO();
       const cells = [];
+      const prevMonthDate = new Date(calViewYear, calViewMonth, 0);
+      const prevMonthDays = prevMonthDate.getDate();
+      const prevMonth = prevMonthDate.getMonth();
+      const prevMonthYear = prevMonthDate.getFullYear();
 
       for(let i = 0; i < leadingBlanks; i++){
-        cells.push({ blank:true });
+        const dayNum = prevMonthDays - leadingBlanks + i + 1;
+        const iso = `${prevMonthYear}-${pad2(prevMonth+1)}-${pad2(dayNum)}`;
+        cells.push({ blank:false, dayNum, iso, entries:[], isOtherMonth:true });
       }
 
       for(let dayNum = 1; dayNum <= daysInMonth; dayNum++){
@@ -3854,15 +3862,23 @@
         const list = [normalList, extraList].filter(Boolean).join("");
 
         const entriesCount = normalCount + extraCount;
-        const countAttr = entriesCount ? ` data-count="${entriesCount}"` : "";
-        const cellAttrs = c.iso ? `data-iso="${c.iso}" data-cal-iso="${c.iso}" tabindex="0"` : "";
+        const countType = extraCount ? "extra" : (normalCount ? "normal" : "");
+        const countAttr = entriesCount ? ` data-count="${entriesCount}" data-count-type="${countType}"` : "";
+        const countsMobile = entriesCount
+          ? `<div class="calCountsMobile">
+              ${normalCount ? `<span class="calCountMobile calCountMobileNormal">${normalCount}</span>` : ""}
+              ${extraCount ? `<span class="calCountMobile calCountMobileExtra">${extraCount}</span>` : ""}
+            </div>`
+          : "";
+        const cellAttrs = (!c.isOtherMonth && c.iso) ? `data-iso="${c.iso}" data-cal-iso="${c.iso}" tabindex="0"` : "";
         return `
-          <div class="calCell ${isSelected ? "isSelected" : ""}" ${cellAttrs}${countAttr}>
+          <div class="calCell ${isSelected ? "isSelected" : ""} ${c.isOtherMonth ? "isOtherMonth" : ""}" ${cellAttrs}${countAttr}>
             <div class="calDayNum">
               <span>${c.dayNum}</span>
               ${isToday ? `<span class="calTodayDot" title="Hoje"></span>` : ""}
             </div>
             <div class="calItems">${list}</div>
+            ${countsMobile}
           </div>
         `;
       }).join("") + gridNoteHtml;
@@ -3896,9 +3912,15 @@
       const trailingBlanks = (7 - (totalCells % 7)) % 7;
       const todayIso = todayISO();
       const cells = [];
+      const prevMonthDate = new Date(calViewYear, calViewMonth, 0);
+      const prevMonthDays = prevMonthDate.getDate();
+      const prevMonth = prevMonthDate.getMonth();
+      const prevMonthYear = prevMonthDate.getFullYear();
 
       for(let i = 0; i < leadingBlanks; i++){
-        cells.push({ blank:true });
+        const dayNum = prevMonthDays - leadingBlanks + i + 1;
+        const iso = `${prevMonthYear}-${pad2(prevMonth+1)}-${pad2(dayNum)}`;
+        cells.push({ blank:false, dayNum, iso, normalCount:0, extraCount:0, isOtherMonth:true });
       }
 
       for(let dayNum = 1; dayNum <= daysInMonth; dayNum++){
@@ -3924,9 +3946,11 @@
         const extraHtml = c.extraCount
           ? `<span class="miniCalCount miniCalCountExtra">${c.extraCount}</span>`
           : "";
-        const ariaLabel = `Dia ${c.dayNum}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
+        const ariaSuffix = c.isOtherMonth ? " (mês anterior)" : "";
+        const ariaLabel = `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
+        const isoAttr = c.isOtherMonth ? "" : ` data-mini-iso="${c.iso}"`;
         return `
-          <button class="miniCalCell ${isToday ? "isToday" : ""}" type="button" data-mini-iso="${c.iso}" aria-label="${ariaLabel}">
+          <button class="miniCalCell ${isToday ? "isToday" : ""} ${c.isOtherMonth ? "isOtherMonth" : ""}" type="button"${isoAttr} aria-label="${ariaLabel}">
             <span class="miniCalDay">${c.dayNum}</span>
             <span class="miniCalCounts">
               ${normalHtml}
@@ -4091,6 +4115,11 @@
         calAddSimpleBtn.disabled = !iso;
         calAddSimpleBtn.style.opacity = iso ? "1" : "0.5";
         calAddSimpleBtn.style.pointerEvents = iso ? "auto" : "none";
+      }
+      if(calAddTaskBtn){
+        calAddTaskBtn.disabled = !iso;
+        calAddTaskBtn.style.opacity = iso ? "1" : "0.5";
+        calAddTaskBtn.style.pointerEvents = iso ? "auto" : "none";
       }
       const shouldScroll = Boolean(options && options.scrollToFirst);
 
@@ -4283,6 +4312,12 @@
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="3"></circle>
                   <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
+                </svg>
+              </button>
+              <button class="btn small iconBtn" data-cal-item-editphase="${escapeHtml(String(e.id || ""))}" data-cal-phase-idx="${escapeHtml(String(phaseInfo.idx))}" title="Editar fase" aria-label="Editar fase">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5l4 4L7 21l-4 1 1-4 12.5-14.5z"></path>
                 </svg>
               </button>
               ${suporteBase ? `<button class="btn small iconBtn" type="button" data-support-store="${escapeHtml(loja)}" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
@@ -6332,12 +6367,24 @@ function fillPhaseStatusSelect(){
     }
 
     function openTaskModal(){
-      if(taskOverlay) taskOverlay.classList.add("show");
+      if(taskOverlay){
+        if(!taskModalFromCalendar) taskOverlay.classList.remove("isCalendarContext");
+        taskOverlay.classList.add("show");
+      }
       if(tData && !tData.value) tData.value = todayISO();
     }
 
     function closeTaskModal(){
-      if(taskOverlay) taskOverlay.classList.remove("show");
+      if(taskOverlay){
+        taskOverlay.classList.remove("show");
+        taskOverlay.classList.remove("isCalendarContext");
+      }
+      if(taskModalFromCalendar){
+        taskModalFromCalendar = false;
+        if(calendarOverlay && !calendarOverlay.classList.contains("show")){
+          openCalendar();
+        }
+      }
     }
 
     /***********************
@@ -8582,6 +8629,21 @@ function getNuvemshopSupportBaseUrl(lojaText){
           renderTasks();
         });
       });
+      calDayDetails.querySelectorAll("[data-cal-item-editphase]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const id = (btn.getAttribute("data-cal-item-editphase") || "").toString().trim();
+          const idxRaw = (btn.getAttribute("data-cal-phase-idx") || "0").toString();
+          const phaseIdx = Number.parseInt(idxRaw, 10);
+          if(!id) return;
+          const ref = (tasks || []).find(t => String(t.id || "") === id);
+          if(!ref){
+            showAlert("Tarefa não encontrada na lista.");
+            return;
+          }
+          closeCalendar();
+          openPhaseEditor({ taskId:id, mode:"edit", index: Number.isFinite(phaseIdx) ? phaseIdx : 0 });
+        });
+      });
       tasksList.querySelectorAll("[data-task-repeat]").forEach(btn=>{
         btn.addEventListener("click", (e)=>{
           e.preventDefault();
@@ -8836,6 +8898,19 @@ function getNuvemshopSupportBaseUrl(lojaText){
           return;
         }
         openSimpleTaskModal(calSelectedISO);
+      });
+    }
+    if(calAddTaskBtn){
+      calAddTaskBtn.addEventListener("click", ()=>{
+        if(!calSelectedISO){
+          showAlert("Selecione um dia.");
+          return;
+        }
+        taskModalFromCalendar = true;
+        if(taskOverlay) taskOverlay.classList.add("isCalendarContext");
+        clearTasksForm();
+        if(tData) tData.value = calSelectedISO;
+        openTaskModal();
       });
     }
     if(calStoreFilter){
