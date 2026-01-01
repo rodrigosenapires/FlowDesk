@@ -2041,6 +2041,10 @@
     const recurrenceCloseBtn = document.getElementById("recurrenceCloseBtn");
     const recurrenceCancelBtn = document.getElementById("recurrenceCancelBtn");
     const recurrenceDoneBtn = document.getElementById("recurrenceDoneBtn");
+    const recurrenceFrequency = document.getElementById("recurrenceFrequency");
+    const recurrenceWeekdays = document.getElementById("recurrenceWeekdays");
+    const recurrenceMonthlyWrap = document.getElementById("recurrenceMonthlyWrap");
+    const recurrenceMonthlyOptions = document.getElementById("recurrenceMonthlyOptions");
 
     // modal: editar/adicionar fase (no card)
     const phaseEditOverlay = document.getElementById("phaseEditOverlay");
@@ -2649,6 +2653,21 @@
       return label ? `${MONTHLY_ORDINAL_PREFIX}${ordinalWord} ${label}` : "Mensal";
     }
 
+    function getMonthlyDayOptionLabel(iso){
+      if(!iso) return "Mensal no dia";
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return "Mensal no dia";
+      return `Mensal no dia ${d.getDate()}`;
+    }
+
+    function getMonthlyWeekdayOptionLabel(iso){
+      if(!iso) return "Mensal no(a)";
+      const idx = getWeekdayIndexFromISO(iso);
+      const weekday = getWeekdayLabelFromIndex(idx);
+      const ordinal = getMonthlyOrdinalWordFromISO(iso);
+      return weekday ? `Mensal no(a) ${ordinal} ${weekday}` : "Mensal no(a)";
+    }
+
     function getSimpleTaskAnnualLabelByDate(iso){
       if(!iso) return "Anual";
       const d = new Date(`${iso}T00:00:00`);
@@ -3091,12 +3110,37 @@
 
     function openRecurrenceModal(){
       if(!recurrenceOverlay) return;
+      const iso = (simpleTaskDate?.value || "").toString().trim() || todayISO();
+      updateRecurrenceMonthlyOptions(iso);
+      syncRecurrenceWeekdaysVisibility();
       recurrenceOverlay.classList.add("show");
     }
 
     function closeRecurrenceModal(){
       if(!recurrenceOverlay) return;
       recurrenceOverlay.classList.remove("show");
+    }
+
+    function syncRecurrenceWeekdaysVisibility(){
+      if(!recurrenceWeekdays || !recurrenceFrequency) return;
+      const value = (recurrenceFrequency.value || "").toString().trim();
+      recurrenceWeekdays.style.display = value === "week" ? "flex" : "none";
+      if(recurrenceMonthlyWrap){
+        recurrenceMonthlyWrap.style.display = value === "month" ? "block" : "none";
+      }
+      if(value === "month"){
+        const iso = (simpleTaskDate?.value || "").toString().trim() || todayISO();
+        updateRecurrenceMonthlyOptions(iso);
+      }
+    }
+
+    function updateRecurrenceMonthlyOptions(iso){
+      if(!recurrenceMonthlyOptions) return;
+      const options = Array.from(recurrenceMonthlyOptions.options || []);
+      const byDay = options.find(opt => (opt.value || "").toString().trim() === "by_day");
+      const byWeekday = options.find(opt => (opt.value || "").toString().trim() === "by_weekday");
+      if(byDay) byDay.text = getMonthlyDayOptionLabel(iso);
+      if(byWeekday) byWeekday.text = getMonthlyWeekdayOptionLabel(iso);
     }
 
     function saveSimpleTask(){
@@ -8361,6 +8405,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       simpleTaskDate.addEventListener("change", ()=>{
         const iso = (simpleTaskDate.value || "").toString().trim();
         updateSimpleTaskRepeatLabels(iso);
+        updateRecurrenceMonthlyOptions(iso);
       });
     }
     if(simpleTaskRepeat){
@@ -8381,6 +8426,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(recurrenceCloseBtn) recurrenceCloseBtn.addEventListener("click", closeRecurrenceModal);
     if(recurrenceCancelBtn) recurrenceCancelBtn.addEventListener("click", closeRecurrenceModal);
     if(recurrenceDoneBtn) recurrenceDoneBtn.addEventListener("click", closeRecurrenceModal);
+    if(recurrenceFrequency){
+      recurrenceFrequency.addEventListener("change", syncRecurrenceWeekdaysVisibility);
+    }
+    if(recurrenceWeekdays){
+      recurrenceWeekdays.querySelectorAll(".recurrenceDayBtn").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          btn.classList.toggle("isActive");
+        });
+      });
+    }
     if(recurrenceOverlay){
       recurrenceOverlay.addEventListener("click", (e)=>{ if(e.target === recurrenceOverlay) closeRecurrenceModal(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && recurrenceOverlay.classList.contains("show")) closeRecurrenceModal(); });

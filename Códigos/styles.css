@@ -1692,14 +1692,17 @@
       cursor:pointer;
     }
     .recurrenceDayBtn.isActive{
-      background:var(--accent);
-      color:#fff;
+      background:#22c55e;
+      color:#0f172a;
       border-color:transparent;
     }
     .recurrenceEndGroup{
       display:flex;
       flex-direction:column;
       gap:10px;
+    }
+    .recurrenceMonthlyWrap{
+      display:none;
     }
     .recurrenceOptionRow{
       display:flex;

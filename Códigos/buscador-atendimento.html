@@ -1093,16 +1093,23 @@
             <div class="label">Repetir a cada:</div>
             <div class="recurrenceInline">
               <input type="number" min="1" value="1" class="recurrenceStepInput" />
-              <select class="recurrenceSelect">
+              <select class="recurrenceSelect" id="recurrenceFrequency">
+                <option value="day">dia</option>
                 <option value="week">semana</option>
                 <option value="month">mes</option>
                 <option value="year">ano</option>
               </select>
             </div>
           </div>
+          <div class="recurrenceMonthlyWrap" id="recurrenceMonthlyWrap">
+            <select class="recurrenceSelect" id="recurrenceMonthlyOptions">
+              <option value="by_day">Mensal no dia 1</option>
+              <option value="by_weekday">Mensal no(a) primeiro(a) quinta-feira</option>
+            </select>
+          </div>
           <div>
             <div class="label">Repetir:</div>
-            <div class="recurrenceDays">
+            <div class="recurrenceDays" id="recurrenceWeekdays">
               <button type="button" class="recurrenceDayBtn">S</button>
               <button type="button" class="recurrenceDayBtn">T</button>
               <button type="button" class="recurrenceDayBtn">Q</button>
