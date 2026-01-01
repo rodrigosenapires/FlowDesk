@@ -1862,6 +1862,7 @@
     const nuvemEditCancelBtn = document.getElementById("nuvemEditCancelBtn");
     const nuvemEditDeleteBtn = document.getElementById("nuvemEditDeleteBtn");
     const nuvemEditCloseBtn = document.getElementById("nuvemEditCloseBtn");
+    const storeLinksBtn = document.getElementById("storeLinksBtn");
     const storeLinksOverlay = document.getElementById("storeLinksOverlay");
     const storeLinksCloseBtn = document.getElementById("storeLinksCloseBtn");
     const storeLinksGrid = document.getElementById("storeLinksGrid");
@@ -3230,6 +3231,7 @@
         popupInput.value = (options?.inputValue || "").toString();
         popupInput.placeholder = (options?.inputPlaceholder || "").toString();
       }
+      markOverlayForDrawerReturn(popupOverlay, [popupCloseBtn]);
       popupOverlay.classList.add("show");
       if(useInput){
         const input = getActivePopupInput();
@@ -3270,6 +3272,7 @@
       }
       popupShortcutContext = null;
       clearPopupQuickPick();
+      handleDrawerReturnAfterClose(popupOverlay, [popupCloseBtn]);
     }
 
     function showAlert(message, title){
@@ -9089,6 +9092,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     const headerPopupTargets = new Set([
       "orderLookupBtn",
       "sakChatBtn",
+      "storeLinksBtn",
       "metaInboxBtn",
       "emailMenuBtn",
       "backupMenuBtn",
@@ -9945,12 +9949,30 @@ function getNuvemshopSupportBaseUrl(lojaText){
       nuvemEditOverlay.addEventListener("click", (e)=>{ if(e.target === nuvemEditOverlay) closeNuvemEditModal(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && nuvemEditOverlay.classList.contains("show")) closeNuvemEditModal(); });
     }
+    if(storeLinksBtn){
+      storeLinksBtn.addEventListener("click", ()=>{
+        if(!storeLinksOverlay) return;
+        markOverlayForDrawerReturn(storeLinksOverlay, [storeLinksCloseBtn]);
+        storeLinksOverlay.classList.add("show");
+      });
+    }
     if(storeLinksCloseBtn){
-      storeLinksCloseBtn.addEventListener("click", ()=>{ if(storeLinksOverlay) storeLinksOverlay.classList.remove("show"); });
+      storeLinksCloseBtn.addEventListener("click", ()=>{
+        if(storeLinksOverlay) storeLinksOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(storeLinksOverlay, [storeLinksCloseBtn]);
+      });
     }
     if(storeLinksOverlay){
-      storeLinksOverlay.addEventListener("click", (e)=>{ if(e.target === storeLinksOverlay) storeLinksOverlay.classList.remove("show"); });
-      document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && storeLinksOverlay.classList.contains("show")) storeLinksOverlay.classList.remove("show"); });
+      storeLinksOverlay.addEventListener("click", (e)=>{
+        if(e.target !== storeLinksOverlay) return;
+        storeLinksOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(storeLinksOverlay, [storeLinksCloseBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !storeLinksOverlay.classList.contains("show")) return;
+        storeLinksOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(storeLinksOverlay, [storeLinksCloseBtn]);
+      });
     }
     if(metaInboxCloseBtn){
       metaInboxCloseBtn.addEventListener("click", ()=>{

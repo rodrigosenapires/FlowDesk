@@ -2207,6 +2207,13 @@
       gap:16px;
     }
     .socialHubTitle{display:flex;flex-direction:column;gap:6px}
+    .socialHubTitleRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      width:100%;
+    }
     .socialHubEyebrow{
       font-size:11px;
       text-transform:uppercase;

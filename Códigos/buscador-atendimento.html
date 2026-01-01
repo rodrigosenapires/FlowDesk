@@ -30,13 +30,13 @@
 
         <div class="brandright">
           <div class="scrollBtns">
-            <button class="themeBtn" id="orderLookupBtn" type="button" title="Buscar pedido" aria-label="Buscar pedido">
+            <button class="themeBtn" id="sakChatBtn" type="button" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
               <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
                 <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
                 <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
               </svg>
             </button>
-            <button class="themeBtn" id="sakChatBtn" type="button" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
+            <button class="themeBtn" id="storeLinksBtn" type="button" title="WhatsApp lojas" aria-label="WhatsApp lojas">
               <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
                 <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
               </svg>
@@ -134,13 +134,13 @@
           <p class="menuTitle">A&ccedil;&otilde;es do cabe&ccedil;alho</p>
         </div>
         <div class="mobileHeaderActions">
-          <button class="themeBtn" type="button" data-header-proxy="orderLookupBtn" title="Buscar pedido" aria-label="Buscar pedido">
+          <button class="themeBtn" type="button" data-header-proxy="sakChatBtn" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
             <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
               <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
               <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
             </svg>
           </button>
-          <button class="themeBtn" type="button" data-header-proxy="sakChatBtn" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
+          <button class="themeBtn" type="button" data-header-proxy="storeLinksBtn" title="WhatsApp lojas" aria-label="WhatsApp lojas">
             <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
               <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
             </svg>
@@ -1476,15 +1476,17 @@
   </div>
 
   <!-- Modal: Meta -->
-  <div class="miniOverlay" id="metaInboxOverlay">
+    <div class="miniOverlay" id="metaInboxOverlay">
     <div class="miniModal metaInboxModal socialHubModal">
       <div class="mh socialHubHeader">
         <div class="socialHubTitle">
-          <div class="socialHubEyebrow">Central social</div>
+          <div class="socialHubTitleRow">
+            <div class="socialHubEyebrow">Central social</div>
+            <button class="btn small" id="metaInboxCloseBtn">Voltar</button>
+          </div>
           <h3>Atendimento nas redes</h3>
           <div class="note socialHubSubtitle">Acesse rapidamente os canais de cada loja e responda direto no inbox.</div>
         </div>
-        <button class="btn small" id="metaInboxCloseBtn">Fechar</button>
       </div>
       <div class="mb">
         
