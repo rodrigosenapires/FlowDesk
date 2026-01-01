@@ -1727,6 +1727,14 @@
     .recurrenceModal input[type="number"]::-webkit-outer-spin-button{
       opacity:1;
     }
+    .repeatRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .repeatRow select{
+      flex:1 1 auto;
+    }
     #popupActions.mf{
       justify-content:center !important;
     }
@@ -2765,7 +2773,10 @@
       justify-content:center;
       width:20px;
       height:20px;
-      color:#ff922b;
+      color:#ffffff;
+    }
+    body.light .taskRepeatIcon{
+      color:#0f172a;
     }
     .taskTitle.extraTitle{
       color:#ff922b;

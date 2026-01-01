@@ -1061,7 +1061,8 @@
           </div>
           <div>
             <div class="label">Repeti&ccedil;&atilde;o</div>
-            <select id="simpleTaskRepeat">
+            <div class="repeatRow">
+              <select id="simpleTaskRepeat">
               <option value="nao_repite">N&atilde;o se repete</option>
               <option value="todos_dias">Todos os dias</option>
               <option value="semanal">Semanal: cada quarta-feira</option>
@@ -1069,7 +1070,14 @@
               <option value="anual">Anual em dezembro 31</option>
               <option value="dias_uteis">Todos os dias da semana (segunda a sexta-feira)</option>
               <option value="personalizar">Personalizar...</option>
-            </select>
+              </select>
+              <button class="btn iconBtn" type="button" id="simpleTaskRepeatEditBtn" title="Editar recorrencia" aria-label="Editar recorrencia" style="display:none;">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5l4 4L7 21l-4 1 1-4 12.5-14.5z"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1142,7 +1150,7 @@
         </div>
       </div>
       <div class="mf">
-        <button class="btn" id="recurrenceCancelBtn">Cancelar</button>
+        <button class="btn" id="recurrenceCancelBtn">Limpar</button>
         <button class="btn primary" id="recurrenceDoneBtn">Concluir</button>
       </div>
     </div>

@@ -2041,6 +2041,7 @@
     const simpleTaskSubject = document.getElementById("simpleTaskSubject");
     const simpleTaskText = document.getElementById("simpleTaskText");
     const simpleTaskRepeat = document.getElementById("simpleTaskRepeat");
+    const simpleTaskRepeatEditBtn = document.getElementById("simpleTaskRepeatEditBtn");
     const recurrenceOverlay = document.getElementById("recurrenceOverlay");
     const recurrenceCloseBtn = document.getElementById("recurrenceCloseBtn");
     const recurrenceCancelBtn = document.getElementById("recurrenceCancelBtn");
@@ -2508,6 +2509,10 @@
       return (label || "").toString().trim().toLowerCase() === DAILY_REPEAT_LABEL.toLowerCase();
     }
 
+    function isNoRepeatLabel(label){
+      return normalizeLabelText(label) === "nao se repete";
+    }
+
     function isDailyRepeatTask(t){
       return Boolean(t?.isExtra) && isDailyRepeatLabel(t?.repeat);
     }
@@ -2848,15 +2853,17 @@
     }
 
     function setRecurrenceEndDraftFromEntry(entry){
-      const endDate = (entry?.repeatUntil || entry?.repeatEnd || "").toString().trim();
       const count = Number.isFinite(entry?.repeatCount) ? entry.repeatCount : null;
+      const endDate = (entry?.repeatUntil || entry?.repeatEnd || "").toString().trim();
+      if(Number.isFinite(count) && count > 0){
+        recurrenceEndDraft = { mode:"count", date:"", count };
+        return;
+      }
       if(endDate){
         recurrenceEndDraft = { mode:"date", date:endDate, count:null };
-      }else if(Number.isFinite(count) && count > 0){
-        recurrenceEndDraft = { mode:"count", date:"", count };
-      }else{
-        recurrenceEndDraft = { mode:"never", date:"", count:null };
+        return;
       }
+      recurrenceEndDraft = { mode:"never", date:"", count:null };
     }
 
     function applyRecurrenceEndDraftToUI(){
@@ -2873,11 +2880,13 @@
     function saveRecurrenceEndDraftFromUI(){
       if(recurrenceEndDate && recurrenceEndDate.checked){
         recurrenceEndDraft = { mode:"date", date:(recurrenceEndDateInput?.value || "").toString().trim(), count:null };
+        if(recurrenceEndCountInput) recurrenceEndCountInput.value = "";
         return;
       }
       if(recurrenceEndCount && recurrenceEndCount.checked){
         const raw = Number.parseInt((recurrenceEndCountInput?.value || "").toString(), 10);
         recurrenceEndDraft = { mode:"count", date:"", count: Number.isFinite(raw) ? raw : null };
+        if(recurrenceEndDateInput) recurrenceEndDateInput.value = "";
         return;
       }
       recurrenceEndDraft = { mode:"never", date:"", count:null };
@@ -3421,6 +3430,7 @@
         }
         if(!matched) simpleTaskRepeat.value = "nao_repite";
         lastSimpleTaskRepeatValue = simpleTaskRepeat.value;
+        syncSimpleTaskRepeatEditButton();
       }
       simpleTaskOverlay.classList.add("show");
       setTimeout(()=>{ if(simpleTaskSubject) simpleTaskSubject.focus(); }, 40);
@@ -3460,6 +3470,7 @@
       if(!recurrenceModalConfirmed && simpleTaskRepeat){
         simpleTaskRepeat.value = lastSimpleTaskRepeatValue || "nao_repite";
       }
+      syncSimpleTaskRepeatEditButton();
     }
 
     function syncRecurrenceWeekdaysVisibility(){
@@ -3473,6 +3484,12 @@
         const iso = (simpleTaskDate?.value || "").toString().trim() || todayISO();
         updateRecurrenceMonthlyOptions(iso);
       }
+    }
+
+    function syncSimpleTaskRepeatEditButton(){
+      if(!simpleTaskRepeatEditBtn || !simpleTaskRepeat) return;
+      const value = (simpleTaskRepeat.value || "").toString().trim();
+      simpleTaskRepeatEditBtn.style.display = value === "personalizar" ? "inline-flex" : "none";
     }
 
     function updateRecurrenceMonthlyOptions(iso){
@@ -8143,11 +8160,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(tasksSingleBtn) tasksSingleBtn.style.display = "none";
       }
       const today = todayISO();
+      const repeatIconSvg = `<svg class="iconStroke" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.3-6.3"></path><polyline points="21 3 21 9 15 9"></polyline><path d="M21 12a9 9 0 0 1-15.3 6.3"></path><polyline points="3 21 3 15 9 15"></polyline></svg>`;
 
       tasksList.innerHTML = show.map(t => {
         const isExtra = Boolean(t.isExtra);
         const repeatLabel = (t.repeat || "").toString().trim();
         const hasDailyRepeat = isDailyRepeatTask(t);
+        const hasExtraRepeat = isExtra && repeatLabel && !isNoRepeatLabel(repeatLabel);
+        const showRepeatIcon = isExtra;
         const effDate = getEffectivePhaseDate(t) || (t.proxEtapa || "").trim();
         const dueToday = (effDate && effDate === today);
         const colors = statusColors(t.status);
@@ -8209,6 +8229,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           : "";
 
         const rastEfetivo = (getEffectiveRastreioFromTask(t) || "").trim();
+        const repeatTitle = repeatLabel ? `Repeti\u00e7\u00e3o: ${repeatLabel}` : "Definir repeti\u00e7\u00e3o";
 
         return `
           <div class="taskCard ${dueToday ? "taskDueToday" : ""} ${isExtra ? "taskExtra" : ""}" data-task-id="${escapeHtml(t.id)}">
@@ -8216,14 +8237,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
               <div class="taskMainInfo">
                 <div class="taskTitleRow">
                   <p class="taskTitle ${isExtra ? "extraTitle" : ""}">${escapeHtml(title)}</p>
-                  ${hasDailyRepeat ? `<span class="taskRepeatIcon" title="Repeti\u00e7\u00e3o: ${escapeHtml(repeatLabel)}" aria-label="Repeti\u00e7\u00e3o: ${escapeHtml(repeatLabel)}">
-                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                      <polyline points="23 4 23 10 17 10"></polyline>
-                      <polyline points="1 20 1 14 7 14"></polyline>
-                      <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
-                      <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
-                    </svg>
-                  </span>` : ""}
                 </div>
                 <div class="note taskSubMeta" style="margin-top:6px;">${subtitleHtml}</div>
               </div>
@@ -8244,7 +8257,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
                   <circle cx="12" cy="12" r="3"></circle>
                   <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
                 </svg>
-              </button>` : `<button class="btn small iconBtn" data-task-phase-add="${escapeHtml(t.id)}" title="Nova fase" aria-label="Nova fase">
+              </button>
+              ${showRepeatIcon ? `<button class="btn small iconBtn" data-task-repeat-id="${escapeHtml(t.id)}" data-task-repeat="${escapeHtml(repeatLabel)}" title="${escapeHtml(repeatTitle)}" aria-label="${escapeHtml(repeatTitle)}">
+                <svg class="iconStroke" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 0 1 15.3-6.3"></path>
+                  <polyline points="21 3 21 9 15 9"></polyline>
+                  <path d="M21 12a9 9 0 0 1-15.3 6.3"></path>
+                  <polyline points="3 21 3 15 9 15"></polyline>
+                </svg>
+              </button>` : ""}` : `<button class="btn small iconBtn" data-task-phase-add="${escapeHtml(t.id)}" title="Nova fase" aria-label="Nova fase">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -8561,6 +8582,41 @@ function getNuvemshopSupportBaseUrl(lojaText){
           renderTasks();
         });
       });
+      tasksList.querySelectorAll("[data-task-repeat]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const label = (btn.getAttribute("data-task-repeat") || "").toString().trim();
+          if(label && !isNoRepeatLabel(label)){
+            showAlert(`Repeti\u00e7\u00e3o: ${label}`);
+            return;
+          }
+          const id = (btn.getAttribute("data-task-repeat-id") || "").toString().trim();
+          if(!id) return;
+          const ref = (tasks || []).find(t => String(t.id || "") === id);
+          if(!ref || !ref.isExtra) return;
+          const entry = {
+            id,
+            date: (ref.data || ref.proxEtapa || "").toString().trim(),
+            assunto: (ref.assunto || "").toString().trim(),
+            extraText: (ref.extraText || "").toString().trim(),
+            loja: (ref.loja || "").toString().trim(),
+            startTime: (ref.startTime || "").toString().trim(),
+            endTime: (ref.endTime || "").toString().trim(),
+            repeat: (ref.repeat || "").toString().trim(),
+            repeatWeekday: ref.repeatWeekday,
+            repeatOrdinal: ref.repeatOrdinal,
+            repeatEvery: ref.repeatEvery,
+            repeatUnit: (ref.repeatUnit || "").toString().trim(),
+            repeatWeekdays: Array.isArray(ref.repeatWeekdays) ? ref.repeatWeekdays.slice() : [],
+            repeatMonthlyMode: (ref.repeatMonthlyMode || "").toString().trim(),
+            repeatUntil: (ref.repeatUntil || "").toString().trim(),
+            repeatCount: ref.repeatCount,
+            repeatExclusions: Array.isArray(ref.repeatExclusions) ? ref.repeatExclusions.slice() : []
+          };
+          openSimpleTaskModal(entry.date || todayISO(), entry);
+        });
+      });
       renderMiniCalendar();
     }
 
@@ -8835,6 +8891,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
           return;
         }
         lastSimpleTaskRepeatValue = value || "nao_repite";
+        syncSimpleTaskRepeatEditButton();
+      });
+    }
+    if(simpleTaskRepeatEditBtn){
+      simpleTaskRepeatEditBtn.addEventListener("click", ()=>{
+        if(!simpleTaskRepeat) return;
+        const value = (simpleTaskRepeat.value || "").toString().trim();
+        if(value !== "personalizar") return;
+        recurrenceModalConfirmed = false;
+        openRecurrenceModal();
       });
     }
     if(simpleTaskOverlay){
@@ -8842,7 +8908,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && simpleTaskOverlay.classList.contains("show")) closeSimpleTaskModal(); });
     }
     if(recurrenceCloseBtn) recurrenceCloseBtn.addEventListener("click", closeRecurrenceModal);
-    if(recurrenceCancelBtn) recurrenceCancelBtn.addEventListener("click", closeRecurrenceModal);
+    if(recurrenceCancelBtn) recurrenceCancelBtn.addEventListener("click", ()=>{
+      const iso = (simpleTaskDate?.value || "").toString().trim() || todayISO();
+      recurrenceDraft = getDefaultRecurrenceDraft(iso);
+      recurrenceEndDraft = { mode:"never", date:"", count:null };
+      applyRecurrenceDraftToUI();
+      applyRecurrenceEndDraftToUI();
+      updateRecurrenceMonthlyOptions(iso);
+    });
     if(recurrenceDoneBtn) recurrenceDoneBtn.addEventListener("click", ()=>{
       recurrenceModalConfirmed = true;
       saveRecurrenceDraftFromUI();
