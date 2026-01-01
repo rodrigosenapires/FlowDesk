@@ -2532,6 +2532,20 @@
       "sexta-feira",
       "s\u00e1bado"
     ];
+    const MONTH_LABELS_PT = [
+      "janeiro",
+      "fevereiro",
+      "mar\u00e7o",
+      "abril",
+      "maio",
+      "junho",
+      "julho",
+      "agosto",
+      "setembro",
+      "outubro",
+      "novembro",
+      "dezembro"
+    ];
 
     function normalizeLabelText(text){
       return (text || "")
@@ -2616,6 +2630,15 @@
       const label = getWeekdayLabelFromIndex(idx);
       const ordinalWord = getMonthlyOrdinalWordFromISO(iso);
       return label ? `${MONTHLY_ORDINAL_PREFIX}${ordinalWord} ${label}` : "Mensal";
+    }
+
+    function getSimpleTaskAnnualLabelByDate(iso){
+      if(!iso) return "Anual";
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return "Anual";
+      const monthLabel = MONTH_LABELS_PT[d.getMonth()] || "";
+      const day = d.getDate();
+      return monthLabel ? `${ANNUAL_REPEAT_PREFIX}${monthLabel} ${day}` : "Anual";
     }
 
     function isWeeklyRepeatLabel(label){
@@ -2991,8 +3014,10 @@
       const options = Array.from(simpleTaskRepeat.options || []);
       const weeklyOption = options.find(opt => (opt.value || "").toString().trim() === "semanal");
       const monthlyOption = options.find(opt => (opt.value || "").toString().trim() === "mensal_ultima");
+      const annualOption = options.find(opt => (opt.value || "").toString().trim() === "anual");
       if(weeklyOption) weeklyOption.text = getSimpleTaskWeeklyLabelByDate(iso);
       if(monthlyOption) monthlyOption.text = getSimpleTaskMonthlyLabelByDate(iso);
+      if(annualOption) annualOption.text = getSimpleTaskAnnualLabelByDate(iso);
     }
 
     function openSimpleTaskModal(date, existing){
@@ -3021,6 +3046,9 @@
             matched = true;
           }else if(isMonthlyLastWeekdayLabel(repeatRaw)){
             simpleTaskRepeat.value = "mensal_ultima";
+            matched = true;
+          }else if(isAnnualRepeatLabel(repeatRaw)){
+            simpleTaskRepeat.value = "anual";
             matched = true;
           }else{
             const optByValue = options.find(opt => (opt.value || "").toString().trim() === repeatRaw);
@@ -3067,7 +3095,9 @@
         ? getSimpleTaskWeeklyLabelByDate(date)
         : (repeatValue === "mensal_ultima"
           ? getSimpleTaskMonthlyLabelByDate(date)
-          : (simpleTaskRepeat?.selectedOptions?.[0]?.text || "").toString().trim());
+          : (repeatValue === "anual"
+            ? getSimpleTaskAnnualLabelByDate(date)
+            : (simpleTaskRepeat?.selectedOptions?.[0]?.text || "").toString().trim()));
       if(!loja){
         showAlert("Selecione a loja.");
         return;
