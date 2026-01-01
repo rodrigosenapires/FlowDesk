@@ -1664,6 +1664,20 @@
       overflow:auto;
       max-height:calc(90vh - 120px);
     }
+    #productManageOverlay{
+      align-items:stretch;
+      justify-content:stretch;
+      padding:0;
+    }
+    #productManageOverlay .miniModal{
+      width:100vw;
+      height:100vh;
+      max-height:none;
+      border-radius:0;
+    }
+    #productManageOverlay .miniModal .mb{
+      max-height:calc(100vh - 120px);
+    }
     .miniModal .mf{
       padding:12px 14px;
       border-top:1px solid color-mix(in srgb, var(--line) 70%, transparent);
@@ -2814,7 +2828,7 @@
     .taskMeta{
       margin-top:8px;
       display:flex;
-      gap:8px;
+      gap:16px;
       flex-wrap:wrap;
       align-items:center;
     }
@@ -2881,7 +2895,7 @@
       flex-wrap:wrap;
       justify-content:flex-end;
       margin-top:16px;
-      padding-top:24px;
+      padding-top:0;
     }
     .taskActions .nuvemIcon{
       width:16px;
@@ -2892,16 +2906,6 @@
       width:16px;
       height:16px;
     }
-    .taskActions::before,
-    .taskActions::after{
-      content:"";
-      position:absolute;
-      left:0;
-      right:0;
-      border-top:1px dashed rgba(255,255,255,0.6);
-    }
-    .taskActions::before{ top:0; }
-    .taskActions::after{ top:8px; }
 
     .filterBtn .iconFilled{ display:none; fill:currentColor; width:20px; height:20px; }
     .filterBtn.isActive .iconStroke{ display:none; }
@@ -2911,6 +2915,21 @@
       display:inline-flex;
       align-items:center;
       gap:6px;
+    }
+    .miniCalendarBody{
+      display:flex;
+      flex-direction:column;
+    }
+    .miniCalendarBody .miniCalHeaderNav{
+      order:0;
+      justify-content:center;
+      width:100%;
+    }
+    .miniCalendarBody .miniCalWeekHeader{
+      order:1;
+    }
+    .miniCalendarBody .miniCalendarGrid{
+      order:2;
     }
     .miniCalHeaderNav .count{
       min-width:110px;
@@ -3186,6 +3205,87 @@
     }
 
     /* ===== Mobile ===== */
+    @media(max-width:980px) and (min-width:721px){
+      .wrap{
+        margin:18px auto 0;
+        padding:12px;
+      }
+      .toprow{
+        display:grid;
+        grid-template-columns:44px 1fr 44px;
+        align-items:center;
+        gap:8px;
+      }
+      .brandleft{
+        min-width:0;
+        justify-self:center;
+        justify-content:center;
+      }
+      .brandright{
+        display:flex;
+        justify-self:end;
+      }
+      .scrollBtns{
+        justify-content:flex-end;
+      }
+      .scrollBtns > *{
+        display:none;
+      }
+      .scrollBtns #goToTasksBtn{
+        display:grid;
+      }
+      .mobileHambBtn{
+        display:grid;
+      }
+      .appLogo img{
+        height:30px;
+      }
+      .viewTitleRow{
+        margin-bottom:32px;
+      }
+      .viewTitle{
+        font-size:20px;
+      }
+      .searchArrows{
+        display:none;
+      }
+      .searchrowWrap{
+        flex-direction:column;
+        gap:8px;
+        align-items:stretch;
+      }
+      .searchrow{
+        display:grid;
+        grid-template-columns:auto 1fr;
+        align-items:center;
+        column-gap:10px;
+        row-gap:0;
+        padding:10px 12px;
+        position:relative;
+        width:100%;
+      }
+      .searchInputWrap{
+        grid-column:2;
+        grid-row:1;
+        width:100%;
+      }
+      .searchrow .filterBtn{
+        grid-column:1;
+        grid-row:1;
+        width:40px;
+        height:40px;
+        padding:0;
+        border-radius:10px;
+        justify-self:start;
+      }
+      .searchrow input{
+        width:100%;
+        padding-left:36px;
+      }
+      .searchrow #searchClearBtn{
+        display:none;
+      }
+    }
     @media(max-width:720px){
       .wrap{
         margin:18px auto 0;
@@ -3285,25 +3385,15 @@
         justify-self:start;
         grid-column:auto;
       }
-      #viewTasks .card .hd .miniCalHeaderNav{
-        grid-column:1 / -1;
-        justify-self:start;
-        justify-content:flex-start;
-        width:100%;
-      }
-      #viewTasks .card .hd .miniCalHeaderNav .count{
-        min-width:0;
-        text-align:left;
-      }
       #miniCalPrev{
         padding-left:12px;
       }
-      #viewTasks .card .hd .miniCalHeaderNav{
-        justify-self:center;
-        justify-content:center;
-        width:auto;
+      #viewTasks .miniCalendarBody .miniCalHeaderNav{
+        order:3;
+        margin-top:8px;
       }
-      #viewTasks .card .hd .miniCalHeaderNav .count{
+      #viewTasks .miniCalendarBody .miniCalHeaderNav .count{
+        min-width:0;
         text-align:center;
       }
       .card .bd{

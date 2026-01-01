@@ -140,11 +140,6 @@
               <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
             </svg>
           </button>
-          <button class="themeBtn" type="button" data-header-proxy="storeLinksBtn" title="WhatsApp lojas" aria-label="WhatsApp lojas">
-            <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
-              <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
-            </svg>
-          </button>
           <button class="themeBtn" type="button" data-header-proxy="metaInboxBtn" title="Meta" aria-label="Meta">
             <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
               <rect x="4" y="4" width="16" height="16" rx="5"></rect>
@@ -518,6 +513,18 @@
                  <line x1="10" y1="14" x2="3" y2="21"></line>
                </svg>
               </button>
+            </div>
+            <div class="bd miniCalendarBody">
+              <div class="miniCalWeekHeader" aria-hidden="true">
+                <div>Seg</div>
+                <div>Ter</div>
+                <div>Qua</div>
+                <div>Qui</div>
+                <div>Sex</div>
+                <div>S&aacute;b</div>
+                <div>Dom</div>
+              </div>
+              <div class="miniCalendarGrid" id="miniCalendarGrid"></div>
               <div class="miniCalHeaderNav">
                 <button class="btn small iconBtn" id="miniCalPrev" title="M&ecirc;s anterior" aria-label="M&ecirc;s anterior">
                   <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
@@ -531,18 +538,6 @@
                   </svg>
                 </button>
               </div>
-            </div>
-            <div class="bd">
-              <div class="miniCalWeekHeader" aria-hidden="true">
-                <div>Seg</div>
-                <div>Ter</div>
-                <div>Qua</div>
-                <div>Qui</div>
-                <div>Sex</div>
-                <div>S&aacute;b</div>
-                <div>Dom</div>
-              </div>
-              <div class="miniCalendarGrid" id="miniCalendarGrid"></div>
             </div>
           </section>
         </div>

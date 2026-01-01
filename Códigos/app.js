@@ -4407,7 +4407,7 @@
           }
           const isRecurring = isCalendarRepeatEntry(entry);
           if(!isRecurring){
-            const ok = await showConfirm("Excluir esta tarefa simples?");
+            const ok = await showConfirm("Excluir esta tarefa extra?");
             if(!ok) return;
             calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
             saveCalendarHistory(calendarHistory);
@@ -8063,7 +8063,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const t = tasks.find(x => x.id === id);
       if(!t) return;
 
-      const ok = await showConfirm(`Remover este caso?\n\nCliente: ${t.cliente || "-"}\nPedido: ${t.pedido || "-"}\nAssunto: ${t.assunto || "-"}\n\nConfirmar?`);
+      const ok = await showConfirm(`Remover esta tarefa?\n\nCliente: ${t.cliente || "-"}\nPedido: ${t.pedido || "-"}\nAssunto: ${t.assunto || "-"}\n\nConfirmar?`);
       if(!ok) return;
 
       if(t.isExtra){
@@ -8299,8 +8299,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
               <span class="pillMini">Data inicial: <b>${escapeHtml(data)}</b></span>
             </div>
 
-            ${renderDescBlock(t.obs, lojaText, t.id)}
-
             <div class="taskActions">
               ${isExtra ? `<button class="btn small iconBtn" data-task-extra-calendar="${escapeHtml(t.id)}" title="Ver no calend\u00e1rio" aria-label="Ver no calend\u00e1rio">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
@@ -8353,6 +8351,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
                 </svg>
               </button>
             </div>
+
+            ${renderDescBlock(t.obs, lojaText, t.id)}
           </div>
         `;
       }).join("");
