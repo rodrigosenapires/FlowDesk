@@ -1606,10 +1606,8 @@
     }
 
     function shouldIncludeDailyRepeatOnDate(entry, iso){
-      if(!iso) return false;
-      const start = (entry?.date || "").toString().trim();
-      if(!start) return true;
-      return iso >= start;
+      if(!shouldIncludeRepeatWindow(entry, iso)) return false;
+      return true;
     }
 
     function getCalendarEntriesForDate(iso, options){
@@ -2500,6 +2498,31 @@
       return (e?.extra || e?.simple) && isDailyRepeatLabel(e?.repeat);
     }
 
+    function addDaysISO(iso, days){
+      if(!iso || !Number.isFinite(days)) return "";
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return "";
+      d.setDate(d.getDate() + days);
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    }
+
+    function getRepeatExclusions(entry){
+      return Array.isArray(entry?.repeatExclusions)
+        ? entry.repeatExclusions.map(v => (v || "").toString().trim()).filter(Boolean)
+        : [];
+    }
+
+    function shouldIncludeRepeatWindow(entry, iso){
+      if(!iso) return false;
+      const start = (entry?.date || "").toString().trim();
+      if(start && iso < start) return false;
+      const end = (entry?.repeatUntil || entry?.repeatEnd || "").toString().trim();
+      if(end && iso > end) return false;
+      const exclusions = getRepeatExclusions(entry);
+      if(exclusions.includes(iso)) return false;
+      return true;
+    }
+
     const WEEKDAY_LABELS_PT = [
       "domingo",
       "segunda-feira",
@@ -2639,9 +2662,7 @@
     }
 
     function shouldIncludeWeeklyRepeatOnDate(entry, iso){
-      if(!iso) return false;
-      const start = (entry?.date || "").toString().trim();
-      if(start && iso < start) return false;
+      if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const weekday = getRepeatWeekdayFromEntry(entry);
       if(!Number.isFinite(weekday)) return false;
       return getWeekdayIndexFromISO(iso) === weekday;
@@ -2659,9 +2680,7 @@
     }
 
     function shouldIncludeMonthlyLastWeekdayOnDate(entry, iso){
-      if(!iso) return false;
-      const start = (entry?.date || "").toString().trim();
-      if(start && iso < start) return false;
+      if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const weekday = getRepeatWeekdayFromEntry(entry);
       if(!Number.isFinite(weekday)) return false;
       if(getWeekdayIndexFromISO(iso) !== weekday) return false;
@@ -2673,9 +2692,7 @@
     }
 
     function shouldIncludeWeekdaysRepeatOnDate(entry, iso){
-      if(!iso) return false;
-      const start = (entry?.date || "").toString().trim();
-      if(start && iso < start) return false;
+      if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const weekday = getWeekdayIndexFromISO(iso);
       return weekday >= 1 && weekday <= 5;
     }
@@ -2714,9 +2731,7 @@
     }
 
     function shouldIncludeAnnualRepeatOnDate(entry, iso){
-      if(!iso) return false;
-      const start = (entry?.date || "").toString().trim();
-      if(start && iso < start) return false;
+      if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const target = getAnnualRepeatMonthDay(entry?.repeat || "", entry?.date || "");
       if(!target) return false;
       const d = new Date(`${iso}T00:00:00`);
@@ -3462,6 +3477,41 @@
       openPopup({ title: "Aten\u00e7\u00e3o", message: text, okLabel: "", showCancel: false });
     }
 
+    function showRecurringDeletePopup(){
+      const popupPromise = openPopup({
+        title: "Excluir tarefa recorrente",
+        message: "",
+        okLabel: "OK",
+        cancelLabel: "Cancelar",
+        showCancel: true,
+        centerMessage: true
+      });
+      if(popupMessage){
+        popupMessage.innerHTML = `
+          <div class="popupOptions">
+            <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+              <input type="radio" name="recurringDeleteOption" value="this" checked>
+              <span>Esta tarefa</span>
+            </label>
+            <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+              <input type="radio" name="recurringDeleteOption" value="this_future">
+              <span>Esta e as tarefas seguintes</span>
+            </label>
+            <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+              <input type="radio" name="recurringDeleteOption" value="all">
+              <span>Todas as tarefas</span>
+            </label>
+          </div>
+        `;
+      }
+      return popupPromise.then(ok => {
+        if(!ok) return null;
+        if(!popupMessage) return "this";
+        const selected = popupMessage.querySelector('input[name="recurringDeleteOption"]:checked');
+        return (selected?.value || "this").toString();
+      });
+    }
+
     async function openNuvemshopSupportPopup(storeName, taskId){
       const base = getNuvemshopSupportBaseUrl(storeName);
       if(!base){
@@ -3800,14 +3850,63 @@
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-simple-del") || "").toString().trim();
           if(!id) return;
-          const ok = await showConfirm("Excluir esta tarefa simples?");
-          if(!ok) return;
-          calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
-          saveCalendarHistory(calendarHistory);
-          const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
-          if(extraIdx >= 0){
-            tasks.splice(extraIdx, 1);
-            saveTasks(tasks);
+          const entry = (calendarHistory || []).find(e => String(e.id || "") === id);
+          if(!entry){
+            showAlert("Tarefa extra n\u00e3o encontrada.");
+            return;
+          }
+          const isRecurring = isCalendarRepeatEntry(entry);
+          if(!isRecurring){
+            const ok = await showConfirm("Excluir esta tarefa simples?");
+            if(!ok) return;
+            calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
+            saveCalendarHistory(calendarHistory);
+            const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
+            if(extraIdx >= 0){
+              tasks.splice(extraIdx, 1);
+              saveTasks(tasks);
+            }
+            renderCalendar();
+            renderCalendarDayDetails(calSelectedISO);
+            return;
+          }
+
+          const choice = await showRecurringDeletePopup();
+          if(!choice) return;
+          const occurrenceIso = (calSelectedISO || entry.date || "").toString().trim();
+          if(!occurrenceIso){
+            showAlert("Data da ocorr\u00eancia inv\u00e1lida.");
+            return;
+          }
+
+          if(choice === "all"){
+            calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
+            saveCalendarHistory(calendarHistory);
+            const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
+            if(extraIdx >= 0){
+              tasks.splice(extraIdx, 1);
+              saveTasks(tasks);
+            }
+          }else if(choice === "this"){
+            const exclusions = getRepeatExclusions(entry);
+            if(!exclusions.includes(occurrenceIso)) exclusions.push(occurrenceIso);
+            entry.repeatExclusions = exclusions;
+            calendarHistory = (calendarHistory || []).map(e => String(e.id || "") === id ? { ...e, repeatExclusions: exclusions } : e);
+            saveCalendarHistory(calendarHistory);
+            const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
+            if(extraIdx >= 0){
+              tasks[extraIdx] = { ...tasks[extraIdx], repeatExclusions: exclusions };
+              saveTasks(tasks);
+            }
+          }else if(choice === "this_future"){
+            const untilIso = addDaysISO(occurrenceIso, -1);
+            calendarHistory = (calendarHistory || []).map(e => String(e.id || "") === id ? { ...e, repeatUntil: untilIso } : e);
+            saveCalendarHistory(calendarHistory);
+            const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
+            if(extraIdx >= 0){
+              tasks[extraIdx] = { ...tasks[extraIdx], repeatUntil: untilIso };
+              saveTasks(tasks);
+            }
           }
           renderCalendar();
           renderCalendarDayDetails(calSelectedISO);
@@ -4471,6 +4570,10 @@ function fillPhaseStatusSelect(){
             : (Number.isFinite(Number.parseInt((t?.repeatOrdinal || "").toString(), 10))
               ? Number.parseInt((t?.repeatOrdinal || "").toString(), 10)
               : null)),
+        repeatUntil: (t?.repeatUntil || t?.repeatEnd || "").toString(),
+        repeatExclusions: Array.isArray(t?.repeatExclusions)
+          ? t.repeatExclusions.map(v => (v || "").toString().trim()).filter(Boolean)
+          : [],
         extraText: (t?.extraText || t?.text || "").toString(),
         isExtra: Boolean(t?.isExtra),
         createdAt: (t?.createdAt || "").toString(),
@@ -4533,6 +4636,10 @@ function fillPhaseStatusSelect(){
               : (Number.isFinite(Number.parseInt((e?.repeatOrdinal || "").toString(), 10))
                 ? Number.parseInt((e?.repeatOrdinal || "").toString(), 10)
                 : null)),
+          repeatUntil: (e?.repeatUntil || e?.repeatEnd || "").toString(),
+          repeatExclusions: Array.isArray(e?.repeatExclusions)
+            ? e.repeatExclusions.map(v => (v || "").toString().trim()).filter(Boolean)
+            : [],
           extraText: (e.extraText || e.text || "").toString(),
           whatsapp: (e.whatsapp || "").toString(),
           phaseIdx: Number.isFinite(e.phaseIdx) ? e.phaseIdx : Number.parseInt((e.phaseIdx || "0").toString(), 10) || 0,
