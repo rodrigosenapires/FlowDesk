@@ -12,6 +12,10 @@
     const STORAGE_KEY_SIZE_TABLES_OVERRIDES = "size_tables_overrides_v1";
     const STORAGE_KEY_PRODUCTS = "products_custom_v1";
     const DAILY_REPEAT_LABEL = "Todos os dias";
+    const WEEKLY_REPEAT_PREFIX = "Semanal: cada ";
+    const MONTHLY_ORDINAL_PREFIX = "Mensal nos(as) ";
+    const WEEKDAYS_REPEAT_LABEL = "Todos os dias da semana (segunda a sexta-feira)";
+    const ANNUAL_REPEAT_PREFIX = "Anual em ";
 
     // >>> TAREFAS
     const STORAGE_KEY_TASKS = "tarefasDiarias_v1";
@@ -1613,11 +1617,30 @@
       const applyStoreFilter = options?.applyStoreFilter !== false;
       const base = (calendarHistory || [])
         .filter(e => e.date === iso)
-        .filter(e => !isDailyRepeatCalendarEntry(e));
-      const repeats = (calendarHistory || [])
-        .filter(isDailyRepeatCalendarEntry)
-        .filter(e => shouldIncludeDailyRepeatOnDate(e, iso))
-        .map(e => ({ ...e, date: iso }));
+        .filter(e => !isCalendarRepeatEntry(e));
+      const repeatEntries = (calendarHistory || []).filter(isCalendarRepeatEntry);
+      const repeats = [];
+      repeatEntries.forEach(entry => {
+        if(isDailyRepeatCalendarEntry(entry)){
+          if(shouldIncludeDailyRepeatOnDate(entry, iso)) repeats.push({ ...entry, date: iso });
+          return;
+        }
+        if(isWeeklyRepeatCalendarEntry(entry)){
+          if(shouldIncludeWeeklyRepeatOnDate(entry, iso)) repeats.push({ ...entry, date: iso });
+          return;
+        }
+        if(isMonthlyLastWeekdayCalendarEntry(entry)){
+          if(shouldIncludeMonthlyLastWeekdayOnDate(entry, iso)) repeats.push({ ...entry, date: iso });
+          return;
+        }
+        if(isWeekdaysRepeatCalendarEntry(entry)){
+          if(shouldIncludeWeekdaysRepeatOnDate(entry, iso)) repeats.push({ ...entry, date: iso });
+          return;
+        }
+        if(isAnnualRepeatCalendarEntry(entry)){
+          if(shouldIncludeAnnualRepeatOnDate(entry, iso)) repeats.push({ ...entry, date: iso });
+        }
+      });
       let entries = base.concat(repeats);
       if(applyStoreFilter) entries = entries.filter(matchesCalendarStoreFilter);
       return entries;
@@ -2477,6 +2500,254 @@
       return (e?.extra || e?.simple) && isDailyRepeatLabel(e?.repeat);
     }
 
+    const WEEKDAY_LABELS_PT = [
+      "domingo",
+      "segunda-feira",
+      "ter\u00e7a-feira",
+      "quarta-feira",
+      "quinta-feira",
+      "sexta-feira",
+      "s\u00e1bado"
+    ];
+
+    function normalizeLabelText(text){
+      return (text || "")
+        .toString()
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function getWeekdayIndexFromISO(iso){
+      if(!iso) return NaN;
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return NaN;
+      return d.getDay();
+    }
+
+    function getWeekdayLabelFromIndex(idx){
+      return WEEKDAY_LABELS_PT[idx] || "";
+    }
+
+    function getMonthlyOrdinalFromISO(iso){
+      if(!iso) return null;
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return null;
+      const day = d.getDate();
+      const month = d.getMonth();
+      const year = d.getFullYear();
+      const ordinal = Math.floor((day - 1) / 7) + 1;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const isLast = (day + 7) > daysInMonth;
+      return { ordinal, isLast };
+    }
+
+    function getMonthlyOrdinalWordFromISO(iso){
+      const info = getMonthlyOrdinalFromISO(iso);
+      if(!info) return "";
+      if(info.isLast) return "\u00faltimos(as)";
+      if(info.ordinal === 1) return "primeiro(as)";
+      if(info.ordinal === 2) return "segunda(as)";
+      if(info.ordinal === 3) return "terceira(as)";
+      if(info.ordinal === 4) return "quarta(as)";
+      return "quinta(as)";
+    }
+
+    function getMonthlyOrdinalInfoFromLabel(label){
+      const normalized = normalizeLabelText(label);
+      const prefix = normalizeLabelText(MONTHLY_ORDINAL_PREFIX);
+      if(!normalized.startsWith(prefix)) return null;
+      const rest = normalized.slice(prefix.length).trim();
+      const parts = rest.split(/\s+/);
+      const ordinalToken = parts[0] || "";
+      let ordinal = null;
+      let isLast = false;
+      if(ordinalToken.startsWith("ultimo")) isLast = true;
+      else if(ordinalToken.startsWith("primeir")) ordinal = 1;
+      else if(ordinalToken.startsWith("segunda")) ordinal = 2;
+      else if(ordinalToken.startsWith("terceir")) ordinal = 3;
+      else if(ordinalToken.startsWith("quart")) ordinal = 4;
+      else if(ordinalToken.startsWith("quint")) ordinal = 5;
+      const weekdayIndex = getWeekdayIndexFromLabel(rest);
+      return { ordinal, isLast, weekdayIndex };
+    }
+
+    function getWeekdayIndexFromLabel(label){
+      const normalized = normalizeLabelText(label);
+      for(let i = 0; i < WEEKDAY_LABELS_PT.length; i++){
+        const token = normalizeLabelText(WEEKDAY_LABELS_PT[i]);
+        if(token && normalized.includes(token)) return i;
+      }
+      return NaN;
+    }
+
+    function getSimpleTaskWeeklyLabelByDate(iso){
+      const idx = getWeekdayIndexFromISO(iso);
+      const label = getWeekdayLabelFromIndex(idx);
+      return label ? `${WEEKLY_REPEAT_PREFIX}${label}` : "Semanal";
+    }
+
+    function getSimpleTaskMonthlyLabelByDate(iso){
+      const idx = getWeekdayIndexFromISO(iso);
+      const label = getWeekdayLabelFromIndex(idx);
+      const ordinalWord = getMonthlyOrdinalWordFromISO(iso);
+      return label ? `${MONTHLY_ORDINAL_PREFIX}${ordinalWord} ${label}` : "Mensal";
+    }
+
+    function isWeeklyRepeatLabel(label){
+      return normalizeLabelText(label).startsWith(normalizeLabelText(WEEKLY_REPEAT_PREFIX));
+    }
+
+    function isMonthlyLastWeekdayLabel(label){
+      return normalizeLabelText(label).startsWith(normalizeLabelText(MONTHLY_ORDINAL_PREFIX));
+    }
+
+    function isWeekdaysRepeatLabel(label){
+      return normalizeLabelText(label) === normalizeLabelText(WEEKDAYS_REPEAT_LABEL);
+    }
+
+    function isAnnualRepeatLabel(label){
+      return normalizeLabelText(label).startsWith(normalizeLabelText(ANNUAL_REPEAT_PREFIX));
+    }
+
+    function getRepeatWeekdayFromEntry(entry){
+      if(Number.isFinite(entry?.repeatWeekday)) return entry.repeatWeekday;
+      const fromLabel = getWeekdayIndexFromLabel(entry?.repeat || "");
+      if(Number.isFinite(fromLabel)) return fromLabel;
+      return getWeekdayIndexFromISO(entry?.date || "");
+    }
+
+    function getRepeatMonthlyOrdinalFromEntry(entry){
+      if(entry?.repeatOrdinal === "last") return { isLast:true, ordinal:null };
+      if(Number.isFinite(entry?.repeatOrdinal)) return { isLast:false, ordinal: entry.repeatOrdinal };
+      const labelInfo = getMonthlyOrdinalInfoFromLabel(entry?.repeat || "");
+      if(labelInfo && (labelInfo.isLast || Number.isFinite(labelInfo.ordinal))){
+        return { isLast: Boolean(labelInfo.isLast), ordinal: labelInfo.isLast ? null : labelInfo.ordinal };
+      }
+      const byDate = getMonthlyOrdinalFromISO(entry?.date || "");
+      if(byDate){
+        return { isLast: Boolean(byDate.isLast), ordinal: byDate.isLast ? null : byDate.ordinal };
+      }
+      return { isLast:false, ordinal:null };
+    }
+
+    function getMonthlyWeekdayOccurrenceIndex(iso){
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return NaN;
+      return Math.floor((d.getDate() - 1) / 7) + 1;
+    }
+
+    function shouldIncludeWeeklyRepeatOnDate(entry, iso){
+      if(!iso) return false;
+      const start = (entry?.date || "").toString().trim();
+      if(start && iso < start) return false;
+      const weekday = getRepeatWeekdayFromEntry(entry);
+      if(!Number.isFinite(weekday)) return false;
+      return getWeekdayIndexFromISO(iso) === weekday;
+    }
+
+    function isLastWeekdayOfMonth(iso, weekday){
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return false;
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const lastDay = new Date(year, month + 1, 0);
+      const diff = (lastDay.getDay() - weekday + 7) % 7;
+      const lastWeekdayDate = lastDay.getDate() - diff;
+      return d.getDate() === lastWeekdayDate;
+    }
+
+    function shouldIncludeMonthlyLastWeekdayOnDate(entry, iso){
+      if(!iso) return false;
+      const start = (entry?.date || "").toString().trim();
+      if(start && iso < start) return false;
+      const weekday = getRepeatWeekdayFromEntry(entry);
+      if(!Number.isFinite(weekday)) return false;
+      if(getWeekdayIndexFromISO(iso) !== weekday) return false;
+      const ordinalInfo = getRepeatMonthlyOrdinalFromEntry(entry);
+      if(ordinalInfo.isLast) return isLastWeekdayOfMonth(iso, weekday);
+      const occurrence = getMonthlyWeekdayOccurrenceIndex(iso);
+      if(!Number.isFinite(occurrence)) return false;
+      return occurrence === ordinalInfo.ordinal;
+    }
+
+    function shouldIncludeWeekdaysRepeatOnDate(entry, iso){
+      if(!iso) return false;
+      const start = (entry?.date || "").toString().trim();
+      if(start && iso < start) return false;
+      const weekday = getWeekdayIndexFromISO(iso);
+      return weekday >= 1 && weekday <= 5;
+    }
+
+    function getAnnualRepeatMonthDay(label, fallbackIso){
+      const normalized = normalizeLabelText(label);
+      const prefix = normalizeLabelText(ANNUAL_REPEAT_PREFIX);
+      if(normalized.startsWith(prefix)){
+        const rest = normalized.slice(prefix.length).trim();
+        const parts = rest.split(/\s+/);
+        const monthKey = parts[0] || "";
+        const day = Number.parseInt(parts[1] || "", 10);
+        const months = {
+          janeiro: 0,
+          fevereiro: 1,
+          marco: 2,
+          abril: 3,
+          maio: 4,
+          junho: 5,
+          julho: 6,
+          agosto: 7,
+          setembro: 8,
+          outubro: 9,
+          novembro: 10,
+          dezembro: 11
+        };
+        if(Object.prototype.hasOwnProperty.call(months, monthKey) && Number.isFinite(day)){
+          return { month: months[monthKey], day };
+        }
+      }
+      const fallback = (fallbackIso || "").toString().trim();
+      if(!fallback) return null;
+      const d = new Date(`${fallback}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return null;
+      return { month: d.getMonth(), day: d.getDate() };
+    }
+
+    function shouldIncludeAnnualRepeatOnDate(entry, iso){
+      if(!iso) return false;
+      const start = (entry?.date || "").toString().trim();
+      if(start && iso < start) return false;
+      const target = getAnnualRepeatMonthDay(entry?.repeat || "", entry?.date || "");
+      if(!target) return false;
+      const d = new Date(`${iso}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return false;
+      return d.getMonth() === target.month && d.getDate() === target.day;
+    }
+
+    function isWeeklyRepeatCalendarEntry(e){
+      return (e?.extra || e?.simple) && isWeeklyRepeatLabel(e?.repeat);
+    }
+
+    function isMonthlyLastWeekdayCalendarEntry(e){
+      return (e?.extra || e?.simple) && isMonthlyLastWeekdayLabel(e?.repeat);
+    }
+
+    function isWeekdaysRepeatCalendarEntry(e){
+      return (e?.extra || e?.simple) && isWeekdaysRepeatLabel(e?.repeat);
+    }
+
+    function isAnnualRepeatCalendarEntry(e){
+      return (e?.extra || e?.simple) && isAnnualRepeatLabel(e?.repeat);
+    }
+
+    function isCalendarRepeatEntry(e){
+      return isDailyRepeatCalendarEntry(e)
+        || isWeeklyRepeatCalendarEntry(e)
+        || isMonthlyLastWeekdayCalendarEntry(e)
+        || isWeekdaysRepeatCalendarEntry(e)
+        || isAnnualRepeatCalendarEntry(e);
+    }
+
     async function copyTextToClipboard(text, btn, doneLabel){
       try{
         if(!navigator.clipboard){
@@ -2700,6 +2971,15 @@
     }
 
     let simpleTaskEditId = "";
+    function updateSimpleTaskRepeatLabels(iso){
+      if(!simpleTaskRepeat) return;
+      const options = Array.from(simpleTaskRepeat.options || []);
+      const weeklyOption = options.find(opt => (opt.value || "").toString().trim() === "semanal");
+      const monthlyOption = options.find(opt => (opt.value || "").toString().trim() === "mensal_ultima");
+      if(weeklyOption) weeklyOption.text = getSimpleTaskWeeklyLabelByDate(iso);
+      if(monthlyOption) monthlyOption.text = getSimpleTaskMonthlyLabelByDate(iso);
+    }
+
     function openSimpleTaskModal(date, existing){
       if(!simpleTaskOverlay) return;
       const ref = existing || null;
@@ -2711,6 +2991,7 @@
       if(simpleTaskStore) simpleTaskStore.value = (ref?.loja || "").toString().trim();
       if(simpleTaskSubject) simpleTaskSubject.value = (ref?.assunto || "").toString().trim();
       if(simpleTaskText) simpleTaskText.value = (ref?.extraText || "").toString().trim();
+      updateSimpleTaskRepeatLabels(iso);
       if(simpleTaskRepeat){
         const repeatRaw = (ref?.repeat || "").toString().trim();
         let matched = false;
@@ -2719,6 +3000,12 @@
           const optByText = options.find(opt => (opt.text || "").toString().trim() === repeatRaw);
           if(optByText){
             simpleTaskRepeat.value = optByText.value;
+            matched = true;
+          }else if(isWeeklyRepeatLabel(repeatRaw)){
+            simpleTaskRepeat.value = "semanal";
+            matched = true;
+          }else if(isMonthlyLastWeekdayLabel(repeatRaw)){
+            simpleTaskRepeat.value = "mensal_ultima";
             matched = true;
           }else{
             const optByValue = options.find(opt => (opt.value || "").toString().trim() === repeatRaw);
@@ -2760,7 +3047,12 @@
       const startTime = (simpleTaskStart?.value || "").toString().trim();
       const endTime = (simpleTaskEnd?.value || "").toString().trim();
       const loja = (simpleTaskStore?.value || "").toString().trim();
-      const repeat = (simpleTaskRepeat?.selectedOptions?.[0]?.text || "").toString().trim();
+      const repeatValue = (simpleTaskRepeat?.value || "").toString().trim();
+      const repeat = repeatValue === "semanal"
+        ? getSimpleTaskWeeklyLabelByDate(date)
+        : (repeatValue === "mensal_ultima"
+          ? getSimpleTaskMonthlyLabelByDate(date)
+          : (simpleTaskRepeat?.selectedOptions?.[0]?.text || "").toString().trim());
       if(!loja){
         showAlert("Selecione a loja.");
         return;
@@ -2769,6 +3061,13 @@
       const editingId = (simpleTaskEditId || "").trim();
       const entryId = editingId || `simple-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
       const prevEntry = (calendarHistory || []).find(e => String(e.id || "") === entryId);
+      const repeatWeekday = (repeatValue === "semanal" || repeatValue === "mensal_ultima")
+        ? (Number.isFinite(prevEntry?.repeatWeekday) ? prevEntry.repeatWeekday : getWeekdayIndexFromISO(date))
+        : null;
+      const monthlyInfo = repeatValue === "mensal_ultima" ? getMonthlyOrdinalFromISO(date) : null;
+      const repeatOrdinal = repeatValue === "mensal_ultima"
+        ? (prevEntry?.repeatOrdinal ?? (monthlyInfo?.isLast ? "last" : monthlyInfo?.ordinal))
+        : null;
       const entry = {
         id: entryId,
         date,
@@ -2778,6 +3077,8 @@
         endTime,
         loja,
         repeat,
+        repeatWeekday,
+        repeatOrdinal,
         extra: true,
         open: prevEntry ? Boolean(prevEntry.open) : true,
         createdAt: prevEntry?.createdAt || nowIso,
@@ -2799,6 +3100,8 @@
         endTime,
         loja,
         repeat,
+        repeatWeekday,
+        repeatOrdinal,
         isExtra: true,
         createdAt: prevEntry?.createdAt || nowIso,
         updatedAt: nowIso,
@@ -2927,6 +3230,11 @@
       }
       calWeekHeader.dataset.built = "1";
     }
+
+    function getMondayBasedWeekdayIndex(date){
+      const day = date.getDay(); // 0 (Dom) - 6 (S\u00e1b)
+      return (day + 6) % 7; // 0 (Seg) - 6 (Dom)
+    }
     function isMobileCalendarLayout(){
       return window.matchMedia && window.matchMedia("(max-width:720px)").matches;
     }
@@ -2956,24 +3264,29 @@
       calMonthLabel.textContent = monthLabelPT(calViewYear, calViewMonth);
 
       const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+      const firstDayOfMonth = new Date(calViewYear, calViewMonth, 1);
+      const leadingBlanks = getMondayBasedWeekdayIndex(firstDayOfMonth);
+      const totalCells = leadingBlanks + daysInMonth;
+      const trailingBlanks = (7 - (totalCells % 7)) % 7;
 
       const todayIso = todayISO();
       const cells = [];
 
-      // sempre 31 dias + 4 vazios (35 celulas)
-      for(let dayNum = 1; dayNum <= 31; dayNum++){
-        const valid = dayNum <= daysInMonth;
-        const iso = valid ? `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}` : "";
-        const entries = valid
-          ? getCalendarEntriesForDate(iso)
-              .sort((a,b) => {
-                if(Boolean(a.open) !== Boolean(b.open)) return a.open ? -1 : 1;
-                return (a.assunto||"").localeCompare(b.assunto||"");
-              })
-          : [];
-        cells.push({ blank:false, dayNum, iso, entries, valid });
+      for(let i = 0; i < leadingBlanks; i++){
+        cells.push({ blank:true });
       }
-      for(let i=0; i<4; i++){
+
+      for(let dayNum = 1; dayNum <= daysInMonth; dayNum++){
+        const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
+        const entries = getCalendarEntriesForDate(iso)
+          .sort((a,b) => {
+            if(Boolean(a.open) !== Boolean(b.open)) return a.open ? -1 : 1;
+            return (a.assunto||"").localeCompare(b.assunto||"");
+          });
+        cells.push({ blank:false, dayNum, iso, entries, valid:true });
+      }
+
+      for(let i = 0; i < trailingBlanks; i++){
         cells.push({ blank:true });
       }
 
@@ -3050,20 +3363,27 @@
       miniCalendarLabel.textContent = monthLabelPT(calViewYear, calViewMonth);
 
       const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+      const firstDayOfMonth = new Date(calViewYear, calViewMonth, 1);
+      const leadingBlanks = getMondayBasedWeekdayIndex(firstDayOfMonth);
+      const totalCells = leadingBlanks + daysInMonth;
+      const trailingBlanks = (7 - (totalCells % 7)) % 7;
       const todayIso = todayISO();
       const cells = [];
 
-      for(let i=0; i<35; i++){
-        const dayNum = i + 1;
-        if(dayNum > daysInMonth){
-          cells.push({ blank:true });
-          continue;
-        }
+      for(let i = 0; i < leadingBlanks; i++){
+        cells.push({ blank:true });
+      }
+
+      for(let dayNum = 1; dayNum <= daysInMonth; dayNum++){
         const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
         const entries = getCalendarEntriesForDate(iso, { applyStoreFilter:false });
         const normalCount = entries.filter(e => !(e.extra || e.simple)).length;
         const extraCount = entries.filter(e => (e.extra || e.simple)).length;
         cells.push({ blank:false, dayNum, iso, normalCount, extraCount });
+      }
+
+      for(let i = 0; i < trailingBlanks; i++){
+        cells.push({ blank:true });
       }
 
       miniCalendarGrid.innerHTML = cells.map(c => {
@@ -4139,6 +4459,18 @@ function fillPhaseStatusSelect(){
         startTime: (t?.startTime || "").toString(),
         endTime: (t?.endTime || "").toString(),
         repeat: (t?.repeat || "").toString(),
+        repeatWeekday: Number.isFinite(t?.repeatWeekday)
+          ? t.repeatWeekday
+          : (Number.isFinite(Number.parseInt((t?.repeatWeekday || "").toString(), 10))
+            ? Number.parseInt((t?.repeatWeekday || "").toString(), 10)
+            : null),
+        repeatOrdinal: (t?.repeatOrdinal === "last")
+          ? "last"
+          : (Number.isFinite(t?.repeatOrdinal)
+            ? t.repeatOrdinal
+            : (Number.isFinite(Number.parseInt((t?.repeatOrdinal || "").toString(), 10))
+              ? Number.parseInt((t?.repeatOrdinal || "").toString(), 10)
+              : null)),
         extraText: (t?.extraText || t?.text || "").toString(),
         isExtra: Boolean(t?.isExtra),
         createdAt: (t?.createdAt || "").toString(),
@@ -4189,6 +4521,18 @@ function fillPhaseStatusSelect(){
           startTime: (e.startTime || "").toString(),
           endTime: (e.endTime || "").toString(),
           repeat: (e.repeat || "").toString(),
+          repeatWeekday: Number.isFinite(e?.repeatWeekday)
+            ? e.repeatWeekday
+            : (Number.isFinite(Number.parseInt((e?.repeatWeekday || "").toString(), 10))
+              ? Number.parseInt((e?.repeatWeekday || "").toString(), 10)
+              : null),
+          repeatOrdinal: (e?.repeatOrdinal === "last")
+            ? "last"
+            : (Number.isFinite(e?.repeatOrdinal)
+              ? e.repeatOrdinal
+              : (Number.isFinite(Number.parseInt((e?.repeatOrdinal || "").toString(), 10))
+                ? Number.parseInt((e?.repeatOrdinal || "").toString(), 10)
+                : null)),
           extraText: (e.extraText || e.text || "").toString(),
           whatsapp: (e.whatsapp || "").toString(),
           phaseIdx: Number.isFinite(e.phaseIdx) ? e.phaseIdx : Number.parseInt((e.phaseIdx || "0").toString(), 10) || 0,
@@ -7843,6 +8187,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(simpleTaskCloseBtn) simpleTaskCloseBtn.addEventListener("click", closeSimpleTaskModal);
     if(simpleTaskCancelBtn) simpleTaskCancelBtn.addEventListener("click", closeSimpleTaskModal);
     if(simpleTaskSaveBtn) simpleTaskSaveBtn.addEventListener("click", saveSimpleTask);
+    if(simpleTaskDate){
+      simpleTaskDate.addEventListener("change", ()=>{
+        const iso = (simpleTaskDate.value || "").toString().trim();
+        updateSimpleTaskRepeatLabels(iso);
+      });
+    }
     if(simpleTaskOverlay){
       simpleTaskOverlay.addEventListener("click", (e)=>{ if(e.target === simpleTaskOverlay) closeSimpleTaskModal(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && simpleTaskOverlay.classList.contains("show")) closeSimpleTaskModal(); });
