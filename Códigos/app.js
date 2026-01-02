@@ -2187,6 +2187,7 @@
     const navAtalhosBtn = document.getElementById("navAtalhosBtn");
     const navToggleViewBtn = document.getElementById("navToggleViewBtn");
     const goToDoneTasksBtn = document.getElementById("goToDoneTasksBtn");
+    const goToSearchBtn = document.getElementById("goToSearchBtn");
     const goToTasksBtn = document.getElementById("goToTasksBtn");
     const atalhosCreateCard = document.getElementById("atalhosCreateCard");
     const drawerBd = document.getElementById("drawerBd");
@@ -3266,7 +3267,7 @@
     async function copyTextToClipboard(text, btn, doneLabel){
       try{
         if(!navigator.clipboard){
-          showAlert("Cópia de texto não suportada neste navegador.");
+          showAlert("C¾pia de texto nÒo suportada neste navegador.");
           return;
         }
         await navigator.clipboard.writeText(text);
@@ -3276,14 +3277,14 @@
           setTimeout(()=>{ btn.textContent = original; }, 900);
         }
       }catch(e){
-        showAlert("Não foi possível copiar o texto.");
+        showAlert("NÒo foi possÝvel copiar o texto.");
       }
     }
 
     async function copyImageToClipboard(url, btn, defaultLabel){
       try{
         if(!navigator.clipboard || !window.ClipboardItem){
-          showAlert("Cópia de imagem não suportada neste navegador.");
+          showAlert("C¾pia de imagem nÒo suportada neste navegador.");
           return;
         }
         const res = await fetch(url);
@@ -3296,7 +3297,7 @@
           setTimeout(()=>{ btn.textContent = original; }, 900);
         }
       }catch(e){
-        showAlert("Não foi possível copiar a imagem.");
+        showAlert("NÒo foi possÝvel copiar a imagem.");
       }
     }
 
@@ -4069,7 +4070,7 @@
         const extraHtml = c.extraCount
           ? `<span class="miniCalCount miniCalCountExtra">${c.extraCount}</span>`
           : "";
-        const ariaSuffix = c.isOtherMonth ? " (mês anterior)" : "";
+        const ariaSuffix = c.isOtherMonth ? " (mÛs anterior)" : "";
         const ariaLabel = `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
         const isoAttr = c.isOtherMonth ? "" : ` data-mini-iso="${c.iso}"`;
         return `
@@ -4490,7 +4491,7 @@
           navigator.clipboard.writeText(val).then(()=>{
             btn.style.opacity = "0.6";
             setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
-          }).catch(()=> showAlert("Não foi possível copiar."));
+          }).catch(()=> showAlert("NÒo foi possÝvel copiar."));
         });
       });
 
@@ -4499,7 +4500,7 @@
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-del") || "").toString();
           if(!id) return;
-          const ok = await showConfirm("Excluir este chamado? (Ele será removido da lista de tarefas e também do calendário.)");
+          const ok = await showConfirm("Excluir este chamado? (Ele serß removido da lista de tarefas e tambÚm do calendßrio.)");
           if(!ok) return;
 
           // remove da lista
@@ -4682,7 +4683,7 @@
             if(!tasksList) return;
             const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
             if(!card){
-              showAlert("Tarefa não encontrada na lista.");
+              showAlert("Tarefa nÒo encontrada na lista.");
               return;
             }
             card.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -4708,7 +4709,7 @@
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
           if(!ref){
-            showAlert("Tarefa não encontrada.");
+            showAlert("Tarefa nÒo encontrada.");
             return;
           }
           openTaskSummaryPopup(ref);
@@ -4789,7 +4790,7 @@
         clearBtn.addEventListener("click", async ()=>{
           const dayIso = (clearBtn.getAttribute("data-cal-clear-day") || "").trim();
           if(!dayIso) return;
-          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendário?\n\nIsso NÃO remove as tarefas em aberto, apenas apaga os itens do calendário deste dia.`);
+          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendßrio?\n\nIsso N+O remove as tarefas em aberto, apenas apaga os itens do calendßrio deste dia.`);
           if(!ok) return;
           const next = (calendarHistory || []).filter(e => e.date !== dayIso);
           saveCalendarHistory(next);
@@ -4972,10 +4973,15 @@
         navToggleViewBtn.textContent = "Buscador";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Di\u00e1rias";
+        if(goToSearchBtn){
+          goToSearchBtn.classList.remove("isSearchView");
+          goToSearchBtn.setAttribute("title", "Ir para o buscador");
+          goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
+        }
         if(goToTasksBtn){
           goToTasksBtn.classList.add("isTasksView");
-          goToTasksBtn.setAttribute("title", "Voltar para o buscador");
-          goToTasksBtn.setAttribute("aria-label", "Voltar para o buscador");
+          goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
+          goToTasksBtn.setAttribute("aria-label", "Ir para tarefas di\u00e1rias");
         }
         if(goToDoneTasksBtn){
           goToDoneTasksBtn.classList.remove("isDoneView");
@@ -4995,6 +5001,11 @@
         navToggleViewBtn.textContent = "Buscador";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Encerradas";
+        if(goToSearchBtn){
+          goToSearchBtn.classList.remove("isSearchView");
+          goToSearchBtn.setAttribute("title", "Ir para o buscador");
+          goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
+        }
         if(goToTasksBtn){
           goToTasksBtn.classList.remove("isTasksView");
           goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
@@ -5002,8 +5013,8 @@
         }
         if(goToDoneTasksBtn){
           goToDoneTasksBtn.classList.add("isDoneView");
-          goToDoneTasksBtn.setAttribute("title", "Voltar para o buscador");
-          goToDoneTasksBtn.setAttribute("aria-label", "Voltar para o buscador");
+          goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
+          goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
         }
 
         renderDoneTasks();
@@ -5021,6 +5032,11 @@
       navToggleViewBtn.textContent = "Tarefas Di\u00e1rias";
       navToggleViewBtn.classList.remove("primary");
       if(viewTitleText) viewTitleText.textContent = "Buscador de Solu\u00e7\u00f5es";
+      if(goToSearchBtn){
+        goToSearchBtn.classList.add("isSearchView");
+        goToSearchBtn.setAttribute("title", "Ir para o buscador");
+        goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
+      }
       if(goToTasksBtn){
         goToTasksBtn.classList.remove("isTasksView");
         goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
@@ -6748,7 +6764,7 @@ function fillPhaseStatusSelect(){
 
       	}catch(err){
 
-      		showAlert("Não foi possível enviar a imagem do passo.");
+      		showAlert("NÒo foi possÝvel enviar a imagem do passo.");
 
       	}
 
@@ -7464,7 +7480,7 @@ function fillPhaseStatusSelect(){
       attentionInput.dataset.index = String(idx);
       attentionInput.checked = Boolean(d.attention || d.attentionNote);
       attentionLabel.appendChild(attentionInput);
-      attentionLabel.appendChild(document.createTextNode(" Atenção"));
+      attentionLabel.appendChild(document.createTextNode(" AtenþÒo"));
       attentionRow.appendChild(attentionLabel);
 
       const attentionWrap = document.createElement("div");
@@ -7472,12 +7488,12 @@ function fillPhaseStatusSelect(){
       attentionWrap.style.display = attentionInput.checked ? "block" : "none";
       const attentionLabelText = document.createElement("div");
       attentionLabelText.className = "label";
-      attentionLabelText.textContent = "Observações";
+      attentionLabelText.textContent = "Observaþ§es";
       const attentionNote = document.createElement("textarea");
       attentionNote.className = "obsAttentionNote";
       attentionNote.dataset.index = String(idx);
       attentionNote.rows = 3;
-      attentionNote.placeholder = "Digite as observações...";
+      attentionNote.placeholder = "Digite as observaþ§es...";
       attentionNote.value = (d.attentionNote || "");
       attentionWrap.appendChild(attentionLabelText);
       attentionWrap.appendChild(attentionNote);
@@ -8148,7 +8164,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
              </button>`
           : "";
         const calendarBtn = (o._idx === lastIdx)
-          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calendário" aria-label="Calendário">
+          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calendßrio" aria-label="Calendßrio">
                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                  <rect x="3" y="4" width="18" height="17" rx="2"></rect>
                  <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -8742,7 +8758,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             setTimeout(()=>{ el.style.opacity = "1"; }, 450);
             openUrl();
           }).catch(()=>{
-            showAlert("Não foi possível copiar.");
+            showAlert("NÒo foi possÝvel copiar.");
             openUrl();
           });
         });
@@ -8789,12 +8805,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa n€oo encontrada.");
+            showAlert("Tarefa nÇoo encontrada.");
             return;
           }
           const date = getPhaseDateByIndex(ref, phaseIdx) || getEffectivePhaseDate(ref);
           if(!date){
-            showAlert("Esta fase n€oo possui data.");
+            showAlert("Esta fase nÇoo possui data.");
             return;
           }
           const parts = date.split("-");
@@ -8915,7 +8931,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa não encontrada na lista.");
+            showAlert("Tarefa nÒo encontrada na lista.");
             return;
           }
           closeCalendar();
@@ -9243,7 +9259,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     		setQuestionImagesUI(qImages.concat(uploaded));
     	}
     	if(hadError){
-    		showAlert("Não foi possível enviar uma das imagens.");
+    		showAlert("NÒo foi possÝvel enviar uma das imagens.");
     	}
     });
     qClearImgsBtn.addEventListener("click", ()=>{
@@ -9822,7 +9838,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(copyProductTableBtn){
       copyProductTableBtn.addEventListener("click", async ()=>{
         if(!currentProductTableUrl){
-          showAlert("Tabela não disponível para este produto.");
+          showAlert("Tabela nÒo disponÝvel para este produto.");
           return;
         }
         await copyImageToClipboard(currentProductTableUrl, copyProductTableBtn, "Copiar imagem");
@@ -9844,7 +9860,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         const phone = digits.startsWith("55") ? digits : `55${digits}`;
         if(!currentProductVideoUrl || !currentProductVideoText){
-          showAlert("Vídeo não disponível para este produto.");
+          showAlert("VÝdeo nÒo disponÝvel para este produto.");
           return;
         }
         const message = `${currentProductVideoText}\n\n${currentProductVideoUrl}`;
@@ -9906,7 +9922,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       window.close();
       setTimeout(() => {
         if(!window.closed){
-          showAlert("Não foi possível fechar a aba automaticamente. Feche manualmente.");
+          showAlert("NÒo foi possÝvel fechar a aba automaticamente. Feche manualmente.");
         }
         allowAppClose = false;
       }, 200);
@@ -10063,13 +10079,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(removedNames.length){
           const fallback = nextNames[0] || "";
           const lines = [
-            "Você está removendo lojas do cadastro.",
+            "VocÛ estß removendo lojas do cadastro.",
             "",
             `Lojas removidas: ${removedNames.join(", ")}`,
             "",
             "O sistema vai remover dados ligados a essas lojas:",
             "- Perguntas/Respostas e Tarefas Diarias",
-            "- Produtos e Histórico do Calendário",
+            "- Produtos e Hist¾rico do Calendßrio",
             "- Links da Nuvemshop",
             "",
             "Os itens ser\u00e3o deletados definitivamente.",
@@ -10862,14 +10878,19 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }
       closeDrawer();
     });
+    if(goToSearchBtn){
+      goToSearchBtn.addEventListener("click", ()=>{
+        setView("search");
+      });
+    }
     if(goToTasksBtn){
       goToTasksBtn.addEventListener("click", ()=>{
-        setView(currentView === "tasks" ? "search" : "tasks");
+        setView("tasks");
       });
     }
     if(goToDoneTasksBtn){
       goToDoneTasksBtn.addEventListener("click", ()=>{
-        setView(currentView === "done" ? "search" : "done");
+        setView("done");
       });
     }
 

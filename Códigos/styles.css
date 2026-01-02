@@ -100,8 +100,8 @@
     .customizeIcon{width:18px;height:18px}
     body:not(.light) .hambBtn{color:#ffffff}
     .mobileHambBtn{display:none}
-    #goToTasksBtn .iconStroke{transition:transform .15s ease}
-    #goToTasksBtn.isTasksView .iconStroke{transform:rotate(180deg)}
+    #goToSearchBtn.isSearchView,
+    #goToTasksBtn.isTasksView,
     #goToDoneTasksBtn.isDoneView{
       background: color-mix(in srgb, var(--brand) 16%, transparent);
       border-color: color-mix(in srgb, var(--brand) 45%, transparent);
