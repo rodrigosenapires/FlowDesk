@@ -102,6 +102,7 @@
     .mobileHambBtn{display:none}
     #goToSearchBtn.isSearchView,
     #goToTasksBtn.isTasksView,
+    #goToTasksExtraBtn.isTasksView,
     #goToDoneTasksBtn.isDoneView{
       background: color-mix(in srgb, var(--brand) 16%, transparent);
       border-color: color-mix(in srgb, var(--brand) 45%, transparent);
@@ -3859,3 +3860,87 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator{
     a, a:visited{ color:#6ecbff; text-decoration:none !important; }
     a:hover{ text-decoration:none !important; }
     a.btn, a.btn:hover, a.btn:visited{ text-decoration:none; color:inherit; }
+    :root{
+      --sideMenuW:220px;
+      --sideMenuCollapsedW:96px;
+    }
+    body.hasSideMenu{
+      padding-left:var(--sideMenuW);
+    }
+    body.sideMenuCollapsed{
+      padding-left:var(--sideMenuCollapsedW);
+    }
+    .sideMenu{
+      position:fixed;
+      top:0;
+      left:0;
+      bottom:0;
+      width:var(--sideMenuW);
+      background: color-mix(in srgb, var(--card) 85%, transparent);
+      border-right:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      box-shadow:var(--shadow);
+      display:flex;
+      flex-direction:column;
+      padding:12px 10px;
+      gap:12px;
+      z-index:1200;
+    }
+    .sideMenu.isCollapsed{
+      width:var(--sideMenuCollapsedW);
+    }
+    .sideToggle{
+      width:40px;
+      height:40px;
+      border-radius:12px;
+      border:1px solid color-mix(in srgb, var(--line) 80%, transparent);
+      background: color-mix(in srgb, var(--bg) 75%, transparent);
+      color:var(--text);
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+    }
+    .sideMenu.isCollapsed .sideToggle svg{transform:rotate(180deg)}
+    .sideTop{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:6px 6px 2px;
+    }
+    .sideLogo{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .sideLogo img{height:28px;width:auto;display:block;}
+    .sideLogo .logoCompact{display:none;}
+    .sideMenu.isCollapsed .sideLogo .logoFull{display:none;}
+    .sideMenu.isCollapsed .sideLogo .logoCompact{display:block;}
+    .sideMenu.isCollapsed .sideLogo .logoCompact.logoLight{display:none;}
+    .sideMenu.isCollapsed .sideLogo .logoCompact.logoDark{display:block;}
+    .sideLogo .logoLight{display:none;}
+    body.light .sideLogo .logoLight{display:block;}
+    body.light .sideLogo .logoDark{display:none;}
+    body.light .sideMenu.isCollapsed .sideLogo .logoCompact.logoLight{display:block;}
+    body.light .sideMenu.isCollapsed .sideLogo .logoCompact.logoDark{display:none;}
+    .sideMenuBtns{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:4px}
+    .sideBtn{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      width:100%;
+      justify-content:flex-start;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid color-mix(in srgb, var(--line) 80%, transparent);
+      background: color-mix(in srgb, var(--bg) 75%, transparent);
+      color:var(--text);
+    }
+    .sideBtn .iconStroke{width:18px;height:18px}
+    .sideLabel{font-size:12px !important;font-weight:800;white-space:nowrap}
+    .sideDivider{height:1px;background:color-mix(in srgb, var(--line) 70%, transparent);margin:4px 6px}
+    .sideMenu.isCollapsed .sideLabel{display:none}
+    .sideMenu.isCollapsed .sideBtn{justify-content:center}
+    @media (max-width: 1024px){
+      body.hasSideMenu{padding-left:0}
+      .sideMenu{display:none}
+    }

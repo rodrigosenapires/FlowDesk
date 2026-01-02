@@ -6,7 +6,7 @@
   <title>Flowdesk</title>
   <link rel="icon" href="../Favicon/favicon-versao-clara.png" media="(prefers-color-scheme: light)">
   <link rel="icon" href="../Favicon/favicon-versao-escura.png" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=13">
   <style>
     .copyRow > div{
       flex:1 1 0;
@@ -21,7 +21,7 @@
   </style>
   </head>
 
-<body>
+<body class="hasSideMenu">
   <div class="authOverlay" id="authOverlay" aria-hidden="true">
     <div class="authCard">
       <div class="authHeader">
@@ -51,7 +51,118 @@
       </div>
     </div>
   </div>
-  <header>
+  <aside class="sideMenu" id="sideMenu">
+    <div class="sideTop">
+      <button class="sideToggle" id="sideMenuToggle" title="Recolher menu" aria-label="Recolher menu">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <polyline points="15 6 9 12 15 18"></polyline>
+        </svg>
+      </button>
+      <div class="sideLogo" aria-label="FlowDesk">
+        <img class="logoDark logoFull" src="../Extras/logo/logo-fundo-escuro.png" alt="FlowDesk">
+        <img class="logoLight logoFull" src="../Extras/logo/logo-fundo-claro.png" alt="FlowDesk">
+        <img class="logoDark logoCompact" src="../Favicon/favicon-versao-escura.png" alt="FlowDesk">
+        <img class="logoLight logoCompact" src="../Favicon/favicon-versao-clara.png" alt="FlowDesk">
+      </div>
+    </div>
+    <div class="sideMenuBtns">
+      <button class="themeBtn sideBtn" id="goToSearchBtn" title="Buscador" aria-label="Buscador">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+        </svg>
+        <span class="sideLabel">Buscador</span>
+      </button>
+      <button class="themeBtn sideBtn" id="goToTasksBtn" title="Tarefas normais" aria-label="Tarefas normais">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="5" y="4" width="14" height="16" rx="2"></rect>
+          <path d="M9 8h6"></path>
+          <path d="M9 12h6"></path>
+          <path d="M9 16h4"></path>
+        </svg>
+        <span class="sideLabel">Tarefas normais</span>
+      </button>
+      <button class="themeBtn sideBtn" id="goToTasksExtraBtn" title="Tarefas extras" aria-label="Tarefas extras">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M13 2L3 14h7l-1 8 12-14h-8l1-6z"></path>
+        </svg>
+        <span class="sideLabel">Tarefas extras</span>
+      </button>
+      <button class="themeBtn sideBtn" id="goToDoneTasksBtn" title="Tarefas encerradas" aria-label="Tarefas encerradas">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <polyline points="8 12 11 15 16 9"></polyline>
+        </svg>
+        <span class="sideLabel">Encerradas</span>
+      </button>
+      <div class="sideDivider"></div>
+      <button class="themeBtn sideBtn" id="sakChatBtn" type="button" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
+        <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
+          <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
+          <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
+        </svg>
+        <span class="sideLabel">Suporte</span>
+      </button>
+      <button class="themeBtn sideBtn" id="storeLinksBtn" type="button" title="WhatsApp lojas" aria-label="WhatsApp lojas">
+        <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
+          <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
+        </svg>
+        <span class="sideLabel">WhatsApp</span>
+      </button>
+      <button class="themeBtn sideBtn quickLinkBtn" id="metaInboxBtn" type="button" data-quick-link="metaInbox" title="Meta" aria-label="Meta">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="5"></rect>
+          <circle cx="12" cy="12" r="4"></circle>
+          <circle cx="17" cy="7" r="1.2"></circle>
+        </svg>
+        <span class="sideLabel">Meta</span>
+      </button>
+      <button class="themeBtn sideBtn quickLinkBtn" id="emailMenuBtn" type="button" data-quick-link="emailMenu" title="E-mail" aria-label="E-mail">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="6" width="18" height="12" rx="2"></rect>
+          <path d="M3 8l9 6 9-6"></path>
+        </svg>
+        <span class="sideLabel">E-mail</span>
+      </button>
+      <div class="themeBtn sideBtn" id="themeToggleBtn" title="Tema" aria-label="Tema">
+        <span id="themeIcon"></span>
+        <span class="sideLabel">Tema</span>
+      </div>
+      <div class="themeBtn sideBtn" id="backupMenuBtn" title="Backup" aria-label="Backup">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="5" y="4" width="14" height="16" rx="2"></rect>
+          <rect x="8" y="4" width="8" height="5"></rect>
+          <rect x="8" y="13" width="8" height="6" rx="1"></rect>
+        </svg>
+        <span class="sideLabel">Backup</span>
+      </div>
+      <div class="themeBtn sideBtn" id="settingsBtn" title="Configura&ccedil;&otilde;es" aria-label="Configura&ccedil;&otilde;es">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.2a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.2a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.2a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8 1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"></path>
+        </svg>
+        <span class="sideLabel">Configura&ccedil;&otilde;es</span>
+      </div>
+      <div class="themeBtn sideBtn rightDrawerBtn" id="openRightDrawerBtn" title="Menu extra" aria-label="Menu extra" onclick="openRightDrawer()">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="3"></rect>
+          <line x1="9" y1="5" x2="9" y2="19"></line>
+        </svg>
+        <span class="sideLabel">Menu extra</span>
+      </div>
+      <button class="hambBtn sideBtn" id="openDrawerBtn" title="Menu Personalizável" aria-label="Menu Personalizável">
+        <svg class="iconStroke customizeIcon" viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <circle cx="9" cy="6" r="2"></circle>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <circle cx="15" cy="12" r="2"></circle>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+          <circle cx="7" cy="18" r="2"></circle>
+        </svg>
+        <span class="sideLabel">Menu Personalizável</span>
+      </button>
+    </div>
+  </aside>  <header>
     <div class="wrap">
       <div class="toprow">
         <button class="hambBtn mobileHambBtn" id="openDrawerBtnMobile" title="Menu" aria-label="Menu">
@@ -62,90 +173,9 @@
           </svg>
         </button>
 
-        <div class="brandleft">
-          <div class="appLogo" aria-label="Logo do app">
-            <img class="logoDark" src="../Extras/logo/logo-fundo-escuro.png" alt="Buscador de Solu&ccedil;&otilde;es">
-            <img class="logoLight" src="../Extras/logo/logo-fundo-claro.png" alt="Buscador de Solu&ccedil;&otilde;es">
-          </div>
-        </div>
+        <div class="brandleft"></div>
 
-        <div class="brandright">
-          <div class="scrollBtns">
-            <button class="themeBtn" id="sakChatBtn" type="button" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
-              <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
-                <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
-                <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
-              </svg>
-            </button>
-            <button class="themeBtn" id="storeLinksBtn" type="button" title="WhatsApp lojas" aria-label="WhatsApp lojas">
-              <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
-                <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
-              </svg>
-            </button>
-            <button class="themeBtn quickLinkBtn" id="metaInboxBtn" type="button" data-quick-link="metaInbox" title="Meta" aria-label="Meta">
-              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="4" y="4" width="16" height="16" rx="5"></rect>
-                <circle cx="12" cy="12" r="4"></circle>
-                <circle cx="17" cy="7" r="1.2"></circle>
-              </svg>
-            </button>
-            <button class="themeBtn quickLinkBtn" id="emailMenuBtn" type="button" data-quick-link="emailMenu" title="E-mail" aria-label="E-mail">
-              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="6" width="18" height="12" rx="2"></rect>
-                <path d="M3 8l9 6 9-6"></path>
-              </svg>
-            </button>
-            <div class="themeBtn" id="themeToggleBtn" title="Alternar tema"><span id="themeIcon"></span></div>
-            <div class="themeBtn" id="backupMenuBtn" title="Backup">
-              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="5" y="4" width="14" height="16" rx="2"></rect>
-                <rect x="8" y="4" width="8" height="5"></rect>
-                <rect x="8" y="13" width="8" height="6" rx="1"></rect>
-              </svg>
-            </div>
-            <div class="themeBtn" id="settingsBtn" title="Configura&ccedil;&otilde;es" aria-label="Configura&ccedil;&otilde;es">
-              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.2a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.2a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.2a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8 1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"></path>
-              </svg>
-            </div>
-            <div class="themeBtn rightDrawerBtn" id="openRightDrawerBtn" title="Menu extra" aria-label="Menu extra" onclick="openRightDrawer()">
-              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="5" width="18" height="14" rx="3"></rect>
-                <line x1="9" y1="5" x2="9" y2="19"></line>
-              </svg>
-            </div>
-            <button class="hambBtn" id="openDrawerBtn" title="Menu">
-              <svg class="iconStroke customizeIcon" viewBox="0 0 24 24" aria-hidden="true">
-                <line x1="4" y1="6" x2="20" y2="6"></line>
-                <circle cx="9" cy="6" r="2"></circle>
-                <line x1="4" y1="12" x2="20" y2="12"></line>
-                <circle cx="15" cy="12" r="2"></circle>
-                <line x1="4" y1="18" x2="20" y2="18"></line>
-                <circle cx="7" cy="18" r="2"></circle>
-              </svg>
-            <button class="themeBtn" id="goToSearchBtn" title="Ir para o buscador" aria-label="Ir para o buscador">
-              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="11" cy="11" r="7"></circle>
-                <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
-              </svg>
-            </button>
-            <button class="themeBtn" id="goToTasksBtn" title="Ir para tarefas di&aacute;rias" aria-label="Ir para tarefas di&aacute;rias">
-              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="5" y="4" width="14" height="16" rx="2"></rect>
-                <path d="M9 8h6"></path>
-                <path d="M9 12h6"></path>
-                <path d="M9 16h4"></path>
-            </button>
-            <button class="themeBtn" id="goToDoneTasksBtn" title="Tarefas encerradas" aria-label="Tarefas encerradas">
-              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="9"></circle>
-                <polyline points="8 12 11 15 16 9"></polyline>
-              </svg>
-            </button>
-            </button>
-          </div>
-        </div>
+        <div class="brandright"></div>
       </div>
 
       <div class="searchrowWrap">
@@ -175,9 +205,9 @@
 
   <!-- Drawer -->
   <div class="drawerBackdrop" id="drawerBackdrop"></div>
-  <aside class="drawer" id="drawer">
+  <aside class="drawer drawerRight" id="drawer">
     <div class="drawerHd">
-      <h3>Menu personaliz&aacute;vel</h3>
+      <h3>Menu Personaliz&aacute;vel</h3>
       <button class="btn small" id="closeDrawerBtn">Fechar</button>
     </div>
 
@@ -228,25 +258,31 @@
               <rect x="3" y="5" width="18" height="14" rx="3"></rect>
               <line x1="9" y1="5" x2="9" y2="19"></line>
             </svg>
+          </button>
           <button class="themeBtn" type="button" data-header-proxy="goToSearchBtn" title="Ir para o buscador" aria-label="Ir para o buscador">
             <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="11" cy="11" r="7"></circle>
               <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
             </svg>
           </button>
-          <button class="themeBtn" type="button" data-header-proxy="goToTasksBtn" title="Ir para tarefas di&aacute;rias" aria-label="Ir para tarefas di&aacute;rias">
+          <button class="themeBtn" type="button" data-header-proxy="goToTasksBtn" title="Ir para tarefas normais" aria-label="Ir para tarefas normais">
             <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
               <rect x="5" y="4" width="14" height="16" rx="2"></rect>
               <path d="M9 8h6"></path>
               <path d="M9 12h6"></path>
               <path d="M9 16h4"></path>
+            </svg>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="goToTasksExtraBtn" title="Ir para tarefas extras" aria-label="Ir para tarefas extras">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M13 2L3 14h7l-1 8 12-14h-8l1-6z"></path>
+            </svg>
           </button>
           <button class="themeBtn" type="button" data-header-proxy="goToDoneTasksBtn" title="Tarefas encerradas" aria-label="Tarefas encerradas">
             <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="9"></circle>
               <polyline points="8 12 11 15 16 9"></polyline>
             </svg>
-          </button>
           </button>
         </div>
       </div>
@@ -260,7 +296,8 @@
 
         <div class="menuBtnsRow">
           <button class="btn small" id="navAtalhosBtn">Buscador</button>
-          <button class="btn small" id="navToggleViewBtn">Tarefas Di&aacute;rias</button>
+          <button class="btn small" id="navToggleViewBtn">Tarefas normais</button>
+          <button class="btn small" id="navTasksExtraBtn">Tarefas extras</button>
         </div>
       </div>
 
@@ -1631,7 +1668,7 @@
     </div>
   </div>
 
-<script src="app.js?v=3"></script>
+<script src="app.js?v=6"></script>
 
   </body>
 </html>

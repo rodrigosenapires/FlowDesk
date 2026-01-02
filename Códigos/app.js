@@ -1,4 +1,4 @@
-/***********************
+ï»¿/***********************
      * CONFIG / STORAGE
      ***********************/
     const STORAGE_KEY_BASE  = "baseAtendimento_v5";
@@ -2186,9 +2186,11 @@
     // nav drawer (2 bot\u00f5es)
     const navAtalhosBtn = document.getElementById("navAtalhosBtn");
     const navToggleViewBtn = document.getElementById("navToggleViewBtn");
+    const navTasksExtraBtn = document.getElementById("navTasksExtraBtn");
     const goToDoneTasksBtn = document.getElementById("goToDoneTasksBtn");
     const goToSearchBtn = document.getElementById("goToSearchBtn");
     const goToTasksBtn = document.getElementById("goToTasksBtn");
+    const goToTasksExtraBtn = document.getElementById("goToTasksExtraBtn");
     const atalhosCreateCard = document.getElementById("atalhosCreateCard");
     const drawerBd = document.getElementById("drawerBd");
 
@@ -2343,6 +2345,7 @@
     let tasks = [];
     let tasksDone = [];
     let tasksEditId = null;
+    let tasksTypeFilter = "normal";
 
     // tasks list view state (\u00daltimo chamado / pr\u00f3ximo / todos + busca)
     let tasksShowAll = false;
@@ -3267,7 +3270,7 @@
     async function copyTextToClipboard(text, btn, doneLabel){
       try{
         if(!navigator.clipboard){
-          showAlert("C¾pia de texto nÒo suportada neste navegador.");
+          showAlert("CÂ¥pia de texto nÃŠo suportada neste navegador.");
           return;
         }
         await navigator.clipboard.writeText(text);
@@ -3277,14 +3280,14 @@
           setTimeout(()=>{ btn.textContent = original; }, 900);
         }
       }catch(e){
-        showAlert("NÒo foi possÝvel copiar o texto.");
+        showAlert("NÃŠo foi possÂ¦vel copiar o texto.");
       }
     }
 
     async function copyImageToClipboard(url, btn, defaultLabel){
       try{
         if(!navigator.clipboard || !window.ClipboardItem){
-          showAlert("C¾pia de imagem nÒo suportada neste navegador.");
+          showAlert("CÂ¥pia de imagem nÃŠo suportada neste navegador.");
           return;
         }
         const res = await fetch(url);
@@ -3297,7 +3300,7 @@
           setTimeout(()=>{ btn.textContent = original; }, 900);
         }
       }catch(e){
-        showAlert("NÒo foi possÝvel copiar a imagem.");
+        showAlert("NÃŠo foi possÂ¦vel copiar a imagem.");
       }
     }
 
@@ -4070,7 +4073,7 @@
         const extraHtml = c.extraCount
           ? `<span class="miniCalCount miniCalCountExtra">${c.extraCount}</span>`
           : "";
-        const ariaSuffix = c.isOtherMonth ? " (mÛs anterior)" : "";
+        const ariaSuffix = c.isOtherMonth ? " (mâ–ˆs anterior)" : "";
         const ariaLabel = `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
         const isoAttr = c.isOtherMonth ? "" : ` data-mini-iso="${c.iso}"`;
         return `
@@ -4491,7 +4494,7 @@
           navigator.clipboard.writeText(val).then(()=>{
             btn.style.opacity = "0.6";
             setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
-          }).catch(()=> showAlert("NÒo foi possÝvel copiar."));
+          }).catch(()=> showAlert("NÃŠo foi possÂ¦vel copiar."));
         });
       });
 
@@ -4500,7 +4503,7 @@
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-del") || "").toString();
           if(!id) return;
-          const ok = await showConfirm("Excluir este chamado? (Ele serß removido da lista de tarefas e tambÚm do calendßrio.)");
+          const ok = await showConfirm("Excluir este chamado? (Ele serâ–€ removido da lista de tarefas e tambâ”Œm do calendâ–€rio.)");
           if(!ok) return;
 
           // remove da lista
@@ -4683,7 +4686,7 @@
             if(!tasksList) return;
             const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
             if(!card){
-              showAlert("Tarefa nÒo encontrada na lista.");
+              showAlert("Tarefa nÃŠo encontrada na lista.");
               return;
             }
             card.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -4709,7 +4712,7 @@
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
           if(!ref){
-            showAlert("Tarefa nÒo encontrada.");
+            showAlert("Tarefa nÃŠo encontrada.");
             return;
           }
           openTaskSummaryPopup(ref);
@@ -4790,7 +4793,7 @@
         clearBtn.addEventListener("click", async ()=>{
           const dayIso = (clearBtn.getAttribute("data-cal-clear-day") || "").trim();
           if(!dayIso) return;
-          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendßrio?\n\nIsso N+O remove as tarefas em aberto, apenas apaga os itens do calendßrio deste dia.`);
+          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendâ–€rio?\n\nIsso N+O remove as tarefas em aberto, apenas apaga os itens do calendâ–€rio deste dia.`);
           if(!ok) return;
           const next = (calendarHistory || []).filter(e => e.date !== dayIso);
           saveCalendarHistory(next);
@@ -4970,7 +4973,7 @@
           searchInput.value = tasksSearchQuery || "";
         }
 
-        navToggleViewBtn.textContent = "Buscador";
+        navToggleViewBtn.textContent = "Tarefas normais";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Di\u00e1rias";
         if(goToSearchBtn){
@@ -4979,9 +4982,16 @@
           goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
         }
         if(goToTasksBtn){
-          goToTasksBtn.classList.add("isTasksView");
-          goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
-          goToTasksBtn.setAttribute("aria-label", "Ir para tarefas di\u00e1rias");
+          const isNormalTasks = tasksTypeFilter !== "extra";
+          goToTasksBtn.classList.toggle("isTasksView", isNormalTasks);
+          goToTasksBtn.setAttribute("title", "Tarefas normais");
+          goToTasksBtn.setAttribute("aria-label", "Tarefas normais");
+        }
+        if(goToTasksExtraBtn){
+          const isExtraTasks = tasksTypeFilter === "extra";
+          goToTasksExtraBtn.classList.toggle("isTasksView", isExtraTasks);
+          goToTasksExtraBtn.setAttribute("title", "Tarefas extras");
+          goToTasksExtraBtn.setAttribute("aria-label", "Tarefas extras");
         }
         if(goToDoneTasksBtn){
           goToDoneTasksBtn.classList.remove("isDoneView");
@@ -4998,7 +5008,7 @@
       if(currentView === "done"){
         if(searchInput) searchInput.placeholder = "Tarefas encerradas";
 
-        navToggleViewBtn.textContent = "Buscador";
+        navToggleViewBtn.textContent = "Tarefas normais";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Encerradas";
         if(goToSearchBtn){
@@ -5008,8 +5018,13 @@
         }
         if(goToTasksBtn){
           goToTasksBtn.classList.remove("isTasksView");
-          goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
-          goToTasksBtn.setAttribute("aria-label", "Ir para tarefas di\u00e1rias");
+          goToTasksBtn.setAttribute("title", "Tarefas normais");
+          goToTasksBtn.setAttribute("aria-label", "Tarefas normais");
+        }
+        if(goToTasksExtraBtn){
+          goToTasksExtraBtn.classList.remove("isTasksView");
+          goToTasksExtraBtn.setAttribute("title", "Tarefas extras");
+          goToTasksExtraBtn.setAttribute("aria-label", "Tarefas extras");
         }
         if(goToDoneTasksBtn){
           goToDoneTasksBtn.classList.add("isDoneView");
@@ -5029,7 +5044,7 @@
         searchInput.value = searchQueryCache || "";
       }
 
-      navToggleViewBtn.textContent = "Tarefas Di\u00e1rias";
+      navToggleViewBtn.textContent = "Tarefas normais";
       navToggleViewBtn.classList.remove("primary");
       if(viewTitleText) viewTitleText.textContent = "Buscador de Solu\u00e7\u00f5es";
       if(goToSearchBtn){
@@ -5039,8 +5054,13 @@
       }
       if(goToTasksBtn){
         goToTasksBtn.classList.remove("isTasksView");
-        goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
-        goToTasksBtn.setAttribute("aria-label", "Ir para tarefas di\u00e1rias");
+        goToTasksBtn.setAttribute("title", "Tarefas normais");
+        goToTasksBtn.setAttribute("aria-label", "Tarefas normais");
+      }
+      if(goToTasksExtraBtn){
+        goToTasksExtraBtn.classList.remove("isTasksView");
+        goToTasksExtraBtn.setAttribute("title", "Tarefas extras");
+        goToTasksExtraBtn.setAttribute("aria-label", "Tarefas extras");
       }
       if(goToDoneTasksBtn){
         goToDoneTasksBtn.classList.remove("isDoneView");
@@ -6764,7 +6784,7 @@ function fillPhaseStatusSelect(){
 
       	}catch(err){
 
-      		showAlert("NÒo foi possÝvel enviar a imagem do passo.");
+      		showAlert("NÃŠo foi possÂ¦vel enviar a imagem do passo.");
 
       	}
 
@@ -7480,7 +7500,7 @@ function fillPhaseStatusSelect(){
       attentionInput.dataset.index = String(idx);
       attentionInput.checked = Boolean(d.attention || d.attentionNote);
       attentionLabel.appendChild(attentionInput);
-      attentionLabel.appendChild(document.createTextNode(" AtenþÒo"));
+      attentionLabel.appendChild(document.createTextNode(" Atenâ– ÃŠo"));
       attentionRow.appendChild(attentionLabel);
 
       const attentionWrap = document.createElement("div");
@@ -7488,12 +7508,12 @@ function fillPhaseStatusSelect(){
       attentionWrap.style.display = attentionInput.checked ? "block" : "none";
       const attentionLabelText = document.createElement("div");
       attentionLabelText.className = "label";
-      attentionLabelText.textContent = "Observaþ§es";
+      attentionLabelText.textContent = "Observaâ– Âºes";
       const attentionNote = document.createElement("textarea");
       attentionNote.className = "obsAttentionNote";
       attentionNote.dataset.index = String(idx);
       attentionNote.rows = 3;
-      attentionNote.placeholder = "Digite as observaþ§es...";
+      attentionNote.placeholder = "Digite as observaâ– Âºes...";
       attentionNote.value = (d.attentionNote || "");
       attentionWrap.appendChild(attentionLabelText);
       attentionWrap.appendChild(attentionNote);
@@ -8164,7 +8184,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
              </button>`
           : "";
         const calendarBtn = (o._idx === lastIdx)
-          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calendßrio" aria-label="Calendßrio">
+          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calendâ–€rio" aria-label="Calendâ–€rio">
                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                  <rect x="3" y="4" width="18" height="17" rx="2"></rect>
                  <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -8433,7 +8453,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const storeFilter = (tasksSearchStoreValue || "").trim();
       const periodFilter = (tasksSearchPeriodValue || "").trim();
       const statusFilter = (tasksSearchStatusValue || "").trim();
+      const typeFilter = (tasksTypeFilter || "normal").trim().toLowerCase();
       return tasks.filter(t => {
+        const isExtraTask = Boolean(t.isExtra || t.extra);
+        if(typeFilter === "extra" && !isExtraTask) return false;
+        if(typeFilter !== "extra" && isExtraTask) return false;
         if(storeFilter && storeFilter !== "ALL"){
           const loja = (t.loja || "").toString().trim();
           if(loja !== storeFilter) return false;
@@ -8758,7 +8782,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             setTimeout(()=>{ el.style.opacity = "1"; }, 450);
             openUrl();
           }).catch(()=>{
-            showAlert("NÒo foi possÝvel copiar.");
+            showAlert("NÃŠo foi possÂ¦vel copiar.");
             openUrl();
           });
         });
@@ -8805,12 +8829,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa nÇoo encontrada.");
+            showAlert("Tarefa nÃƒoo encontrada.");
             return;
           }
           const date = getPhaseDateByIndex(ref, phaseIdx) || getEffectivePhaseDate(ref);
           if(!date){
-            showAlert("Esta fase nÇoo possui data.");
+            showAlert("Esta fase nÃƒoo possui data.");
             return;
           }
           const parts = date.split("-");
@@ -8931,7 +8955,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa nÒo encontrada na lista.");
+            showAlert("Tarefa nÃŠo encontrada na lista.");
             return;
           }
           closeCalendar();
@@ -9259,7 +9283,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     		setQuestionImagesUI(qImages.concat(uploaded));
     	}
     	if(hadError){
-    		showAlert("NÒo foi possÝvel enviar uma das imagens.");
+    		showAlert("NÃŠo foi possÂ¦vel enviar uma das imagens.");
     	}
     });
     qClearImgsBtn.addEventListener("click", ()=>{
@@ -9838,7 +9862,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(copyProductTableBtn){
       copyProductTableBtn.addEventListener("click", async ()=>{
         if(!currentProductTableUrl){
-          showAlert("Tabela nÒo disponÝvel para este produto.");
+          showAlert("Tabela nÃŠo disponÂ¦vel para este produto.");
           return;
         }
         await copyImageToClipboard(currentProductTableUrl, copyProductTableBtn, "Copiar imagem");
@@ -9860,7 +9884,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         const phone = digits.startsWith("55") ? digits : `55${digits}`;
         if(!currentProductVideoUrl || !currentProductVideoText){
-          showAlert("VÝdeo nÒo disponÝvel para este produto.");
+          showAlert("VÂ¦deo nÃŠo disponÂ¦vel para este produto.");
           return;
         }
         const message = `${currentProductVideoText}\n\n${currentProductVideoUrl}`;
@@ -9922,7 +9946,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       window.close();
       setTimeout(() => {
         if(!window.closed){
-          showAlert("NÒo foi possÝvel fechar a aba automaticamente. Feche manualmente.");
+          showAlert("NÃŠo foi possÂ¦vel fechar a aba automaticamente. Feche manualmente.");
         }
         allowAppClose = false;
       }, 200);
@@ -10079,13 +10103,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(removedNames.length){
           const fallback = nextNames[0] || "";
           const lines = [
-            "VocÛ estß removendo lojas do cadastro.",
+            "Vocâ–ˆ estâ–€ removendo lojas do cadastro.",
             "",
             `Lojas removidas: ${removedNames.join(", ")}`,
             "",
             "O sistema vai remover dados ligados a essas lojas:",
             "- Perguntas/Respostas e Tarefas Diarias",
-            "- Produtos e Hist¾rico do Calendßrio",
+            "- Produtos e HistÂ¥rico do Calendâ–€rio",
             "- Links da Nuvemshop",
             "",
             "Os itens ser\u00e3o deletados definitivamente.",
@@ -10871,13 +10895,17 @@ navAtalhosBtn.addEventListener("click", ()=>{
     
 
     navToggleViewBtn.addEventListener("click", ()=>{
-      if(currentView === "search"){
-        setView("tasks");
-      }else{
-        setView("search");
-      }
+      tasksTypeFilter = "normal";
+      setView("tasks");
       closeDrawer();
     });
+    if(navTasksExtraBtn){
+      navTasksExtraBtn.addEventListener("click", ()=>{
+        tasksTypeFilter = "extra";
+        setView("tasks");
+        closeDrawer();
+      });
+    }
     if(goToSearchBtn){
       goToSearchBtn.addEventListener("click", ()=>{
         setView("search");
@@ -10885,6 +10913,13 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(goToTasksBtn){
       goToTasksBtn.addEventListener("click", ()=>{
+        tasksTypeFilter = "normal";
+        setView("tasks");
+      });
+    }
+    if(goToTasksExtraBtn){
+      goToTasksExtraBtn.addEventListener("click", ()=>{
+        tasksTypeFilter = "extra";
         setView("tasks");
       });
     }
