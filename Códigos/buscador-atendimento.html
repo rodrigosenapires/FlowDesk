@@ -10,6 +10,35 @@
   </head>
 
 <body>
+  <div class="authOverlay" id="authOverlay" aria-hidden="true">
+    <div class="authCard">
+      <div class="authHeader">
+        <h3 id="authTitle">Entrar</h3>
+      </div>
+      <div class="authBody">
+        <form class="authForm" id="loginForm" autocomplete="on">
+          <label class="authLabel" for="loginUsername">Usuário</label>
+          <input class="authInput" id="loginUsername" type="text" autocomplete="username" />
+          <label class="authLabel" for="loginPassword">Senha</label>
+          <input class="authInput" id="loginPassword" type="password" autocomplete="current-password" />
+          <button class="btn small primary authSubmit" type="submit">Entrar</button>
+        </form>
+
+        <form class="authForm" id="setupForm" autocomplete="on" style="display:none;">
+          <label class="authLabel" for="setupUsername">Usuário</label>
+          <input class="authInput" id="setupUsername" type="text" autocomplete="username" />
+          <label class="authLabel" for="setupDisplayName">Nome (opcional)</label>
+          <input class="authInput" id="setupDisplayName" type="text" autocomplete="name" />
+          <label class="authLabel" for="setupPassword">Senha</label>
+          <input class="authInput" id="setupPassword" type="password" autocomplete="new-password" />
+          <button class="btn small primary authSubmit" type="submit">Criar usuário</button>
+        </form>
+
+        <div class="note authError" id="authError" style="display:none;"></div>
+        <div class="note authHint" id="authHint"></div>
+      </div>
+    </div>
+  </div>
   <header>
     <div class="wrap">
       <div class="toprow">

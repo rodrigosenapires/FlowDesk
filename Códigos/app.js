@@ -29,6 +29,73 @@
     const FILE_NAME_PREFIX = "base-atendimento";
     const BACKUP_VERSION = 10;
 
+    const API_BASE = "api";
+    let storageCache = {};
+    let storageReady = false;
+    let currentUser = null;
+
+    function storageGet(key){
+      return Object.prototype.hasOwnProperty.call(storageCache, key) ? storageCache[key] : null;
+    }
+
+    function storageSet(key, value){
+      const nextValue = (value ?? "").toString();
+      storageCache[key] = nextValue;
+      void apiStorageSet(key, nextValue);
+    }
+
+    function storageSetMany(items){
+      const payload = {};
+      Object.keys(items || {}).forEach((key) => {
+        const nextValue = (items[key] ?? "").toString();
+        storageCache[key] = nextValue;
+        payload[key] = nextValue;
+      });
+      if(Object.keys(payload).length){
+        void apiStorageSetMany(payload);
+      }
+    }
+
+    async function apiRequest(path, body, options){
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body || {}),
+        ...options
+      });
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok){
+        const msg = data?.error || "request_failed";
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    async function apiSession(){
+      const response = await fetch(`${API_BASE}/session.php`, { credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      return data || {};
+    }
+
+    async function apiSetupStatus(){
+      const response = await fetch(`${API_BASE}/setup.php`, { credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      return data || {};
+    }
+
+    async function apiStorageGetAll(){
+      return apiRequest(`${API_BASE}/storage.php`, { action: "getAll" });
+    }
+
+    async function apiStorageSet(key, value){
+      return apiRequest(`${API_BASE}/storage.php`, { action: "set", key, value });
+    }
+
+    async function apiStorageSetMany(items){
+      return apiRequest(`${API_BASE}/storage.php`, { action: "setMany", items });
+    }
+
     const DEFAULT_DIARIO_LOGO = "https://acdn-us.mitiendanube.com/stores/003/800/267/themes/common/logo-1017420669-1696607286-3604afa78036bc99d42c4a45a62c9aac1696607286-480-0.webp";
     const DEFAULT_SHOP80_LOGO = "https://acdn-us.mitiendanube.com/stores/006/053/724/themes/common/logo-881782978-1743865292-d422bc1fcaed5234816adb11a5e1931b1743865292-480-0.webp";
 
@@ -148,7 +215,7 @@
     }
 
     function loadQuickLinks(){
-      const raw = localStorage.getItem(STORAGE_KEY_QUICK_LINKS);
+      const raw = storageGet(STORAGE_KEY_QUICK_LINKS);
       const parsed = safeJsonParse(raw);
       if(parsed && typeof parsed === "object") return normalizeQuickLinks(parsed);
       return normalizeQuickLinks({});
@@ -156,7 +223,7 @@
 
     function saveQuickLinks(next){
       quickLinks = normalizeQuickLinks(next);
-      localStorage.setItem(STORAGE_KEY_QUICK_LINKS, JSON.stringify(quickLinks));
+      storageSet(STORAGE_KEY_QUICK_LINKS, JSON.stringify(quickLinks));
       renderExtraMenuLinks();
     }
 
@@ -182,20 +249,36 @@
       { title:"Gerar Etiqueta Onlog", url:"https://conecta.log.br/" }
     ];
     const STORAGE_KEY_TRANSPORTADORAS_SEEDED = "quick_links_transportadoras_seeded";
+    const STORAGE_KEYS_ALL = [
+      STORAGE_KEY_BASE,
+      STORAGE_KEY_MENU,
+      STORAGE_KEY_THEME,
+      STORAGE_KEY_QUICK_LINKS,
+      STORAGE_KEY_NUVEM_LINKS,
+      STORAGE_KEY_STORES,
+      STORAGE_KEY_SEARCH_TAGS,
+      STORAGE_KEY_SIZE_TABLES,
+      STORAGE_KEY_SIZE_TABLES_OVERRIDES,
+      STORAGE_KEY_PRODUCTS,
+      STORAGE_KEY_TASKS,
+      STORAGE_KEY_TASKS_DONE,
+      STORAGE_KEY_CALENDAR,
+      STORAGE_KEY_TRANSPORTADORAS_SEEDED
+    ];
     function seedTransportadorasLinks(){
-      if(localStorage.getItem(STORAGE_KEY_TRANSPORTADORAS_SEEDED) === "1") return;
+      if(storageGet(STORAGE_KEY_TRANSPORTADORAS_SEEDED) === "1") return;
       const list = Array.isArray(quickLinks.transportadorasExtra) ? quickLinks.transportadorasExtra : [];
       if(list.length){
-        localStorage.setItem(STORAGE_KEY_TRANSPORTADORAS_SEEDED, "1");
+        storageSet(STORAGE_KEY_TRANSPORTADORAS_SEEDED, "1");
         return;
       }
       quickLinks = normalizeQuickLinks({ ...quickLinks, transportadorasExtra: DEFAULT_TRANSPORTADORAS_LINKS });
-      localStorage.setItem(STORAGE_KEY_QUICK_LINKS, JSON.stringify(quickLinks));
-      localStorage.setItem(STORAGE_KEY_TRANSPORTADORAS_SEEDED, "1");
+      storageSet(STORAGE_KEY_QUICK_LINKS, JSON.stringify(quickLinks));
+      storageSet(STORAGE_KEY_TRANSPORTADORAS_SEEDED, "1");
     }
 
     function loadSearchTags(){
-      const raw = localStorage.getItem(STORAGE_KEY_SEARCH_TAGS);
+      const raw = storageGet(STORAGE_KEY_SEARCH_TAGS);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeSearchTags(parsed);
       return normalizeSearchTags(DEFAULT_SEARCH_TAGS);
@@ -203,7 +286,7 @@
 
     function saveSearchTags(next){
       searchTags = normalizeSearchTags(next);
-      localStorage.setItem(STORAGE_KEY_SEARCH_TAGS, JSON.stringify(searchTags));
+      storageSet(STORAGE_KEY_SEARCH_TAGS, JSON.stringify(searchTags));
       renderSearchTags();
     }
 
@@ -218,7 +301,7 @@
     }
 
     function loadSizeTablesCustom(){
-      const raw = localStorage.getItem(STORAGE_KEY_SIZE_TABLES);
+      const raw = storageGet(STORAGE_KEY_SIZE_TABLES);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeSizeTables(parsed);
       return [];
@@ -226,12 +309,12 @@
 
     function saveSizeTablesCustom(next){
       sizeTablesCustom = normalizeSizeTables(next);
-      localStorage.setItem(STORAGE_KEY_SIZE_TABLES, JSON.stringify(sizeTablesCustom));
+      storageSet(STORAGE_KEY_SIZE_TABLES, JSON.stringify(sizeTablesCustom));
       buildSizeTablesGrid();
     }
 
     function loadSizeTablesOverrides(){
-      const raw = localStorage.getItem(STORAGE_KEY_SIZE_TABLES_OVERRIDES);
+      const raw = storageGet(STORAGE_KEY_SIZE_TABLES_OVERRIDES);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeSizeTables(parsed);
       return [];
@@ -239,7 +322,7 @@
 
     function saveSizeTablesOverrides(next){
       sizeTablesOverrides = normalizeSizeTables(next);
-      localStorage.setItem(STORAGE_KEY_SIZE_TABLES_OVERRIDES, JSON.stringify(sizeTablesOverrides));
+      storageSet(STORAGE_KEY_SIZE_TABLES_OVERRIDES, JSON.stringify(sizeTablesOverrides));
       buildSizeTablesGrid();
     }
 
@@ -516,17 +599,17 @@
     }
 
     function loadProducts(){
-      const raw = localStorage.getItem(STORAGE_KEY_PRODUCTS);
+      const raw = storageGet(STORAGE_KEY_PRODUCTS);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeProducts(parsed);
-      const hasBase = Boolean(localStorage.getItem(STORAGE_KEY_BASE));
+      const hasBase = Boolean(storageGet(STORAGE_KEY_BASE));
       const seed = hasBase ? LEGACY_PRODUCTS : DEFAULT_PRODUCTS_MINIMAL;
       return normalizeProducts(seed);
     }
 
     function saveProducts(next){
       productsCustom = normalizeProducts(next);
-      localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(productsCustom));
+      storageSet(STORAGE_KEY_PRODUCTS, JSON.stringify(productsCustom));
       buildProductsGrid();
     }
 
@@ -644,7 +727,7 @@
     }
 
     function loadStores(){
-      const raw = localStorage.getItem(STORAGE_KEY_STORES);
+      const raw = storageGet(STORAGE_KEY_STORES);
       const parsed = safeJsonParse(raw);
       const normalized = Array.isArray(parsed)
         ? normalizeStores(parsed)
@@ -663,14 +746,14 @@
         return store;
       });
       if(changed){
-        localStorage.setItem(STORAGE_KEY_STORES, JSON.stringify(backfilled));
+        storageSet(STORAGE_KEY_STORES, JSON.stringify(backfilled));
       }
       return backfilled;
     }
 
     function saveStores(next){
       stores = normalizeStores(next);
-      localStorage.setItem(STORAGE_KEY_STORES, JSON.stringify(stores));
+      storageSet(STORAGE_KEY_STORES, JSON.stringify(stores));
       updateStoresUI();
     }
 
@@ -805,7 +888,7 @@
     }
 
     function loadNuvemLinks(){
-      const raw = localStorage.getItem(STORAGE_KEY_NUVEM_LINKS);
+      const raw = storageGet(STORAGE_KEY_NUVEM_LINKS);
       const parsed = safeJsonParse(raw);
       if(parsed && typeof parsed === "object") return normalizeNuvemLinks(parsed);
       return normalizeNuvemLinks({});
@@ -813,7 +896,7 @@
 
     function saveNuvemLinks(next){
       nuvemLinks = normalizeNuvemLinks(next);
-      localStorage.setItem(STORAGE_KEY_NUVEM_LINKS, JSON.stringify(nuvemLinks));
+      storageSet(STORAGE_KEY_NUVEM_LINKS, JSON.stringify(nuvemLinks));
       renderNuvemLinks();
     }
 
@@ -1576,7 +1659,7 @@
       buildProductsGrid();
 
       nuvemLinks = normalizeNuvemLinks(nuvemLinks);
-      localStorage.setItem(STORAGE_KEY_NUVEM_LINKS, JSON.stringify(nuvemLinks));
+      storageSet(STORAGE_KEY_NUVEM_LINKS, JSON.stringify(nuvemLinks));
       renderNuvemLinks();
     }
 
@@ -2147,10 +2230,22 @@
     const tasksSingleBtn = document.getElementById("tasksSingleBtn");
     const quickLinkButtons = Array.from(document.querySelectorAll("[data-quick-link]"));
 
+    const authOverlay = document.getElementById("authOverlay");
+    const authTitle = document.getElementById("authTitle");
+    const authError = document.getElementById("authError");
+    const authHint = document.getElementById("authHint");
+    const loginForm = document.getElementById("loginForm");
+    const loginUsername = document.getElementById("loginUsername");
+    const loginPassword = document.getElementById("loginPassword");
+    const setupForm = document.getElementById("setupForm");
+    const setupUsername = document.getElementById("setupUsername");
+    const setupDisplayName = document.getElementById("setupDisplayName");
+    const setupPassword = document.getElementById("setupPassword");
+
     /***********************
      * STATE
      ***********************/
-    let items = loadBase();
+    let items = [];
     let editIndex = -1;
 
     let qImages = [];
@@ -2166,15 +2261,14 @@
     let phaseEditMode = "add"; // add | edit
 
     // drawer
-    let menuButtons = loadMenuButtons();
+    let menuButtons = [];
     let drawerPage = 1;
-    let quickLinks = loadQuickLinks();
-    seedTransportadorasLinks();
-    let stores = loadStores();
-    let searchTags = loadSearchTags();
-    let sizeTablesCustom = loadSizeTablesCustom();
-    let sizeTablesOverrides = loadSizeTablesOverrides();
-    let productsCustom = loadProducts();
+    let quickLinks = {};
+    let stores = [];
+    let searchTags = [];
+    let sizeTablesCustom = [];
+    let sizeTablesOverrides = [];
+    let productsCustom = [];
     let sizeTableUploadMode = "add";
     let sizeTableUploadIsCustom = false;
     let sizeTableUploadTargetName = "";
@@ -2189,7 +2283,7 @@
     let currentQuickLinksListLabel = "";
     let currentQuickLinksListMode = "list";
     let currentQuickLinkEditIndex = -1;
-    let nuvemLinks = loadNuvemLinks();
+    let nuvemLinks = {};
     let nuvemEditStore = "";
     let nuvemEditId = "";
     let nuvemEditIsNew = false;
@@ -2221,8 +2315,8 @@
     let currentProductVideoText = "";
 
     // tasks state
-    let tasks = loadTasks();
-    let tasksDone = loadTasksDone();
+    let tasks = [];
+    let tasksDone = [];
     let tasksEditId = null;
 
     // tasks list view state (\u00daltimo chamado / pr\u00f3ximo / todos + busca)
@@ -2236,7 +2330,7 @@
     let tasksSearchStatusValue = "";
 
     // calend\u00e1rio state
-    let calendarHistory = loadCalendarHistory();
+    let calendarHistory = [];
     let calViewYear = new Date().getFullYear();
     let calViewMonth = new Date().getMonth(); // 0-11
     let calSelectedISO = "";
@@ -3905,6 +3999,7 @@
     function renderMiniCalendar(){
       if(!miniCalendarGrid || !miniCalendarLabel) return;
 
+      ensureMiniCalendarNavPlacement();
       syncCalendarOpenFlags();
       miniCalendarLabel.textContent = monthLabelPT(calViewYear, calViewMonth);
 
@@ -4716,6 +4811,15 @@
     function scrollToTop(){ window.scrollTo({ top:0, behavior:"smooth" }); }
     function scrollToBottom(){ window.scrollTo({ top:document.documentElement.scrollHeight, behavior:"smooth" }); }
 
+    function ensureMiniCalendarNavPlacement(){
+      const body = document.querySelector(".miniCalendarBody");
+      if(!body) return;
+      const nav = document.querySelector(".miniCalHeaderNav");
+      if(nav && nav.parentElement !== body){
+        body.appendChild(nav);
+      }
+    }
+
     // senha apenas para PERGUNTAS e IMPORT
     async function requirePassword(actionName){
       return true;
@@ -4865,10 +4969,10 @@
         if(themeIcon) themeIcon.innerHTML = iconMarkup;
         if(themeIconMobile) themeIconMobile.innerHTML = iconMarkup;
       }
-      localStorage.setItem(STORAGE_KEY_THEME, mode);
+      storageSet(STORAGE_KEY_THEME, mode);
     }
     function initTheme(){
-      const saved = localStorage.getItem(STORAGE_KEY_THEME);
+      const saved = storageGet(STORAGE_KEY_THEME);
       if(saved === "light" || saved === "dark"){
         applyTheme(saved);
       }else{
@@ -4921,7 +5025,7 @@ function fillPhaseStatusSelect(){
      * STORAGE
      ***********************/
     function loadBase(){
-      const raw = localStorage.getItem(STORAGE_KEY_BASE);
+      const raw = storageGet(STORAGE_KEY_BASE);
       if(!raw) return [];
       const parsed = safeJsonParse(raw);
       if(!Array.isArray(parsed)) return [];
@@ -4943,7 +5047,7 @@ function fillPhaseStatusSelect(){
         })) : [],
       }));
     }
-    function saveBase(next){ localStorage.setItem(STORAGE_KEY_BASE, JSON.stringify(next || [])); }
+    function saveBase(next){ storageSet(STORAGE_KEY_BASE, JSON.stringify(next || [])); }
 
     function normalizeMenuButtons(arr){
       return (arr||[]).map(b => ({
@@ -4956,7 +5060,7 @@ function fillPhaseStatusSelect(){
     }
 
     function loadMenuButtons(){
-      const raw = localStorage.getItem(STORAGE_KEY_MENU);
+      const raw = storageGet(STORAGE_KEY_MENU);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeMenuButtons(parsed);
 
@@ -4988,13 +5092,13 @@ function fillPhaseStatusSelect(){
           ]
         }
       ];
-      localStorage.setItem(STORAGE_KEY_MENU, JSON.stringify(defaults));
+      storageSet(STORAGE_KEY_MENU, JSON.stringify(defaults));
       return defaults;
     }
 
     function saveMenuButtons(next){
       menuButtons = normalizeMenuButtons(next);
-      localStorage.setItem(STORAGE_KEY_MENU, JSON.stringify(menuButtons));
+      storageSet(STORAGE_KEY_MENU, JSON.stringify(menuButtons));
       renderDrawer();
     }
 
@@ -5148,7 +5252,7 @@ function fillPhaseStatusSelect(){
     }
 
     function loadTasks(){
-      const raw = localStorage.getItem(STORAGE_KEY_TASKS);
+      const raw = storageGet(STORAGE_KEY_TASKS);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeTasks(parsed);
       return [];
@@ -5156,7 +5260,7 @@ function fillPhaseStatusSelect(){
 
     function saveTasks(next){
       tasks = normalizeTasks(next);
-      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(tasks));
+      storageSet(STORAGE_KEY_TASKS, JSON.stringify(tasks));
       renderTasks();
       renderMiniCalendar();
 
@@ -5242,7 +5346,7 @@ function fillPhaseStatusSelect(){
     }
 
     function loadCalendarHistory(){
-      const raw = localStorage.getItem(STORAGE_KEY_CALENDAR);
+      const raw = storageGet(STORAGE_KEY_CALENDAR);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeCalendarHistory(parsed);
       return [];
@@ -5250,7 +5354,7 @@ function fillPhaseStatusSelect(){
 
     function saveCalendarHistory(next){
       calendarHistory = normalizeCalendarHistory(next);
-      localStorage.setItem(STORAGE_KEY_CALENDAR, JSON.stringify(calendarHistory));
+      storageSet(STORAGE_KEY_CALENDAR, JSON.stringify(calendarHistory));
       renderMiniCalendar();
     }
 
@@ -5269,7 +5373,7 @@ function fillPhaseStatusSelect(){
     }
 
     function exportFile(){
-      const themePref = localStorage.getItem(STORAGE_KEY_THEME) || "";
+      const themePref = storageGet(STORAGE_KEY_THEME) || "";
       const data = {
         version: BACKUP_VERSION,
         exportedAt: new Date().toISOString(),
@@ -6663,7 +6767,7 @@ function fillPhaseStatusSelect(){
     }
 
     function loadTasksDone(){
-      const raw = localStorage.getItem(STORAGE_KEY_TASKS_DONE);
+      const raw = storageGet(STORAGE_KEY_TASKS_DONE);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeTasks(parsed);
       return [];
@@ -6671,7 +6775,7 @@ function fillPhaseStatusSelect(){
 
     function saveTasksDone(next){
       tasksDone = normalizeTasks(next);
-      localStorage.setItem(STORAGE_KEY_TASKS_DONE, JSON.stringify(tasksDone));
+      storageSet(STORAGE_KEY_TASKS_DONE, JSON.stringify(tasksDone));
       renderMiniCalendar();
     }
     function renderLinksList(list){
@@ -10647,6 +10751,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
         renderTasks();
       });
     }
+    if(loginForm){
+      loginForm.addEventListener("submit", handleLoginSubmit);
+    }
+    if(setupForm){
+      setupForm.addEventListener("submit", handleSetupSubmit);
+    }
 
     window.addEventListener("beforeunload", (e) => {
       if(allowAppClose) return;
@@ -10654,6 +10764,110 @@ navAtalhosBtn.addEventListener("click", ()=>{
       e.returnValue = "";
     });
 
+
+    /***********************
+     * AUTH / STORAGE BOOTSTRAP
+     ***********************/
+    let authResolver = null;
+
+    function showAuthOverlay(mode, hint){
+      if(!authOverlay) return;
+      const isSetup = mode === "setup";
+      if(loginForm) loginForm.style.display = isSetup ? "none" : "flex";
+      if(setupForm) setupForm.style.display = isSetup ? "flex" : "none";
+      if(authTitle) authTitle.textContent = isSetup ? "Criar primeiro usuario" : "Entrar";
+      if(authHint){
+        authHint.textContent = hint || (isSetup ? "Crie o primeiro usuario para comecar." : "");
+      }
+      if(authError){
+        authError.style.display = "none";
+        authError.textContent = "";
+      }
+      authOverlay.classList.add("show");
+      authOverlay.setAttribute("aria-hidden", "false");
+    }
+
+    function hideAuthOverlay(){
+      if(!authOverlay) return;
+      authOverlay.classList.remove("show");
+      authOverlay.setAttribute("aria-hidden", "true");
+    }
+
+    function setAuthError(message){
+      if(!authError) return;
+      authError.textContent = message || "Falha na autenticacao.";
+      authError.style.display = "block";
+    }
+
+    async function handleLoginSubmit(e){
+      e.preventDefault();
+      const username = (loginUsername?.value || "").trim();
+      const password = (loginPassword?.value || "").toString();
+      if(!username || !password){
+        setAuthError("Preencha usuario e senha.");
+        return;
+      }
+      try{
+        const result = await apiRequest(`${API_BASE}/login.php`, { username, password });
+        currentUser = result.user || null;
+        if(loginPassword) loginPassword.value = "";
+        hideAuthOverlay();
+        if(authResolver){
+          authResolver();
+          authResolver = null;
+        }
+      }catch(err){
+        setAuthError("Usuario ou senha invalidos.");
+      }
+    }
+
+    async function handleSetupSubmit(e){
+      e.preventDefault();
+      const username = (setupUsername?.value || "").trim();
+      const displayName = (setupDisplayName?.value || "").trim();
+      const password = (setupPassword?.value || "").toString();
+      if(!username || !password){
+        setAuthError("Preencha usuario e senha.");
+        return;
+      }
+      try{
+        const result = await apiRequest(`${API_BASE}/setup.php`, {
+          username,
+          display_name: displayName,
+          password
+        });
+        currentUser = result.user || null;
+        if(setupPassword) setupPassword.value = "";
+        hideAuthOverlay();
+        if(authResolver){
+          authResolver();
+          authResolver = null;
+        }
+      }catch(err){
+        setAuthError("Nao foi possivel criar o usuario.");
+      }
+    }
+
+    async function ensureAuthenticated(){
+      const session = await apiSession().catch(() => ({}));
+      if(session && session.authenticated){
+        currentUser = session.user || null;
+        return;
+      }
+      const setupStatus = await apiSetupStatus().catch(() => ({}));
+      const needsSetup = Boolean(setupStatus?.needs_setup);
+      showAuthOverlay(needsSetup ? "setup" : "login");
+
+      await new Promise((resolve) => {
+        authResolver = resolve;
+      });
+    }
+
+    async function bootstrapStorage(){
+      const result = await apiStorageGetAll();
+      storageCache = result?.data && typeof result.data === "object" ? result.data : {};
+      storageReady = true;
+    }
 
     /***********************
      * INIT
@@ -10668,25 +10882,47 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(!tData.value) tData.value = today;
     }
 
-    initTheme();
-    // mant\u00e9m o calend\u00e1rio consistente na inicializa\u00e7\u00e3o
-    syncCalendarOpenFlags();
-    updateModeLabel();
-    updateQCount();
-    setQuestionImagesUI([]);
-    setQuestionLinksUI([]);
-    renderSearchTags();
-    renderMiniCalendar();
-    updateStoresUI();
-    renderDrawer();
-    renderExtraMenuLinks();
-    render();
-    initTasksUI();
-    setView("search");
+    async function bootstrapApp(){
+      await ensureAuthenticated();
+      await bootstrapStorage();
 
-    if(!localStorage.getItem(STORAGE_KEY_STORES)){
-      openStoresConfig();
+      items = loadBase();
+      menuButtons = loadMenuButtons();
+      quickLinks = loadQuickLinks();
+      stores = loadStores();
+      searchTags = loadSearchTags();
+      sizeTablesCustom = loadSizeTablesCustom();
+      sizeTablesOverrides = loadSizeTablesOverrides();
+      productsCustom = loadProducts();
+      nuvemLinks = loadNuvemLinks();
+      tasks = loadTasks();
+      tasksDone = loadTasksDone();
+      calendarHistory = loadCalendarHistory();
+      seedTransportadorasLinks();
+
+      initTheme();
+      // mant\u00e9m o calend\u00e1rio consistente na inicializa\u00e7\u00e3o
+      syncCalendarOpenFlags();
+      updateModeLabel();
+      updateQCount();
+      setQuestionImagesUI([]);
+      setQuestionLinksUI([]);
+      renderSearchTags();
+      renderMiniCalendar();
+      updateStoresUI();
+      renderDrawer();
+      renderExtraMenuLinks();
+      render();
+      initTasksUI();
+      setView("search");
+      ensureMiniCalendarNavPlacement();
+
+      if(!storageGet(STORAGE_KEY_STORES)){
+        openStoresConfig();
+      }
     }
+
+    bootstrapApp();
 
 
 
