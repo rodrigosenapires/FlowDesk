@@ -979,8 +979,13 @@
       align-items:flex-start;
       justify-content:space-between;
     }
+    .copyRow > div{
+      min-width:0;
+    }
     .pre{
       white-space:pre-wrap;
+      overflow-wrap:anywhere;
+      word-break:break-word;
       font-family:var(--sans);
       font-size:13px;
       line-height:1.45;

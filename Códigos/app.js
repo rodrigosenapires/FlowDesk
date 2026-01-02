@@ -1,4 +1,4 @@
-/***********************
+﻿/***********************
      * CONFIG / STORAGE
      ***********************/
     const STORAGE_KEY_BASE  = "baseAtendimento_v5";
@@ -94,6 +94,25 @@
 
     async function apiStorageSetMany(items){
       return apiRequest(`${API_BASE}/storage.php`, { action: "setMany", items });
+    }
+
+    async function apiUploadImage(file){
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${API_BASE}/upload_image.php`, {
+        method: "POST",
+        credentials: "include",
+        body: formData
+      });
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok || !data?.ok){
+        const msg = data?.error || "upload_failed";
+        throw new Error(msg);
+      }
+      return (data.filename || "").toString();
+    }
+    async function apiDeleteImage(filename){
+      return apiRequest(`${API_BASE}/delete_image.php`, { filename });
     }
 
     const DEFAULT_DIARIO_LOGO = "https://acdn-us.mitiendanube.com/stores/003/800/267/themes/common/logo-1017420669-1696607286-3604afa78036bc99d42c4a45a62c9aac1696607286-480-0.webp";
@@ -2249,6 +2268,7 @@
     let editIndex = -1;
 
     let qImages = [];
+    let pendingDeleteImages = [];
     let qLinks = [];
 
     // modal steps
@@ -6434,6 +6454,39 @@ function fillPhaseStatusSelect(){
       renderQImgsPreview();
     }
 
+    function queueImageDeletes(list){
+      const names = (Array.isArray(list) ? list : [])
+        .map(x => (x || "").toString().trim())
+        .filter(Boolean);
+      if(!names.length) return;
+      pendingDeleteImages = uniq(pendingDeleteImages.concat(names));
+    }
+
+    async function deleteImagesNow(list){
+      const names = uniq((Array.isArray(list) ? list : [])
+        .map(x => (x || "").toString().trim())
+        .filter(Boolean));
+      if(!names.length) return;
+      let hadError = false;
+      for(const name of names){
+        try{
+          await apiDeleteImage(name);
+        }catch(err){
+          hadError = true;
+        }
+      }
+      if(hadError){
+        showAlert("N\u00e3o foi poss\u00edvel remover uma das imagens do servidor.");
+      }
+    }
+
+    async function flushPendingImageDeletes(){
+      if(!pendingDeleteImages.length) return;
+      const list = pendingDeleteImages.slice();
+      pendingDeleteImages = [];
+      await deleteImagesNow(list);
+    }
+
     function renderQImgsPreview(){
       if(!qImages.length){
         qImgsPreviewGrid.innerHTML = `
@@ -6450,7 +6503,7 @@ function fillPhaseStatusSelect(){
       qImgsPreviewGrid.innerHTML = qImages.map((fn, i) => `
         <div class="qImgBox">
           <button type="button" class="qImgDelBtn" title="Remover imagem" data-qimg-remove="${i}">&times;</button>
-          <img alt="Pr\u00e9via" src="../imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
+          <img alt="Pr\u00e9via" src="imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
           <div class="qImgName">${escapeHtml(fn)}</div>
         </div>
       `).join("");
@@ -6595,10 +6648,31 @@ function fillPhaseStatusSelect(){
       rmBtn.addEventListener("click", ()=> wrap.remove());
 
       pickBtn.addEventListener("click", ()=> fileEl.click());
-      fileEl.addEventListener("change", ()=>{
-        const f = fileEl.files && fileEl.files[0];
-        if(!f) return;
-        imgNameEl.textContent = f.name; // mant\u00e9m nome original
+
+      fileEl.addEventListener("change", async ()=>{
+
+      	const f = fileEl.files && fileEl.files[0];
+
+      	if(!f) return;
+
+      	fileEl.value = "";
+
+      	try{
+
+      		const filename = await apiUploadImage(f);
+
+      		if(filename){
+
+      			imgNameEl.textContent = filename;
+
+      		}
+
+      	}catch(err){
+
+      		showAlert("Não foi possível enviar a imagem do passo.");
+
+      	}
+
       });
 
       clearBtn.addEventListener("click", ()=>{
@@ -6631,6 +6705,7 @@ function fillPhaseStatusSelect(){
     function clearForm(){
       editIndex = -1;
       updateModeLabel();
+      pendingDeleteImages = [];
 
       qInput.value = "";
       if(qStoreSelect) qStoreSelect.value = "ALL";
@@ -6680,6 +6755,7 @@ function fillPhaseStatusSelect(){
       items = next;
       saveBase(items);
 
+      void flushPendingImageDeletes();
       clearForm();
       render();
       scrollToTop();
@@ -6692,6 +6768,7 @@ function fillPhaseStatusSelect(){
       const it = items[idx];
       if(!it) return;
 
+      pendingDeleteImages = [];
       editIndex = idx;
       updateModeLabel();
 
@@ -6724,6 +6801,7 @@ function fillPhaseStatusSelect(){
       items.splice(idx,1);
       saveBase(items);
 
+      void deleteImagesNow(Array.isArray(it.qImages) ? it.qImages : []);
       if(editIndex === idx) clearForm();
       render();
       scrollToTop();
@@ -6825,7 +6903,7 @@ function fillPhaseStatusSelect(){
             <div class="label">Imagens da Pergunta <span class="count">${imgs.length} arquivo(s)</span></div>
             <div class="qImgsShowGrid">
               ${imgs.map(fn => `
-                <img alt="Imagem da pergunta" src="../imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
+                <img alt="Imagem da pergunta" src="imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
               `).join("")}
             </div>
           </div>
@@ -7064,7 +7142,7 @@ function fillPhaseStatusSelect(){
         : ``;
 
       const imgHtml = s.imageFilename
-        ? `<img alt="Imagem do passo" src="../imagens/${encodeURIComponent(s.imageFilename)}" onerror="this.style.display='none'">`
+        ? `<img alt="Imagem do passo" src="imagens/${encodeURIComponent(s.imageFilename)}" onerror="this.style.display='none'">`
         : ``;
 
       modalBody.innerHTML = `
@@ -8914,16 +8992,36 @@ function getNuvemshopSupportBaseUrl(lojaText){
 
     // imagens (m\u00faltiplas)
     qPickImgsBtn.addEventListener("click", ()=> qImgsFile.click());
-    qImgsFile.addEventListener("change", ()=>{
-      const files = qImgsFile.files ? [...qImgsFile.files] : [];
-      if(!files.length) return;
-      const names = files.map(f => (f && f.name ? f.name.trim() : "")).filter(Boolean);
-      setQuestionImagesUI(qImages.concat(names));
-      qImgsFile.value = "";
+    qImgsFile.addEventListener("change", async ()=>{
+    	const files = qImgsFile.files ? [...qImgsFile.files] : [];
+    	if(!files.length) return;
+    	qImgsFile.value = "";
+    	const uploaded = [];
+    	let hadError = false;
+    	for(const f of files){
+    		try{
+    			const filename = await apiUploadImage(f);
+    			if(filename) uploaded.push(filename);
+    		}catch(err){
+    			hadError = true;
+    		}
+    	}
+    	if(uploaded.length){
+    		setQuestionImagesUI(qImages.concat(uploaded));
+    	}
+    	if(hadError){
+    		showAlert("Não foi possível enviar uma das imagens.");
+    	}
     });
     qClearImgsBtn.addEventListener("click", ()=>{
+      const removed = qImages.slice();
       qImgsFile.value = "";
       setQuestionImagesUI([]);
+      if(editIndex === -1){
+        void deleteImagesNow(removed);
+      }else{
+        queueImageDeletes(removed);
+      }
     });
 
     // remover imagem espec\u00edfica (pr\u00e9via)
@@ -8932,9 +9030,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(!btn) return;
       const idx = Number(btn.getAttribute("data-qimg-remove"));
       if(!Number.isFinite(idx)) return;
+      const removed = [qImages[idx]];
       const next = qImages.slice();
       next.splice(idx, 1);
       setQuestionImagesUI(next);
+      if(editIndex === -1){
+        void deleteImagesNow(removed);
+      }else{
+        queueImageDeletes(removed);
+      }
     });
 
     if(openQuestionModalBtn){
@@ -10923,6 +11027,9 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
 
     bootstrapApp();
+
+
+
 
 
 

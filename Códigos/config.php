@@ -14,3 +14,7 @@ define("DB_CHARSET", "utf8mb4");
 
 // Session settings.
 define("APP_SESSION_NAME", "flowdesk_session");
+
+// Upload settings.
+define("APP_PUBLIC_ROOT", realpath(__DIR__) ?: __DIR__);
+define("APP_IMAGES_DIR", APP_PUBLIC_ROOT . "/imagens");
