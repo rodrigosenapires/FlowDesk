@@ -1,4 +1,4 @@
-ï»¿/***********************
+/***********************
      * CONFIG / STORAGE
      ***********************/
     const STORAGE_KEY_BASE  = "baseAtendimento_v5";
@@ -1769,7 +1769,7 @@
         || Boolean((tasksSearchPeriodFromValue || "").trim())
         || Boolean((tasksSearchPeriodToValue || "").trim());
       if(searchFilterBtn){
-        const active = currentView === "tasks" ? tasksActive : searchActive;
+        const active = currentView === "tasks" ? tasksActive : (currentView === "done" ? false : searchActive);
         searchFilterBtn.classList.toggle("isActive", active);
       }
       if(calFilterBtn){
@@ -1785,6 +1785,7 @@
 
     const viewSearch  = document.getElementById("viewSearch");
     const viewTasks   = document.getElementById("viewTasks");
+    const viewDone    = document.getElementById("viewDone");
     const viewStack   = document.getElementById("viewStack");
 
     const searchInput = document.getElementById("search");
@@ -2185,6 +2186,7 @@
     // nav drawer (2 bot\u00f5es)
     const navAtalhosBtn = document.getElementById("navAtalhosBtn");
     const navToggleViewBtn = document.getElementById("navToggleViewBtn");
+    const goToDoneTasksBtn = document.getElementById("goToDoneTasksBtn");
     const goToTasksBtn = document.getElementById("goToTasksBtn");
     const atalhosCreateCard = document.getElementById("atalhosCreateCard");
     const drawerBd = document.getElementById("drawerBd");
@@ -2213,6 +2215,8 @@
     const tasksCount = document.getElementById("tasksCount");
     const tasksPeriodLabel = document.getElementById("tasksPeriodLabel");
     const tasksList = document.getElementById("tasksList");
+    const doneTasksCount = document.getElementById("doneTasksCount");
+    const doneTasksList = document.getElementById("doneTasksList");
 
     const tData = document.getElementById("tData");
     const tCliente = document.getElementById("tCliente");
@@ -3262,7 +3266,7 @@
     async function copyTextToClipboard(text, btn, doneLabel){
       try{
         if(!navigator.clipboard){
-          showAlert("CÃ³pia de texto nÃ£o suportada neste navegador.");
+          showAlert("Cópia de texto não suportada neste navegador.");
           return;
         }
         await navigator.clipboard.writeText(text);
@@ -3272,14 +3276,14 @@
           setTimeout(()=>{ btn.textContent = original; }, 900);
         }
       }catch(e){
-        showAlert("NÃ£o foi possÃ­vel copiar o texto.");
+        showAlert("Não foi possível copiar o texto.");
       }
     }
 
     async function copyImageToClipboard(url, btn, defaultLabel){
       try{
         if(!navigator.clipboard || !window.ClipboardItem){
-          showAlert("CÃ³pia de imagem nÃ£o suportada neste navegador.");
+          showAlert("Cópia de imagem não suportada neste navegador.");
           return;
         }
         const res = await fetch(url);
@@ -3292,7 +3296,7 @@
           setTimeout(()=>{ btn.textContent = original; }, 900);
         }
       }catch(e){
-        showAlert("NÃ£o foi possÃ­vel copiar a imagem.");
+        showAlert("Não foi possível copiar a imagem.");
       }
     }
 
@@ -3772,6 +3776,7 @@
       const ok = await showConfirm("Encerrar esta tarefa extra?");
       if(!ok) return;
       const nowIso = new Date().toISOString();
+      addTaskToDone(t, { closedAt: nowIso, isExtra: true });
       tasks = (tasks || []).filter(x => String(x.id || "") !== id);
       saveTasks(tasks);
       const prev = (calendarHistory || []).find(e => String(e.id || "") === id);
@@ -4064,7 +4069,7 @@
         const extraHtml = c.extraCount
           ? `<span class="miniCalCount miniCalCountExtra">${c.extraCount}</span>`
           : "";
-        const ariaSuffix = c.isOtherMonth ? " (mÃªs anterior)" : "";
+        const ariaSuffix = c.isOtherMonth ? " (mês anterior)" : "";
         const ariaLabel = `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
         const isoAttr = c.isOtherMonth ? "" : ` data-mini-iso="${c.iso}"`;
         return `
@@ -4262,6 +4267,7 @@
       }
 
       const copyIconSmall = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+        const trashIcon = `<svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><rect x="6" y="6" width="12" height="14" rx="2"></rect><path d="M10 10v6"></path><path d="M14 10v6"></path></svg>`;
 
       const html = entries.map(e => {
         if(e.extra || e.simple){
@@ -4484,7 +4490,7 @@
           navigator.clipboard.writeText(val).then(()=>{
             btn.style.opacity = "0.6";
             setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
-          }).catch(()=> showAlert("NÃ£o foi possÃ­vel copiar."));
+          }).catch(()=> showAlert("Não foi possível copiar."));
         });
       });
 
@@ -4493,10 +4499,12 @@
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-del") || "").toString();
           if(!id) return;
-          const ok = await showConfirm("Excluir este chamado? (Ele serÃ¡ removido da lista de tarefas e tambÃ©m do calendÃ¡rio.)");
+          const ok = await showConfirm("Excluir este chamado? (Ele será removido da lista de tarefas e também do calendário.)");
           if(!ok) return;
 
           // remove da lista
+          const taskRef = (tasks || []).find(t => String(t.id || "") === String(id));
+          if(taskRef) addTaskToDone(taskRef, { isExtra: Boolean(taskRef.isExtra) });
           tasks = (tasks || []).filter(t => String(t.id) !== String(id));
           saveTasks(tasks);
 
@@ -4528,6 +4536,7 @@
             saveCalendarHistory(calendarHistory);
             const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
             if(extraIdx >= 0){
+              addTaskToDone(tasks[extraIdx], { isExtra: true });
               tasks.splice(extraIdx, 1);
               saveTasks(tasks);
             }
@@ -4549,6 +4558,7 @@
             saveCalendarHistory(calendarHistory);
             const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
             if(extraIdx >= 0){
+              addTaskToDone(tasks[extraIdx], { isExtra: true });
               tasks.splice(extraIdx, 1);
               saveTasks(tasks);
             }
@@ -4672,7 +4682,7 @@
             if(!tasksList) return;
             const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
             if(!card){
-              showAlert("Tarefa nÃ£o encontrada na lista.");
+              showAlert("Tarefa não encontrada na lista.");
               return;
             }
             card.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -4698,7 +4708,7 @@
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
           if(!ref){
-            showAlert("Tarefa nÃ£o encontrada.");
+            showAlert("Tarefa não encontrada.");
             return;
           }
           openTaskSummaryPopup(ref);
@@ -4713,7 +4723,7 @@
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
           if(!ref){
-            showAlert("Tarefa nÇœo encontrada.");
+            showAlert("Tarefa nuo encontrada.");
             return;
           }
           const info = getEffectivePhaseAttention(ref);
@@ -4727,7 +4737,7 @@
           if(!id) return;
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           if(!fromDone){
-            showAlert("Tarefa nÇœo encontrada.");
+            showAlert("Tarefa nuo encontrada.");
             return;
           }
           const ok = await showConfirm("Reativar esta tarefa?");
@@ -4779,7 +4789,7 @@
         clearBtn.addEventListener("click", async ()=>{
           const dayIso = (clearBtn.getAttribute("data-cal-clear-day") || "").trim();
           if(!dayIso) return;
-          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendÃ¡rio?\n\nIsso NÃƒO remove as tarefas em aberto, apenas apaga os itens do calendÃ¡rio deste dia.`);
+          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendário?\n\nIsso NÃO remove as tarefas em aberto, apenas apaga os itens do calendário deste dia.`);
           if(!ok) return;
           const next = (calendarHistory || []).filter(e => e.date !== dayIso);
           saveCalendarHistory(next);
@@ -4860,6 +4870,13 @@
       if(m) return `${m[3]}/${m[2]}/${m[1]}`;
       return s;
     }
+    function formatDateTimeBR(value){
+      const raw = (value || "").toString().trim();
+      if(!raw) return "-";
+      const d = new Date(raw);
+      if(Number.isNaN(d.getTime())) return raw;
+      return d.toLocaleString("pt-BR");
+    }
 
 
     function getNuvemshopOrderUrl(loja, pedido){
@@ -4890,31 +4907,59 @@
      * VIEW SWITCH
      ***********************/
     function setView(view){
-      currentView = (view === "tasks") ? "tasks" : "search";
+      currentView = (view === "tasks" || view === "done") ? view : "search";
       const toTasks = currentView === "tasks";
+      const toDone = currentView === "done";
 
       if(viewStack && viewSearch && viewTasks){
-        const incoming = toTasks ? viewTasks : viewSearch;
-        const outgoing = toTasks ? viewSearch : viewTasks;
-        const isFirst = !viewStack.classList.contains("viewReady");
+        if(viewDone && toDone){
+          const isFirst = !viewStack.classList.contains("viewReady");
+          if(isFirst) viewStack.classList.add("isInstant");
+          viewStack.classList.add("viewReady");
 
-        viewSearch.classList.remove("viewHidden");
-        viewTasks.classList.remove("viewHidden");
+          viewSearch.classList.remove("isActive", "toLeft", "toRight");
+          viewTasks.classList.remove("isActive", "toLeft", "toRight");
+          viewSearch.classList.add("viewHidden");
+          viewTasks.classList.add("viewHidden");
 
-        if(isFirst) viewStack.classList.add("isInstant");
-        viewStack.classList.add("viewReady");
+          viewDone.classList.remove("viewHidden", "toLeft", "toRight");
+          viewDone.classList.add("isActive");
 
-        incoming.classList.add("isActive");
-        incoming.classList.add(toTasks ? "toRight" : "toLeft");
-        outgoing.classList.remove("toLeft", "toRight");
-        outgoing.classList.add(toTasks ? "toLeft" : "toRight");
-        outgoing.classList.remove("isActive");
+          requestAnimationFrame(() => {
+            if(isFirst) viewStack.classList.remove("isInstant");
+          });
+        }else{
+          if(viewDone){
+            viewDone.classList.remove("isActive", "toLeft", "toRight");
+            viewDone.classList.add("viewHidden");
+          }
+          const incoming = toTasks ? viewTasks : viewSearch;
+          const outgoing = toTasks ? viewSearch : viewTasks;
+          const isFirst = !viewStack.classList.contains("viewReady");
 
-        requestAnimationFrame(() => {
-          if(isFirst) viewStack.classList.remove("isInstant");
-          incoming.classList.remove("toLeft", "toRight");
-        });
+          viewSearch.classList.remove("viewHidden");
+          viewTasks.classList.remove("viewHidden");
+
+          if(isFirst) viewStack.classList.add("isInstant");
+          viewStack.classList.add("viewReady");
+
+          incoming.classList.add("isActive");
+          incoming.classList.add(toTasks ? "toRight" : "toLeft");
+          outgoing.classList.remove("toLeft", "toRight");
+          outgoing.classList.add(toTasks ? "toLeft" : "toRight");
+          outgoing.classList.remove("isActive");
+
+          requestAnimationFrame(() => {
+            if(isFirst) viewStack.classList.remove("isInstant");
+            incoming.classList.remove("toLeft", "toRight");
+          });
+        }
       }
+
+      const showSearchRow = currentView !== "done";
+      if(searchRow) searchRow.style.display = showSearchRow ? "" : "none";
+      if(searchFilterBtn) searchFilterBtn.disabled = !showSearchRow;
+      if(searchInput) searchInput.disabled = !showSearchRow;
 
       if(currentView === "tasks"){
 
@@ -4932,30 +4977,64 @@
           goToTasksBtn.setAttribute("title", "Voltar para o buscador");
           goToTasksBtn.setAttribute("aria-label", "Voltar para o buscador");
         }
+        if(goToDoneTasksBtn){
+          goToDoneTasksBtn.classList.remove("isDoneView");
+          goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
+          goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
+        }
 
         renderTasks();
         scrollToTop();
         updateFilterButtonsState();
-      }else{
-        if(searchInput) searchInput.placeholder = "Digite uma palavra-chave (ex: troca, prazo, rastreio, pix, tamanho...)";
-        if(searchInput){
-          tasksSearchQuery = (searchInput.value || "");
-          searchInput.value = searchQueryCache || "";
-        }
+        return;
+      }
 
-        navToggleViewBtn.textContent = "Tarefas Di\u00e1rias";
+      if(currentView === "done"){
+        if(searchInput) searchInput.placeholder = "Tarefas encerradas";
+
+        navToggleViewBtn.textContent = "Buscador";
         navToggleViewBtn.classList.remove("primary");
-        if(viewTitleText) viewTitleText.textContent = "Buscador de Solu\u00e7\u00f5es";
+        if(viewTitleText) viewTitleText.textContent = "Tarefas Encerradas";
         if(goToTasksBtn){
           goToTasksBtn.classList.remove("isTasksView");
           goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
           goToTasksBtn.setAttribute("aria-label", "Ir para tarefas di\u00e1rias");
         }
+        if(goToDoneTasksBtn){
+          goToDoneTasksBtn.classList.add("isDoneView");
+          goToDoneTasksBtn.setAttribute("title", "Voltar para o buscador");
+          goToDoneTasksBtn.setAttribute("aria-label", "Voltar para o buscador");
+        }
 
-        render();
+        renderDoneTasks();
         scrollToTop();
         updateFilterButtonsState();
+        return;
       }
+
+      if(searchInput) searchInput.placeholder = "Digite uma palavra-chave (ex: troca, prazo, rastreio, pix, tamanho...)";
+      if(searchInput){
+        tasksSearchQuery = (searchInput.value || "");
+        searchInput.value = searchQueryCache || "";
+      }
+
+      navToggleViewBtn.textContent = "Tarefas Di\u00e1rias";
+      navToggleViewBtn.classList.remove("primary");
+      if(viewTitleText) viewTitleText.textContent = "Buscador de Solu\u00e7\u00f5es";
+      if(goToTasksBtn){
+        goToTasksBtn.classList.remove("isTasksView");
+        goToTasksBtn.setAttribute("title", "Ir para tarefas di\u00e1rias");
+        goToTasksBtn.setAttribute("aria-label", "Ir para tarefas di\u00e1rias");
+      }
+      if(goToDoneTasksBtn){
+        goToDoneTasksBtn.classList.remove("isDoneView");
+        goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
+        goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
+      }
+
+      render();
+      scrollToTop();
+      updateFilterButtonsState();
     }
 
     /***********************
@@ -6669,7 +6748,7 @@ function fillPhaseStatusSelect(){
 
       	}catch(err){
 
-      		showAlert("NÃ£o foi possÃ­vel enviar a imagem do passo.");
+      		showAlert("Não foi possível enviar a imagem do passo.");
 
       	}
 
@@ -6855,6 +6934,7 @@ function fillPhaseStatusSelect(){
       tasksDone = normalizeTasks(next);
       storageSet(STORAGE_KEY_TASKS_DONE, JSON.stringify(tasksDone));
       renderMiniCalendar();
+      renderDoneTasks();
     }
     function renderLinksList(list){
       const arr = Array.isArray(list) ? list : [];
@@ -7384,7 +7464,7 @@ function fillPhaseStatusSelect(){
       attentionInput.dataset.index = String(idx);
       attentionInput.checked = Boolean(d.attention || d.attentionNote);
       attentionLabel.appendChild(attentionInput);
-      attentionLabel.appendChild(document.createTextNode(" AtenÃ§Ã£o"));
+      attentionLabel.appendChild(document.createTextNode(" Atenção"));
       attentionRow.appendChild(attentionLabel);
 
       const attentionWrap = document.createElement("div");
@@ -7392,12 +7472,12 @@ function fillPhaseStatusSelect(){
       attentionWrap.style.display = attentionInput.checked ? "block" : "none";
       const attentionLabelText = document.createElement("div");
       attentionLabelText.className = "label";
-      attentionLabelText.textContent = "ObservaÃ§Ãµes";
+      attentionLabelText.textContent = "Observações";
       const attentionNote = document.createElement("textarea");
       attentionNote.className = "obsAttentionNote";
       attentionNote.dataset.index = String(idx);
       attentionNote.rows = 3;
-      attentionNote.placeholder = "Digite as observaÃ§Ãµes...";
+      attentionNote.placeholder = "Digite as observações...";
       attentionNote.value = (d.attentionNote || "");
       attentionWrap.appendChild(attentionLabelText);
       attentionWrap.appendChild(attentionNote);
@@ -7779,13 +7859,22 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(idx < 0) return;
       const t = tasks[idx];
       markCalendarClosed(t);
-      tasksDone = tasksDone || [];
-      tasksDone.unshift({ ...t, closedAt: new Date().toISOString() });
-      saveTasksDone(tasksDone);
+      addTaskToDone(t, { isExtra: false });
       tasks.splice(idx, 1);
       saveTasks(tasks);
       if(tasksEditId === id) clearTasksForm();
       renderTasks();
+    }
+
+    function addTaskToDone(task, options){
+      if(!task) return;
+      const closedAt = options?.closedAt || new Date().toISOString();
+      const isExtra = options?.isExtra ?? Boolean(task.isExtra);
+      const id = String(task.id || "");
+      tasksDone = tasksDone || [];
+      tasksDone = tasksDone.filter(t => String(t.id || "") !== id);
+      tasksDone.unshift({ ...task, closedAt, isExtra });
+      saveTasksDone(tasksDone);
     }
 
     function togglePhaseEditAttention(){
@@ -8026,8 +8115,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
            </button>`
         : "";
 
-        const textHtml = o.text
-          ? `<div class="label" style="margin:16px 0 4px 0;">Descri&ccedil;&atilde;o</div><div class="pre">${escapeHtml(o.text)}</div>`
+        const textRaw = (o.text || "").toString();
+        const textSafe = escapeHtml(textRaw);
+        const textWrapped = textSafe.replace(/([^\s]{20})/g, "$1&#8203;");
+        const textHtml = textRaw
+          ? `<div class="label" style="margin:16px 0 4px 0;">Descri&ccedil;&atilde;o</div><div class="pre" style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">${textWrapped}</div>`
           : "";
         const stateValue = (o.state || "").trim() || (o._idx === lastIdx ? PHASE_STATE_ACTIVE : PHASE_STATE_DONE);
         const isActive = stateValue === PHASE_STATE_ACTIVE;
@@ -8056,7 +8148,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
              </button>`
           : "";
         const calendarBtn = (o._idx === lastIdx)
-          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="CalendÃ¡rio" aria-label="CalendÃ¡rio">
+          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calendário" aria-label="Calendário">
                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                  <rect x="3" y="4" width="18" height="17" rx="2"></rect>
                  <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -8248,6 +8340,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const ok = await showConfirm(`Remover esta tarefa?\n\nCliente: ${t.cliente || "-"}\nPedido: ${t.pedido || "-"}\nAssunto: ${t.assunto || "-"}\n\nConfirmar?`);
       if(!ok) return;
 
+      addTaskToDone(t, { isExtra: Boolean(t.isExtra) });
       if(t.isExtra){
         calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== String(id));
         saveCalendarHistory(calendarHistory);
@@ -8649,7 +8742,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             setTimeout(()=>{ el.style.opacity = "1"; }, 450);
             openUrl();
           }).catch(()=>{
-            showAlert("NÃ£o foi possÃ­vel copiar.");
+            showAlert("Não foi possível copiar.");
             openUrl();
           });
         });
@@ -8680,7 +8773,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa nÇœo encontrada.");
+            showAlert("Tarefa nuo encontrada.");
             return;
           }
           openTaskSummaryPopup(ref);
@@ -8696,12 +8789,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa nâ‚¬oo encontrada.");
+            showAlert("Tarefa n€oo encontrada.");
             return;
           }
           const date = getPhaseDateByIndex(ref, phaseIdx) || getEffectivePhaseDate(ref);
           if(!date){
-            showAlert("Esta fase nâ‚¬oo possui data.");
+            showAlert("Esta fase n€oo possui data.");
             return;
           }
           const parts = date.split("-");
@@ -8736,7 +8829,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!Number.isFinite(idx) || idx < 0) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa nÇœo encontrada.");
+            showAlert("Tarefa nuo encontrada.");
             return;
           }
           const info = getPhaseAttentionByIndex(ref, idx);
@@ -8822,7 +8915,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa nÃ£o encontrada na lista.");
+            showAlert("Tarefa não encontrada na lista.");
             return;
           }
           closeCalendar();
@@ -8867,6 +8960,144 @@ function getNuvemshopSupportBaseUrl(lojaText){
       renderMiniCalendar();
     }
 
+    function renderDoneTasks(){
+      if(currentView !== "done") return;
+      if(!doneTasksList || !doneTasksCount) return;
+
+      const list = Array.isArray(tasksDone) ? tasksDone.slice() : [];
+      list.sort((a, b) => {
+        const ta = new Date(a.closedAt || a.updatedAt || a.createdAt || 0).getTime();
+        const tb = new Date(b.closedAt || b.updatedAt || b.createdAt || 0).getTime();
+        return tb - ta;
+      });
+
+      doneTasksCount.textContent = `${list.length} item(ns)`;
+
+      if(!list.length){
+        doneTasksList.innerHTML = `<div class="note">Nenhuma tarefa encerrada.</div>`;
+        return;
+      }
+
+      doneTasksList.innerHTML = list.map(t => {
+        const isExtra = Boolean(t.isExtra);
+        const title = (t.assunto || "").trim() || (isExtra ? "Tarefa extra" : "Caso");
+        const lojaRaw = (t.loja || "").toString().trim();
+        const lojaText = isExtra ? lojaRaw : (lojaRaw || "Di\u00e1rio Nerdify");
+        const effDate = getEffectivePhaseDate(t) || (t.proxEtapa || "").trim();
+        const startTime = (t.startTime || "").toString().trim();
+        const endTime = (t.endTime || "").toString().trim();
+        const timeLabel = (startTime || endTime) ? `${startTime || "--:--"} - ${endTime || "--:--"}` : "-";
+        const prox = isExtra ? timeLabel : formatDateBR(effDate);
+        const data = formatDateBR(t.data || "");
+        const closedAt = formatDateTimeBR(t.closedAt || t.updatedAt || t.createdAt || "");
+
+        const extraText = (t.extraText || "").toString().trim();
+        const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
+        const cliente = (t.cliente || "").toString().trim();
+
+        const copyIconSmall = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+        const trashIcon = `<svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><rect x="6" y="6" width="12" height="14" rx="2"></rect><path d="M10 10v6"></path><path d="M14 10v6"></path></svg>`;
+        const summaryBtn = (!isExtra && Array.isArray(t.obs) && t.obs.length)
+          ? `<button type="button" class="btn small iconBtn" data-done-summary="${escapeHtml(String(t.id || ""))}" title="Resumo" aria-label="Resumo" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">
+               <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                 <line x1="6" y1="7" x2="20" y2="7"></line>
+                 <line x1="6" y1="12" x2="20" y2="12"></line>
+                 <line x1="6" y1="17" x2="20" y2="17"></line>
+                 <circle cx="4" cy="7" r="1"></circle>
+                 <circle cx="4" cy="12" r="1"></circle>
+                 <circle cx="4" cy="17" r="1"></circle>
+               </svg>
+             </button>`
+          : "";
+
+        const detailItems = [];
+        if(isExtra && extraText) detailItems.push(escapeHtml(extraText));
+        if(!isExtra && pedidoEfetivo) detailItems.push(`Pedido: <span style="font-weight:600;">${escapeHtml(pedidoEfetivo)}</span> <button type="button" class="btn small copyBtn" data-copy-done-pedido="${escapeHtml(pedidoEfetivo)}" title="Copiar pedido" aria-label="Copiar pedido" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIconSmall}</button>`);
+        if(!isExtra && cliente) detailItems.push(`Cliente: <span style="font-weight:600;">${escapeHtml(cliente)}</span> <button type="button" class="btn small copyBtn" data-copy-done-cliente="${escapeHtml(cliente)}" title="Copiar cliente" aria-label="Copiar cliente" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIconSmall}</button>`);
+
+        const detailsHtml = detailItems.length
+          ? `<div class="doneTaskDetail" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-word;">${detailItems.map(v => `<span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;">${v}</span>`).join("")}</div>`
+          : "";
+
+        return `
+          <div class="doneTaskCard ${isExtra ? "doneTaskExtra" : ""}" style="padding:16px;border-radius:14px;border:1px solid color-mix(in srgb, var(--line) 70%, transparent);background:color-mix(in srgb, var(--card) 80%, transparent);box-shadow:var(--shadow);">
+            <div class="doneTaskStack">
+            <div class="doneTaskHeader" style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+              <div class="doneTaskTitle" style="margin-bottom:16px;">${escapeHtml(title)}</div>
+              <div class="doneTaskActions" style="display:inline-flex;align-items:center;gap:8px;">
+                ${summaryBtn}
+                <button type="button" class="btn small danger iconBtn" data-done-del="${escapeHtml(String(t.id || ""))}" title="Excluir tarefa" aria-label="Excluir tarefa" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${trashIcon}</button>
+              </div>
+            </div>
+            <div class="doneMetaRow" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:16px;">
+              ${lojaText ? `<span class="pillMini donePill">Loja: ${escapeHtml(lojaText)}</span>` : ""}
+              <span class="pillMini donePill">${isExtra ? "Hor\u00e1rio" : "Pr\u00f3xima Etapa"}: <b>${escapeHtml(prox)}</b></span>
+              <span class="pillMini donePill">Data inicial: <b>${escapeHtml(data)}</b></span>
+              <span class="pillMini donePill">Encerrada em: <b>${escapeHtml(closedAt)}</b></span>
+            </div>
+            ${detailsHtml}
+            </div>
+          </div>
+        `;
+      }).join("");
+      doneTasksList.querySelectorAll("[data-copy-done-pedido]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const v = (btn.getAttribute("data-copy-done-pedido") || "").trim();
+          if(!v) return;
+          navigator.clipboard.writeText(v).then(()=>{
+            btn.style.opacity = "0.6";
+            setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
+          }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
+        });
+      });
+
+      doneTasksList.querySelectorAll("[data-copy-done-cliente]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const v = (btn.getAttribute("data-copy-done-cliente") || "").trim();
+          if(!v) return;
+          navigator.clipboard.writeText(v).then(()=>{
+            btn.style.opacity = "0.6";
+            setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
+          }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
+        });
+
+      });
+      doneTasksList.querySelectorAll("[data-done-summary]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const id = (btn.getAttribute("data-done-summary") || "").toString().trim();
+          if(!id) return;
+          const ref = (tasksDone || []).find(t => String(t.id || "") === id);
+          if(!ref){
+            showAlert("Tarefa n\u00e3o encontrada.");
+            return;
+          }
+          openTaskSummaryPopup(ref);
+        });
+      });
+
+      doneTasksList.querySelectorAll("[data-done-del]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const id = (btn.getAttribute("data-done-del") || "").trim();
+          if(!id) return;
+          const ref = (tasksDone || []).find(t => String(t.id || "") === id);
+          const pedidoRef = ref ? (getEffectivePedidoFromTask(ref) || ref.pedido || "").toString().trim() : "";
+          const clienteRef = ref ? (ref.cliente || "").toString().trim() : "";
+          const assuntoRef = ref ? ((ref.assunto || ref.extraText || "").toString().trim()) : "";
+          const ok = await showConfirm(`Excluir esta tarefa encerrada?\n\nAssunto: ${assuntoRef || "-"}\nCliente: ${clienteRef || "-"}\nPedido: ${pedidoRef || "-"}\n\nConfirmar?`);
+          if(!ok) return;
+          tasksDone = (tasksDone || []).filter(t => String(t.id || "") !== id);
+          saveTasksDone(tasksDone);
+          calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
+          saveCalendarHistory(calendarHistory);
+          renderDoneTasks();
+          renderCalendar();
+          renderCalendarDayDetails(calSelectedISO);
+        });
+      });
+    }
+
     /***********************
      * EVENTS
      ***********************/
@@ -8878,6 +9109,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         renderTasks();
         return;
       }
+      if(currentView === "done") return;
       render();
     });
     if(searchStoreSelect){
@@ -8900,6 +9132,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(tasksFiltersOverlay) tasksFiltersOverlay.classList.add("show");
           return;
         }
+        if(currentView === "done") return;
         if(searchFiltersOverlay) searchFiltersOverlay.classList.add("show");
       });
     }
@@ -9010,7 +9243,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     		setQuestionImagesUI(qImages.concat(uploaded));
     	}
     	if(hadError){
-    		showAlert("NÃ£o foi possÃ­vel enviar uma das imagens.");
+    		showAlert("Não foi possível enviar uma das imagens.");
     	}
     });
     qClearImgsBtn.addEventListener("click", ()=>{
@@ -9589,7 +9822,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(copyProductTableBtn){
       copyProductTableBtn.addEventListener("click", async ()=>{
         if(!currentProductTableUrl){
-          showAlert("Tabela nÃ£o disponÃ­vel para este produto.");
+          showAlert("Tabela não disponível para este produto.");
           return;
         }
         await copyImageToClipboard(currentProductTableUrl, copyProductTableBtn, "Copiar imagem");
@@ -9611,7 +9844,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         const phone = digits.startsWith("55") ? digits : `55${digits}`;
         if(!currentProductVideoUrl || !currentProductVideoText){
-          showAlert("VÃ­deo nÃ£o disponÃ­vel para este produto.");
+          showAlert("Vídeo não disponível para este produto.");
           return;
         }
         const message = `${currentProductVideoText}\n\n${currentProductVideoUrl}`;
@@ -9673,7 +9906,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       window.close();
       setTimeout(() => {
         if(!window.closed){
-          showAlert("NÃ£o foi possÃ­vel fechar a aba automaticamente. Feche manualmente.");
+          showAlert("Não foi possível fechar a aba automaticamente. Feche manualmente.");
         }
         allowAppClose = false;
       }, 200);
@@ -9830,13 +10063,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(removedNames.length){
           const fallback = nextNames[0] || "";
           const lines = [
-            "VocÃª estÃ¡ removendo lojas do cadastro.",
+            "Você está removendo lojas do cadastro.",
             "",
             `Lojas removidas: ${removedNames.join(", ")}`,
             "",
             "O sistema vai remover dados ligados a essas lojas:",
             "- Perguntas/Respostas e Tarefas Diarias",
-            "- Produtos e HistÃ³rico do CalendÃ¡rio",
+            "- Produtos e Histórico do Calendário",
             "- Links da Nuvemshop",
             "",
             "Os itens ser\u00e3o deletados definitivamente.",
@@ -10634,6 +10867,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
         setView(currentView === "tasks" ? "search" : "tasks");
       });
     }
+    if(goToDoneTasksBtn){
+      goToDoneTasksBtn.addEventListener("click", ()=>{
+        setView(currentView === "done" ? "search" : "done");
+      });
+    }
 
 
     // tasks events (sem senha)
@@ -11027,6 +11265,22 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
 
     bootstrapApp();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
