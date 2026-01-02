@@ -24,6 +24,7 @@
     // >>> CALEND\u00c1RIO (hist\u00f3rico dos assuntos por Pr\u00f3xima Etapa)
     // Mant\u00e9m registros mesmo ap\u00f3s remover chamados (para aparecer vermelho no calend\u00e1rio)
     const STORAGE_KEY_CALENDAR = "calendarHistory_v1";
+    const STORAGE_KEY_SIDE_MENU = "side_menu_collapsed_v1";
 
     const PASSWORD = "123"; // usado para editar/excluir PERGUNTAS e importar
     const FILE_NAME_PREFIX = "base-atendimento";
@@ -1644,6 +1645,11 @@
           .concat(names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
         tasksSearchStore.innerHTML = options.join("");
       }
+      if(doneSearchStore){
+        const options = ['<option value="" selected>Todas as lojas</option>']
+          .concat(names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
+        doneSearchStore.innerHTML = options.join("");
+      }
       if(tLoja){
         const options = ['<option value="" selected>Escolha a loja</option>']
           .concat(names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
@@ -1768,8 +1774,13 @@
         || Boolean((tasksSearchStatusValue || "").trim())
         || Boolean((tasksSearchPeriodFromValue || "").trim())
         || Boolean((tasksSearchPeriodToValue || "").trim());
+      const doneActive = Boolean((doneSearchStoreValue || "").trim())
+        || (doneSearchPeriodValue || "").trim() !== "ALL"
+        || Boolean((doneSearchStatusValue || "").trim())
+        || Boolean((doneSearchPeriodFromValue || "").trim())
+        || Boolean((doneSearchPeriodToValue || "").trim());
       if(searchFilterBtn){
-        const active = currentView === "tasks" ? tasksActive : (currentView === "done" ? false : searchActive);
+        const active = currentView === "tasks" ? tasksActive : (currentView === "done" ? doneActive : searchActive);
         searchFilterBtn.classList.toggle("isActive", active);
       }
       if(calFilterBtn){
@@ -1787,6 +1798,8 @@
     const viewTasks   = document.getElementById("viewTasks");
     const viewDone    = document.getElementById("viewDone");
     const viewStack   = document.getElementById("viewStack");
+    const sideMenu    = document.getElementById("sideMenu");
+    const sideMenuToggle = document.getElementById("sideMenuToggle");
 
     const searchInput = document.getElementById("search");
     const searchStoreSelect = document.getElementById("searchStore");
@@ -2220,6 +2233,8 @@
     const tasksList = document.getElementById("tasksList");
     const doneTasksCount = document.getElementById("doneTasksCount");
     const doneTasksList = document.getElementById("doneTasksList");
+    const tasksCountBadge = document.getElementById("tasksCountBadge");
+    const tasksExtraCountBadge = document.getElementById("tasksExtraCountBadge");
 
     const tData = document.getElementById("tData");
     const tCliente = document.getElementById("tCliente");
@@ -2245,6 +2260,16 @@
     const tasksSearchPeriodTo = document.getElementById("tasksSearchPeriodTo");
     const tasksSearchStatus = document.getElementById("tasksSearchStatus");
     const tasksSearchClearBtn = document.getElementById("tasksSearchClearBtn");
+    const doneFiltersOverlay = document.getElementById("doneFiltersOverlay");
+    const doneFiltersCloseBtn = document.getElementById("doneFiltersCloseBtn");
+    const doneFiltersApplyBtn = document.getElementById("doneFiltersApplyBtn");
+    const doneFiltersClearBtn = document.getElementById("doneFiltersClearBtn");
+    const doneSearchStore = document.getElementById("doneSearchStore");
+    const doneSearchPeriod = document.getElementById("doneSearchPeriod");
+    const doneSearchPeriodCustom = document.getElementById("doneSearchPeriodCustom");
+    const doneSearchPeriodFrom = document.getElementById("doneSearchPeriodFrom");
+    const doneSearchPeriodTo = document.getElementById("doneSearchPeriodTo");
+    const doneSearchStatus = document.getElementById("doneSearchStatus");
     const tasksFilterBtn = document.getElementById("tasksFilterBtn");
     const tasksFiltersOverlay = document.getElementById("tasksFiltersOverlay");
     const tasksFiltersCloseBtn = document.getElementById("tasksFiltersCloseBtn");
@@ -2356,6 +2381,12 @@
     let tasksSearchPeriodFromValue = "";
     let tasksSearchPeriodToValue = "";
     let tasksSearchStatusValue = "";
+    let doneSearchQuery = "";
+    let doneSearchStoreValue = "";
+    let doneSearchPeriodValue = "ALL";
+    let doneSearchPeriodFromValue = "";
+    let doneSearchPeriodToValue = "";
+    let doneSearchStatusValue = "";
 
     // calend\u00e1rio state
     let calendarHistory = [];
@@ -4911,9 +4942,24 @@
      * VIEW SWITCH
      ***********************/
     function setView(view){
+      const prevView = currentView;
       currentView = (view === "tasks" || view === "done") ? view : "search";
       const toTasks = currentView === "tasks";
       const toDone = currentView === "done";
+
+      if(searchInput){
+        if(prevView === "tasks") tasksSearchQuery = (searchInput.value || "");
+        if(prevView === "done") doneSearchQuery = (searchInput.value || "");
+      }
+
+      const animateFromRight = (el) => {
+        if(!el) return;
+        el.classList.remove("toLeft", "toRight");
+        el.classList.add("toRight");
+        requestAnimationFrame(() => {
+          el.classList.remove("toRight");
+        });
+      };
 
       if(viewStack && viewSearch && viewTasks){
         if(viewDone && toDone){
@@ -4927,10 +4973,11 @@
           viewTasks.classList.add("viewHidden");
 
           viewDone.classList.remove("viewHidden", "toLeft", "toRight");
-          viewDone.classList.add("isActive");
+          viewDone.classList.add("isActive", "toRight");
 
           requestAnimationFrame(() => {
             if(isFirst) viewStack.classList.remove("isInstant");
+            viewDone.classList.remove("toRight");
           });
         }else{
           if(viewDone){
@@ -4947,10 +4994,10 @@
           if(isFirst) viewStack.classList.add("isInstant");
           viewStack.classList.add("viewReady");
 
-          incoming.classList.add("isActive");
-          incoming.classList.add(toTasks ? "toRight" : "toLeft");
+          incoming.classList.remove("toLeft", "toRight");
+          incoming.classList.add("isActive", "toRight");
           outgoing.classList.remove("toLeft", "toRight");
-          outgoing.classList.add(toTasks ? "toLeft" : "toRight");
+          outgoing.classList.add("toLeft");
           outgoing.classList.remove("isActive");
 
           requestAnimationFrame(() => {
@@ -4960,7 +5007,14 @@
         }
       }
 
-      const showSearchRow = currentView !== "done";
+      if(prevView === "tasks" && currentView === "tasks"){
+        animateFromRight(viewTasks);
+      }
+      if(prevView === "done" && currentView === "done"){
+        animateFromRight(viewDone);
+      }
+
+      const showSearchRow = true;
       if(searchRow) searchRow.style.display = showSearchRow ? "" : "none";
       if(searchFilterBtn) searchFilterBtn.disabled = !showSearchRow;
       if(searchInput) searchInput.disabled = !showSearchRow;
@@ -4973,7 +5027,7 @@
           searchInput.value = tasksSearchQuery || "";
         }
 
-        navToggleViewBtn.textContent = "Tarefas normais";
+        navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Di\u00e1rias";
         if(goToSearchBtn){
@@ -4984,8 +5038,8 @@
         if(goToTasksBtn){
           const isNormalTasks = tasksTypeFilter !== "extra";
           goToTasksBtn.classList.toggle("isTasksView", isNormalTasks);
-          goToTasksBtn.setAttribute("title", "Tarefas normais");
-          goToTasksBtn.setAttribute("aria-label", "Tarefas normais");
+          goToTasksBtn.setAttribute("title", "Tarefas");
+          goToTasksBtn.setAttribute("aria-label", "Tarefas");
         }
         if(goToTasksExtraBtn){
           const isExtraTasks = tasksTypeFilter === "extra";
@@ -5006,9 +5060,10 @@
       }
 
       if(currentView === "done"){
-        if(searchInput) searchInput.placeholder = "Tarefas encerradas";
+        if(searchInput) searchInput.placeholder = "Buscar tarefas encerradas...";
+        if(searchInput) searchInput.value = doneSearchQuery || "";
 
-        navToggleViewBtn.textContent = "Tarefas normais";
+        navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Encerradas";
         if(goToSearchBtn){
@@ -5018,8 +5073,8 @@
         }
         if(goToTasksBtn){
           goToTasksBtn.classList.remove("isTasksView");
-          goToTasksBtn.setAttribute("title", "Tarefas normais");
-          goToTasksBtn.setAttribute("aria-label", "Tarefas normais");
+          goToTasksBtn.setAttribute("title", "Tarefas");
+          goToTasksBtn.setAttribute("aria-label", "Tarefas");
         }
         if(goToTasksExtraBtn){
           goToTasksExtraBtn.classList.remove("isTasksView");
@@ -5039,12 +5094,9 @@
       }
 
       if(searchInput) searchInput.placeholder = "Digite uma palavra-chave (ex: troca, prazo, rastreio, pix, tamanho...)";
-      if(searchInput){
-        tasksSearchQuery = (searchInput.value || "");
-        searchInput.value = searchQueryCache || "";
-      }
+      if(searchInput) searchInput.value = searchQueryCache || "";
 
-      navToggleViewBtn.textContent = "Tarefas normais";
+      navToggleViewBtn.textContent = "Tarefas";
       navToggleViewBtn.classList.remove("primary");
       if(viewTitleText) viewTitleText.textContent = "Buscador de Solu\u00e7\u00f5es";
       if(goToSearchBtn){
@@ -5054,8 +5106,8 @@
       }
       if(goToTasksBtn){
         goToTasksBtn.classList.remove("isTasksView");
-        goToTasksBtn.setAttribute("title", "Tarefas normais");
-        goToTasksBtn.setAttribute("aria-label", "Tarefas normais");
+        goToTasksBtn.setAttribute("title", "Tarefas");
+        goToTasksBtn.setAttribute("aria-label", "Tarefas");
       }
       if(goToTasksExtraBtn){
         goToTasksExtraBtn.classList.remove("isTasksView");
@@ -5119,6 +5171,25 @@
       applyTheme(isLight ? "dark" : "light");
     }
 
+    function setSideMenuCollapsed(collapsed){
+      if(!sideMenu) return;
+      document.body.classList.toggle("sideMenuCollapsed", collapsed);
+      sideMenu.classList.toggle("isCollapsed", collapsed);
+      if(sideMenuToggle){
+        const label = collapsed ? "Expandir menu" : "Recolher menu";
+        sideMenuToggle.setAttribute("title", label);
+        sideMenuToggle.setAttribute("aria-label", label);
+      }
+      updateTaskCountBadges();
+      storageSet(STORAGE_KEY_SIDE_MENU, collapsed ? "1" : "0");
+    }
+
+    function initSideMenu(){
+      const saved = storageGet(STORAGE_KEY_SIDE_MENU);
+      const collapsed = saved === "1";
+      setSideMenuCollapsed(collapsed);
+    }
+
     
 
 function fillPhaseStatusSelect(){
@@ -5154,6 +5225,39 @@ function fillPhaseStatusSelect(){
 
   if(prev){
     phaseEditStatus.value = prev;
+  }
+}
+
+function fillAssuntoSelect(){
+  if(!tAssunto) return;
+
+  const prev = (tAssunto.value || "").toString();
+  const alreadyFilled = (tAssunto.dataset.filled === "1");
+
+  if(!alreadyFilled){
+    tAssunto.innerHTML = "";
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = "Selecione o assunto";
+    tAssunto.appendChild(opt0);
+
+    PHASE_STATUS_OPTIONS.forEach(g=>{
+      const og = document.createElement("optgroup");
+      og.label = g.group;
+      (g.options || []).forEach(txt=>{
+        const o = document.createElement("option");
+        o.value = txt;
+        o.textContent = txt;
+        og.appendChild(o);
+      });
+      tAssunto.appendChild(og);
+    });
+
+    tAssunto.dataset.filled = "1";
+  }
+
+  if(prev){
+    tAssunto.value = prev;
   }
 }
 /***********************
@@ -5396,6 +5500,7 @@ function fillPhaseStatusSelect(){
     function saveTasks(next){
       tasks = normalizeTasks(next);
       storageSet(STORAGE_KEY_TASKS, JSON.stringify(tasks));
+      updateTaskCountBadges();
       renderTasks();
       renderMiniCalendar();
 
@@ -6642,6 +6747,7 @@ function fillPhaseStatusSelect(){
     }
 
     function openTaskModal(){
+      fillAssuntoSelect();
       if(taskOverlay){
         if(!taskModalFromCalendar) taskOverlay.classList.remove("isCalendarContext");
         taskOverlay.classList.add("show");
@@ -8489,9 +8595,25 @@ function getNuvemshopSupportBaseUrl(lojaText){
       });
     }
 
+    function updateTaskCountBadges(){
+      const list = Array.isArray(tasks) ? tasks : [];
+      const normalCount = list.filter(t => !t.isExtra).length;
+      const extraCount = list.filter(t => t.isExtra).length;
+      const isCollapsed = document.body.classList.contains("sideMenuCollapsed");
+      if(tasksCountBadge){
+        tasksCountBadge.textContent = String(normalCount);
+        tasksCountBadge.style.display = isCollapsed ? "none" : "inline-flex";
+      }
+      if(tasksExtraCountBadge){
+        tasksExtraCountBadge.textContent = String(extraCount);
+        tasksExtraCountBadge.style.display = isCollapsed ? "none" : "inline-flex";
+      }
+    }
+
     function renderTasks(){
       if(currentView !== "tasks") return;
 
+      updateTaskCountBadges();
       const filtered = getFilteredTasks();
 
       tasksCount.textContent = `${filtered.length} item(ns)`;
@@ -9004,11 +9126,36 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(currentView !== "done") return;
       if(!doneTasksList || !doneTasksCount) return;
 
-      const list = Array.isArray(tasksDone) ? tasksDone.slice() : [];
+      let list = Array.isArray(tasksDone) ? tasksDone.slice() : [];
       list.sort((a, b) => {
         const ta = new Date(a.closedAt || a.updatedAt || a.createdAt || 0).getTime();
         const tb = new Date(b.closedAt || b.updatedAt || b.createdAt || 0).getTime();
         return tb - ta;
+      });
+
+      const q = (doneSearchQuery || "").trim().toLowerCase();
+      const storeFilter = (doneSearchStoreValue || "").trim();
+      const periodFilter = (doneSearchPeriodValue || "").trim();
+      const statusFilter = (doneSearchStatusValue || "").trim();
+      list = list.filter(t => {
+        const isExtra = Boolean(t.isExtra);
+        let loja = (t.loja || "").toString().trim();
+        if(!loja && !isExtra) loja = "Di\u00e1rio Nerdify";
+        if(storeFilter && storeFilter !== "ALL" && loja !== storeFilter) return false;
+        if(statusFilter){
+          const st = (getEffectivePhaseStatus(t) || "").toString().trim();
+          if(!st || st !== statusFilter) return false;
+        }
+        if(periodFilter && periodFilter !== "ALL"){
+          const effDate = (getEffectivePhaseDate(t) || (t.proxEtapa || "")).toString().trim();
+          if(!matchesPeriod(effDate, periodFilter)) return false;
+        }
+        if(!q) return true;
+        const cliente = (t.cliente || "").toString().toLowerCase();
+        const pedidoBase = (t.pedido || "").toString().toLowerCase();
+        const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").toString().toLowerCase();
+        const assunto = (t.assunto || t.extraText || "").toString().toLowerCase();
+        return cliente.includes(q) || pedidoBase.includes(q) || pedidoEfetivo.includes(q) || assunto.includes(q);
       });
 
       doneTasksCount.textContent = `${list.length} item(ns)`;
@@ -9149,7 +9296,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
         renderTasks();
         return;
       }
-      if(currentView === "done") return;
+      if(currentView === "done"){
+        doneSearchQuery = (searchInput.value || "");
+        renderDoneTasks();
+        return;
+      }
       render();
     });
     if(searchStoreSelect){
@@ -9172,7 +9323,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(tasksFiltersOverlay) tasksFiltersOverlay.classList.add("show");
           return;
         }
-        if(currentView === "done") return;
+        if(currentView === "done"){
+          if(doneSearchPeriodCustom && doneSearchPeriod){
+            const val = (doneSearchPeriod.value || "").trim();
+            doneSearchPeriodCustom.style.display = val === "CUSTOM" ? "block" : "none";
+          }
+          if(doneFiltersOverlay) doneFiltersOverlay.classList.add("show");
+          return;
+        }
         if(searchFiltersOverlay) searchFiltersOverlay.classList.add("show");
       });
     }
@@ -9939,6 +10097,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
 
     // theme
     themeToggleBtn.addEventListener("click", toggleTheme);
+    if(sideMenuToggle){
+      sideMenuToggle.addEventListener("click", ()=>{
+        const isCollapsed = document.body.classList.contains("sideMenuCollapsed");
+        setSideMenuCollapsed(!isCollapsed);
+      });
+    }
 
     // fechar app (PWA)
     function tryCloseApp(){
@@ -10665,6 +10829,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
           renderTasks();
           return;
         }
+        if(currentView === "done"){
+          doneSearchQuery = "";
+          renderDoneTasks();
+          return;
+        }
         if(searchStoreSelect) searchStoreSelect.value = "";
         showAllCards = false;
         currentSingleIndex = 0;
@@ -11043,6 +11212,37 @@ navAtalhosBtn.addEventListener("click", ()=>{
         updateFilterButtonsState();
       });
     }
+    if(doneSearchStore){
+      doneSearchStore.addEventListener("change", ()=>{
+        doneSearchStoreValue = (doneSearchStore.value || "").trim();
+        renderDoneTasks();
+        updateFilterButtonsState();
+      });
+    }
+    if(doneSearchPeriod){
+      doneSearchPeriod.addEventListener("change", ()=>{
+        doneSearchPeriodValue = (doneSearchPeriod.value || "").trim();
+        if(doneSearchPeriodCustom){
+          doneSearchPeriodCustom.style.display = doneSearchPeriodValue === "CUSTOM" ? "block" : "none";
+        }
+        renderDoneTasks();
+        updateFilterButtonsState();
+      });
+    }
+    if(doneSearchPeriodFrom){
+      doneSearchPeriodFrom.addEventListener("change", ()=>{
+        doneSearchPeriodFromValue = (doneSearchPeriodFrom.value || "").trim();
+        renderDoneTasks();
+        updateFilterButtonsState();
+      });
+    }
+    if(doneSearchPeriodTo){
+      doneSearchPeriodTo.addEventListener("change", ()=>{
+        doneSearchPeriodToValue = (doneSearchPeriodTo.value || "").trim();
+        renderDoneTasks();
+        updateFilterButtonsState();
+      });
+    }
     if(tasksSearchStatus){
       const opts = ['<option value=\"\" selected>Status: todos</option>'];
       PHASE_STATUS_OPTIONS.forEach(g => {
@@ -11058,6 +11258,22 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
+      });
+    }
+    if(doneSearchStatus){
+      const opts = ['<option value=\"\" selected>Status: todos</option>'];
+      PHASE_STATUS_OPTIONS.forEach(g => {
+        opts.push(`<optgroup label=\"${escapeHtml(g.group)}\">`);
+        (g.options || []).forEach(txt => {
+          opts.push(`<option value=\"${escapeHtml(txt)}\">${escapeHtml(txt)}</option>`);
+        });
+        opts.push(`</optgroup>`);
+      });
+      doneSearchStatus.innerHTML = opts.join("");
+      doneSearchStatus.addEventListener("change", ()=>{
+        doneSearchStatusValue = (doneSearchStatus.value || "").trim();
+        renderDoneTasks();
         updateFilterButtonsState();
       });
     }
@@ -11103,6 +11319,38 @@ navAtalhosBtn.addEventListener("click", ()=>{
         tasksShowAll = false;
         tasksSingleIndex = 0;
         renderTasks();
+        updateFilterButtonsState();
+      });
+    }
+    if(doneFiltersCloseBtn && doneFiltersOverlay){
+      doneFiltersCloseBtn.addEventListener("click", ()=> doneFiltersOverlay.classList.remove("show"));
+    }
+    if(doneFiltersApplyBtn && doneFiltersOverlay){
+      doneFiltersApplyBtn.addEventListener("click", ()=>{
+        doneSearchStoreValue = (doneSearchStore ? (doneSearchStore.value || "").trim() : "");
+        doneSearchPeriodValue = (doneSearchPeriod ? (doneSearchPeriod.value || "").trim() : "ALL");
+        doneSearchPeriodFromValue = (doneSearchPeriodFrom ? (doneSearchPeriodFrom.value || "").trim() : "");
+        doneSearchPeriodToValue = (doneSearchPeriodTo ? (doneSearchPeriodTo.value || "").trim() : "");
+        doneSearchStatusValue = (doneSearchStatus ? (doneSearchStatus.value || "").trim() : "");
+        renderDoneTasks();
+        doneFiltersOverlay.classList.remove("show");
+        updateFilterButtonsState();
+      });
+    }
+    if(doneFiltersClearBtn){
+      doneFiltersClearBtn.addEventListener("click", ()=>{
+        if(doneSearchStore) doneSearchStore.value = "";
+        if(doneSearchPeriod) doneSearchPeriod.value = "ALL";
+        if(doneSearchPeriodCustom) doneSearchPeriodCustom.style.display = "none";
+        if(doneSearchPeriodFrom) doneSearchPeriodFrom.value = "";
+        if(doneSearchPeriodTo) doneSearchPeriodTo.value = "";
+        if(doneSearchStatus) doneSearchStatus.value = "";
+        doneSearchStoreValue = "";
+        doneSearchPeriodValue = "ALL";
+        doneSearchPeriodFromValue = "";
+        doneSearchPeriodToValue = "";
+        doneSearchStatusValue = "";
+        renderDoneTasks();
         updateFilterButtonsState();
       });
     }
@@ -11156,8 +11404,21 @@ navAtalhosBtn.addEventListener("click", ()=>{
       setupForm.addEventListener("submit", handleSetupSubmit);
     }
 
+    function hasOpenOverlay(){
+      const overlays = [
+        taskOverlay,
+        questionOverlay,
+        phaseEditOverlay,
+        menuEditOverlay,
+        closeTaskOverlay,
+        backupOverlay
+      ].filter(Boolean);
+      return overlays.some(el => el.classList.contains("show"));
+    }
+
     window.addEventListener("beforeunload", (e) => {
       if(allowAppClose) return;
+      if(!hasOpenOverlay()) return;
       e.preventDefault();
       e.returnValue = "";
     });
@@ -11299,6 +11560,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       seedTransportadorasLinks();
 
       initTheme();
+      initSideMenu();
       // mant\u00e9m o calend\u00e1rio consistente na inicializa\u00e7\u00e3o
       syncCalendarOpenFlags();
       updateModeLabel();
@@ -11311,6 +11573,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       renderDrawer();
       renderExtraMenuLinks();
       render();
+      updateTaskCountBadges();
       initTasksUI();
       setView("search");
       ensureMiniCalendarNavPlacement();
@@ -11321,6 +11584,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
 
     bootstrapApp();
+
 
 
 

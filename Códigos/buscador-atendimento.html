@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
@@ -6,7 +6,7 @@
   <title>Flowdesk</title>
   <link rel="icon" href="../Favicon/favicon-versao-clara.png" media="(prefers-color-scheme: light)">
   <link rel="icon" href="../Favicon/favicon-versao-escura.png" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=23">
   <style>
     .copyRow > div{
       flex:1 1 0;
@@ -73,29 +73,49 @@
         </svg>
         <span class="sideLabel">Buscador</span>
       </button>
-      <button class="themeBtn sideBtn" id="goToTasksBtn" title="Tarefas normais" aria-label="Tarefas normais">
+      <button class="themeBtn sideBtn" id="goToTasksBtn" title="Tarefas" aria-label="Tarefas">
         <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="5" y="4" width="14" height="16" rx="2"></rect>
           <path d="M9 8h6"></path>
           <path d="M9 12h6"></path>
           <path d="M9 16h4"></path>
         </svg>
-        <span class="sideLabel">Tarefas normais</span>
+        <span class="sideLabel">Tarefas</span>
+        <span class="sideCount" id="tasksCountBadge">0</span>
       </button>
       <button class="themeBtn sideBtn" id="goToTasksExtraBtn" title="Tarefas extras" aria-label="Tarefas extras">
         <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M13 2L3 14h7l-1 8 12-14h-8l1-6z"></path>
         </svg>
         <span class="sideLabel">Tarefas extras</span>
+        <span class="sideCount" id="tasksExtraCountBadge">0</span>
       </button>
       <button class="themeBtn sideBtn" id="goToDoneTasksBtn" title="Tarefas encerradas" aria-label="Tarefas encerradas">
         <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="9"></circle>
           <polyline points="8 12 11 15 16 9"></polyline>
         </svg>
-        <span class="sideLabel">Encerradas</span>
+        <span class="sideLabel">Tarefas encerradas</span>
       </button>
       <div class="sideDivider"></div>
+      <button class="hambBtn sideBtn" id="openDrawerBtn" title="Menu Personaliz&aacute;vel" aria-label="Menu Personaliz&aacute;vel">
+        <svg class="iconStroke customizeIcon" viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <circle cx="9" cy="6" r="2"></circle>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <circle cx="15" cy="12" r="2"></circle>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+          <circle cx="7" cy="18" r="2"></circle>
+        </svg>
+        <span class="sideLabel">Menu Personaliz&aacute;vel</span>
+      </button>
+      <div class="themeBtn sideBtn rightDrawerBtn" id="openRightDrawerBtn" title="Menu extra" aria-label="Menu extra" onclick="openRightDrawer()">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="3"></rect>
+          <line x1="9" y1="5" x2="9" y2="19"></line>
+        </svg>
+        <span class="sideLabel">Menu extra</span>
+      </div>
       <button class="themeBtn sideBtn" id="sakChatBtn" type="button" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
         <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
           <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
@@ -103,6 +123,7 @@
         </svg>
         <span class="sideLabel">Suporte</span>
       </button>
+      
       <button class="themeBtn sideBtn" id="storeLinksBtn" type="button" title="WhatsApp lojas" aria-label="WhatsApp lojas">
         <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
           <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
@@ -143,24 +164,7 @@
         </svg>
         <span class="sideLabel">Configura&ccedil;&otilde;es</span>
       </div>
-      <div class="themeBtn sideBtn rightDrawerBtn" id="openRightDrawerBtn" title="Menu extra" aria-label="Menu extra" onclick="openRightDrawer()">
-        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="3" y="5" width="18" height="14" rx="3"></rect>
-          <line x1="9" y1="5" x2="9" y2="19"></line>
-        </svg>
-        <span class="sideLabel">Menu extra</span>
-      </div>
-      <button class="hambBtn sideBtn" id="openDrawerBtn" title="Menu Personalizável" aria-label="Menu Personalizável">
-        <svg class="iconStroke customizeIcon" viewBox="0 0 24 24" aria-hidden="true">
-          <line x1="4" y1="6" x2="20" y2="6"></line>
-          <circle cx="9" cy="6" r="2"></circle>
-          <line x1="4" y1="12" x2="20" y2="12"></line>
-          <circle cx="15" cy="12" r="2"></circle>
-          <line x1="4" y1="18" x2="20" y2="18"></line>
-          <circle cx="7" cy="18" r="2"></circle>
-        </svg>
-        <span class="sideLabel">Menu Personalizável</span>
-      </button>
+      
     </div>
   </aside>  <header>
     <div class="wrap">
@@ -265,7 +269,7 @@
               <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
             </svg>
           </button>
-          <button class="themeBtn" type="button" data-header-proxy="goToTasksBtn" title="Ir para tarefas normais" aria-label="Ir para tarefas normais">
+          <button class="themeBtn" type="button" data-header-proxy="goToTasksBtn" title="Ir para tarefas" aria-label="Ir para tarefas">
             <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
               <rect x="5" y="4" width="14" height="16" rx="2"></rect>
               <path d="M9 8h6"></path>
@@ -296,7 +300,7 @@
 
         <div class="menuBtnsRow">
           <button class="btn small" id="navAtalhosBtn">Buscador</button>
-          <button class="btn small" id="navToggleViewBtn">Tarefas normais</button>
+          <button class="btn small" id="navToggleViewBtn">Tarefas</button>
           <button class="btn small" id="navTasksExtraBtn">Tarefas extras</button>
         </div>
       </div>
@@ -840,7 +844,7 @@
 
           <div>
             <div class="label">Assunto <span class="count">obrigat&oacute;rio</span></div>
-            <input id="tAssunto" type="text" placeholder="Ex: atraso, troca, defeito..." />
+            <select id="tAssunto"></select>
           </div>
 
           <hr class="dashDivider">
@@ -1420,6 +1424,51 @@
       </div>
     </div>
   </div>
+  <div class="miniOverlay" id="doneFiltersOverlay">
+    <div class="miniModal tasksFiltersModal">
+      <div class="mh">
+        <h3>Filtros - Tarefas encerradas</h3>
+        <button class="btn small" id="doneFiltersCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Loja</div>
+            <select id="doneSearchStore" title="Loja"></select>
+          </div>
+
+          <div>
+            <div class="label">Per&iacute;odo</div>
+            <select id="doneSearchPeriod" title="Per&iacute;odo">
+              <option value="ALL" selected>Todos</option>
+              <option value="TODAY">Hoje</option>
+              <option value="NEXT7">Pr&oacute;ximos 7 dias</option>
+              <option value="NEXT30">Pr&oacute;ximos 30 dias</option>
+              <option value="MONTH">Este m&ecirc;s</option>
+              <option value="CUSTOM">Personalizado</option>
+            </select>
+          </div>
+
+          <div id="doneSearchPeriodCustom" style="display:none;">
+            <div class="label">Per&iacute;odo personalizado</div>
+            <div class="row" style="gap:8px; flex-wrap:wrap;">
+              <input id="doneSearchPeriodFrom" type="date" style="min-width:140px;">
+              <input id="doneSearchPeriodTo" type="date" style="min-width:140px;">
+            </div>
+          </div>
+
+          <div>
+            <div class="label">Status da fase</div>
+            <select id="doneSearchStatus" title="Status da fase"></select>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="doneFiltersClearBtn">Limpar filtros</button>
+        <button class="btn primary" id="doneFiltersApplyBtn">Aplicar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal: Fechar app -->
   <div class="miniOverlay" id="closeAppOverlay">
@@ -1668,10 +1717,12 @@
     </div>
   </div>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=16"></script>
 
   </body>
 </html>
+
+
 
 
 
