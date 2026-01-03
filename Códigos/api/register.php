@@ -2,23 +2,8 @@
 declare(strict_types=1);
 require_once __DIR__ . "/_init.php";
 
-if ($_SERVER["REQUEST_METHOD"] === "GET") {
-  $countStmt = db()->query("SELECT COUNT(*) AS total FROM users");
-  $countRow = $countStmt->fetch();
-  $total = $countRow ? (int)$countRow["total"] : 0;
-  respond(["ok" => true, "needs_setup" => ($total === 0)]);
-}
-
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
   respond(["ok" => false, "error" => "method_not_allowed"], 405);
-}
-
-// Only allow setup if there are no users yet.
-$countStmt = db()->query("SELECT COUNT(*) AS total FROM users");
-$countRow = $countStmt->fetch();
-$total = $countRow ? (int)$countRow["total"] : 0;
-if ($total > 0) {
-  respond(["ok" => false, "error" => "already_configured"], 409);
 }
 
 $input = read_json();
@@ -48,6 +33,11 @@ if (trim($expectedCaptcha) !== $captcha) {
 }
 unset($_SESSION["captcha_answer"], $_SESSION["captcha_ts"]);
 
+$usernameStmt = db()->prepare("SELECT id FROM users WHERE username = :username LIMIT 1");
+$usernameStmt->execute([":username" => $username]);
+if ($usernameStmt->fetch()) {
+  respond(["ok" => false, "error" => "username_in_use"], 409);
+}
 $emailStmt = db()->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
 $emailStmt->execute([":email" => $email]);
 if ($emailStmt->fetch()) {
@@ -71,7 +61,6 @@ $stmt->execute([
   ":expires_at" => $expiresAt,
 ]);
 
-$user_id = (int)db()->lastInsertId();
 $mailSent = send_verification_email($email, $token);
 if (!$mailSent) {
   respond(["ok" => false, "error" => "email_send_failed"], 500);

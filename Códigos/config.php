@@ -14,6 +14,18 @@ define("DB_CHARSET", "utf8mb4");
 
 // Session settings.
 define("APP_SESSION_NAME", "flowdesk_session");
+define("APP_DEBUG", false);
+define("APP_AUTO_MIGRATE", false);
+
+// Email settings.
+define("APP_BASE_URL", "https://beige-opossum-768581.hostingersite.com/C%C3%B3digos");
+define("APP_MAIL_FROM", "rodrigosenamkt@gmail.com");
+define("APP_MAIL_FROM_NAME", "FlowDesk");
+define("APP_SMTP_HOST", "smtp.gmail.com");
+define("APP_SMTP_PORT", 587);
+define("APP_SMTP_USER", "rodrigosenamkt@gmail.com");
+define("APP_SMTP_PASS", "lcmbpulmmtbiegfk");
+define("APP_SMTP_SECURE", "tls"); // tls, ssl, or none
 
 // Upload settings.
 define("APP_PUBLIC_ROOT", realpath(__DIR__) ?: __DIR__);

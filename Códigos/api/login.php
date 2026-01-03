@@ -14,12 +14,20 @@ if ($username === "" || $password === "") {
   respond(["ok" => false, "error" => "missing_credentials"], 400);
 }
 
-$stmt = db()->prepare("SELECT id, username, display_name, password_hash FROM users WHERE username = :username LIMIT 1");
+$stmt = db()->prepare("SELECT id, username, display_name, password_hash, email, email_verified FROM users WHERE username = :username LIMIT 1");
 $stmt->execute([":username" => $username]);
 $user = $stmt->fetch();
 
 if (!$user || !password_verify($password, (string)$user["password_hash"])) {
   respond(["ok" => false, "error" => "invalid_credentials"], 401);
+}
+if ((int)$user["email_verified"] !== 1) {
+  $email = trim((string)($user["email"] ?? ""));
+  if ($email === "") {
+    // Legacy user without email: allow login.
+  } else {
+    respond(["ok" => false, "error" => "email_unverified"], 403);
+  }
 }
 
 $_SESSION["user_id"] = (int)$user["id"];

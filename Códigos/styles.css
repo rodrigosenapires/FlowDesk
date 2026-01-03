@@ -182,9 +182,29 @@
       border-color: color-mix(in srgb, var(--brand) 70%, var(--line));
       box-shadow:0 0 0 2px color-mix(in srgb, var(--brand) 35%, transparent);
     }
+    .authCaptcha{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .authCaptchaRow{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .authCaptchaQuestion{
+      font-size:12px;
+      font-weight:800;
+      color: color-mix(in srgb, var(--text) 88%, transparent);
+    }
     .authSubmit{
       width:100%;
       margin-top:4px;
+    }
+    .authActions{
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
     }
     .authError{
       color:var(--danger);
@@ -733,7 +753,7 @@
       align-items:center;
       gap:10px;
     }
-    textarea, input[type="text"], input[type="date"], input[type="time"], select{
+    textarea, input[type="text"], input[type="date"], input[type="time"], input[type="email"], input[type="tel"], select{
       width:100%;
       padding:12px 12px;
       border-radius:12px;
@@ -762,7 +782,7 @@
     .searchInputWrap input{
       padding-left:calc(var(--search-icon-left) + var(--search-icon-size) + var(--search-icon-gap));
     }
-    body.light textarea, body.light input[type="text"], body.light input[type="date"], body.light input[type="time"], body.light select{
+    body.light textarea, body.light input[type="text"], body.light input[type="date"], body.light input[type="time"], body.light input[type="email"], body.light input[type="tel"], body.light select{
       background: color-mix(in srgb, var(--card) 90%, transparent);
     }
     textarea{min-height:110px}

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Teste de e-mail</title>
+    <style>
+      body{font-family:Arial,sans-serif;background:#0b1220;color:#e9eef7;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}
+      .card{max-width:520px;background:#0f1b2e;border:1px solid #20324f;border-radius:16px;padding:24px}
+      .btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:10px;padding:10px 14px;background:#7c8cff;color:#0b1220;font-weight:700;cursor:pointer}
+      .input{width:100%;box-sizing:border-box;border-radius:10px;border:1px solid #20324f;background:#0b1220;color:#e9eef7;padding:10px 12px;margin:10px 0}
+      .log{white-space:pre-wrap;background:#0b1220;border:1px solid #20324f;border-radius:10px;padding:10px;min-height:80px;margin-top:12px}
+      .note{color:#9fb0c8;font-size:12px;margin-top:10px}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>Teste de e-mail</h2>
+      <p>Envia um e-mail de confirmacao para o destino informado.</p>
+      <label for="emailTo">E-mail destino:</label>
+      <input class="input" id="emailTo" type="email" value="diarionerdify@gmail.com" />
+      <button class="btn" id="runBtn" type="button">Enviar teste</button>
+      <div class="log" id="log">Aguardando...</div>
+      <div class="note">Se der erro, confirme se a senha de app do Gmail foi salva sem espacos.</div>
+    </div>
+    <script>
+      const runBtn = document.getElementById("runBtn");
+      const logEl = document.getElementById("log");
+      const emailTo = document.getElementById("emailTo");
+      runBtn.addEventListener("click", async () => {
+        logEl.textContent = "Enviando...";
+        try {
+          const response = await fetch("api/test_email.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: emailTo.value || "" })
+          });
+          const data = await response.json().catch(() => ({}));
+          logEl.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          logEl.textContent = "Erro: " + (err && err.message ? err.message : "request_failed");
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -2,11 +2,16 @@ CREATE TABLE IF NOT EXISTS `users` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `username` VARCHAR(64) NOT NULL,
   `display_name` VARCHAR(120) DEFAULT NULL,
+  `email` VARCHAR(255) DEFAULT NULL,
+  `email_verified` TINYINT(1) NOT NULL DEFAULT 0,
+  `email_verification_token` VARCHAR(64) DEFAULT NULL,
+  `email_verification_expires_at` DATETIME DEFAULT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `users_username_unique` (`username`)
+  UNIQUE KEY `users_username_unique` (`username`),
+  UNIQUE KEY `users_email_unique` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `user_storage` (

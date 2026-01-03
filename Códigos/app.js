@@ -39,6 +39,9 @@
     let userProfileAvatarPending = "";
     let userProfileAvatarPrev = "";
     let userProfileRequired = false;
+    let storesRequired = false;
+    let authMode = "login";
+    let needsSetupFlag = false;
 
     function storageGet(key){
       return Object.prototype.hasOwnProperty.call(storageCache, key) ? storageCache[key] : null;
@@ -67,6 +70,8 @@
       return {
         name: (data.name || "").toString().trim(),
         doc: (data.doc || "").toString().trim(),
+        whatsapp: (data.whatsapp || "").toString().trim(),
+        email: (data.email || "").toString().trim(),
         avatar: (data.avatar || "").toString().trim()
       };
     }
@@ -85,7 +90,7 @@
 
     function isUserProfileComplete(profile){
       const data = normalizeUserProfile(profile);
-      return Boolean(data.name) && Boolean(data.doc);
+      return Boolean(data.name) && Boolean(data.doc) && Boolean(data.whatsapp) && Boolean(data.email);
     }
 
     function getInitials(name){
@@ -1504,14 +1509,19 @@
       storesConfigHost.innerHTML = cards.join("");
     }
 
-    function openStoresConfig(){
+    function openStoresConfig(options){
+      storesRequired = Boolean(options?.required);
       const base = stores.length ? stores : [DEFAULT_STORES[0]];
       storesDraft = cloneStoresList(base);
       renderStoresConfig();
+      if(storesConfigCloseBtn){
+        storesConfigCloseBtn.style.display = storesRequired ? "none" : "inline-flex";
+      }
       if(storesConfigOverlay) storesConfigOverlay.classList.add("show");
     }
 
     function closeStoresConfig(){
+      if(storesRequired) return;
       if(storesConfigOverlay) storesConfigOverlay.classList.remove("show");
     }
 
@@ -2357,11 +2367,22 @@
     const setupForm = document.getElementById("setupForm");
     const setupUsername = document.getElementById("setupUsername");
     const setupDisplayName = document.getElementById("setupDisplayName");
+    const setupEmail = document.getElementById("setupEmail");
     const setupPassword = document.getElementById("setupPassword");
+    const setupCaptcha = document.getElementById("setupCaptcha");
+    const setupCaptchaQuestion = document.getElementById("setupCaptchaQuestion");
+    const setupCaptchaRefreshBtn = document.getElementById("setupCaptchaRefreshBtn");
+    const openRegisterBtn = document.getElementById("openRegisterBtn");
+    const resendVerificationBtn = document.getElementById("resendVerificationBtn");
+    const backToLoginBtn = document.getElementById("backToLoginBtn");
+    const authLoginActions = document.getElementById("authLoginActions");
+    const authSetupActions = document.getElementById("authSetupActions");
     const userProfileOverlay = document.getElementById("userProfileOverlay");
     const userProfileCloseBtn = document.getElementById("userProfileCloseBtn");
     const userProfileName = document.getElementById("userProfileName");
     const userProfileDoc = document.getElementById("userProfileDoc");
+    const userProfileWhatsapp = document.getElementById("userProfileWhatsapp");
+    const userProfileEmail = document.getElementById("userProfileEmail");
     const userProfileAvatarPreview = document.getElementById("userProfileAvatarPreview");
     const userProfileAvatarImg = document.getElementById("userProfileAvatarImg");
     const userProfileAvatarFallback = document.getElementById("userProfileAvatarFallback");
@@ -2371,6 +2392,7 @@
     const userProfileSaveBtn = document.getElementById("userProfileSaveBtn");
     const userProfileLogoutBtn = document.getElementById("userProfileLogoutBtn");
     const userProfileStoresBtn = document.getElementById("userProfileStoresBtn");
+    const userProfileNextBtn = document.getElementById("userProfileNextBtn");
     const userProfileError = document.getElementById("userProfileError");
 
     /***********************
@@ -10365,6 +10387,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           cleanupStoreData(removedNames, nextNames);
         }
         saveStores(next);
+        storesRequired = false;
         closeStoresConfig();
       });
     }
@@ -11483,6 +11506,49 @@ navAtalhosBtn.addEventListener("click", ()=>{
     if(setupForm){
       setupForm.addEventListener("submit", handleSetupSubmit);
     }
+    if(openRegisterBtn){
+      openRegisterBtn.addEventListener("click", ()=>{
+        showAuthOverlay("register");
+      });
+    }
+    if(resendVerificationBtn){
+      resendVerificationBtn.addEventListener("click", async ()=>{
+        const username = (loginUsername?.value || "").trim();
+        if(!username){
+          setAuthError("Informe o usu\u00e1rio para reenviar o c\u00f3digo.");
+          return;
+        }
+        try{
+          await apiRequest(`${API_BASE}/resend_verification.php`, { username });
+          setAuthError("Enviamos um novo e-mail de confirma\u00e7\u00e3o.");
+          resendVerificationBtn.style.display = "none";
+        }catch(err){
+          const msg = (err && err.message) ? String(err.message) : "";
+          if(msg === "email_already_verified"){
+            setAuthError("Seu e-mail j\u00e1 est\u00e1 confirmado.");
+          }else if(msg === "email_invalid"){
+            setAuthError("E-mail do usu\u00e1rio n\u00e3o est\u00e1 v\u00e1lido.");
+          }else if(msg === "user_not_found"){
+            setAuthError("Usu\u00e1rio n\u00e3o encontrado.");
+          }else if(msg === "email_send_failed"){
+            setAuthError("N\u00e3o foi poss\u00edvel enviar o e-mail. Verifique a configura\u00e7\u00e3o do servidor.");
+          }else{
+            setAuthError("N\u00e3o foi poss\u00edvel reenviar o e-mail.");
+          }
+        }
+      });
+    }
+    if(backToLoginBtn){
+      backToLoginBtn.addEventListener("click", ()=>{
+        showAuthOverlay(needsSetupFlag ? "setup" : "login");
+      });
+    }
+    if(setupCaptchaRefreshBtn){
+      setupCaptchaRefreshBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        loadSetupCaptcha();
+      });
+    }
     if(openUserProfileBtn){
       openUserProfileBtn.addEventListener("click", ()=> openUserProfileOverlay({ required:false }));
     }
@@ -11541,6 +11607,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
         handleUserProfileSave();
       });
     }
+    if(userProfileNextBtn){
+      userProfileNextBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        handleUserProfileSave();
+      });
+    }
     if(userProfileLogoutBtn){
       userProfileLogoutBtn.addEventListener("click", (e)=>{
         e.preventDefault();
@@ -11582,17 +11654,29 @@ navAtalhosBtn.addEventListener("click", ()=>{
 
     function showAuthOverlay(mode, hint){
       if(!authOverlay) return;
-      const isSetup = mode === "setup";
+      authMode = (mode === "register") ? "register" : (mode === "setup" ? "setup" : "login");
+      const isSetup = authMode !== "login";
       if(loginForm) loginForm.style.display = isSetup ? "none" : "flex";
       if(setupForm) setupForm.style.display = isSetup ? "flex" : "none";
-      if(authTitle) authTitle.textContent = isSetup ? "Criar primeiro usuario" : "Entrar";
+      if(authTitle){
+        authTitle.textContent = authMode === "setup"
+          ? "Criar primeiro usuario"
+          : (authMode === "register" ? "Criar conta" : "Entrar");
+      }
       if(authHint){
-        authHint.textContent = hint || (isSetup ? "Crie o primeiro usuario para comecar." : "");
+        const defaultHint = authMode === "setup"
+          ? "Crie o primeiro usuario para comecar."
+          : (authMode === "register" ? "Crie sua conta e confirme o e-mail." : "");
+        authHint.textContent = hint || defaultHint;
       }
-      if(authError){
-        authError.style.display = "none";
-        authError.textContent = "";
-      }
+        if(authError){
+          authError.style.display = "none";
+          authError.textContent = "";
+        }
+        if(resendVerificationBtn) resendVerificationBtn.style.display = authMode === "login" ? "inline-flex" : "none";
+      if(isSetup) loadSetupCaptcha();
+        if(authLoginActions) authLoginActions.style.display = authMode === "login" ? "flex" : "none";
+        if(authSetupActions) authSetupActions.style.display = authMode === "register" ? "flex" : "none";
       authOverlay.classList.add("show");
       authOverlay.setAttribute("aria-hidden", "false");
     }
@@ -11609,6 +11693,17 @@ navAtalhosBtn.addEventListener("click", ()=>{
       authError.style.display = "block";
     }
 
+    async function loadSetupCaptcha(){
+      if(!setupCaptchaQuestion) return;
+      try{
+        const response = await fetch(`${API_BASE}/captcha.php`, { credentials: "include" });
+        const data = await response.json().catch(() => ({}));
+        setupCaptchaQuestion.textContent = data?.question || "Quanto e 1 + 1?";
+      }catch(e){
+        setupCaptchaQuestion.textContent = "Quanto e 1 + 1?";
+      }
+    }
+
     function setUserProfileError(message){
       if(!userProfileError) return;
       if(message){
@@ -11623,6 +11718,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
     function fillUserProfileForm(data){
       if(userProfileName) userProfileName.value = data.name || "";
       if(userProfileDoc) userProfileDoc.value = data.doc || "";
+      if(userProfileWhatsapp) userProfileWhatsapp.value = data.whatsapp || "";
+      if(userProfileEmail) userProfileEmail.value = data.email || "";
       userProfileAvatarPending = data.avatar || "";
       userProfileAvatarPrev = data.avatar || "";
       setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, data.name, data.avatar);
@@ -11637,6 +11734,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(userProfileCloseBtn){
         userProfileCloseBtn.style.display = userProfileRequired ? "none" : "inline-flex";
       }
+      if(userProfileStoresBtn) userProfileStoresBtn.style.display = userProfileRequired ? "none" : "inline-flex";
+      if(userProfileLogoutBtn) userProfileLogoutBtn.style.display = userProfileRequired ? "none" : "inline-flex";
+      if(userProfileSaveBtn) userProfileSaveBtn.style.display = userProfileRequired ? "none" : "inline-flex";
+      if(userProfileNextBtn) userProfileNextBtn.style.display = userProfileRequired ? "inline-flex" : "none";
       userProfileOverlay.classList.add("show");
     }
 
@@ -11648,17 +11749,23 @@ navAtalhosBtn.addEventListener("click", ()=>{
     async function handleUserProfileSave(){
       const name = (userProfileName?.value || "").trim();
       const doc = (userProfileDoc?.value || "").trim();
-      if(!name || !doc){
-        setUserProfileError("Preencha nome e CPF/CNPJ.");
+      const whatsapp = (userProfileWhatsapp?.value || "").trim();
+      const email = (userProfileEmail?.value || "").trim();
+      if(!name || !doc || !whatsapp || !email){
+        setUserProfileError("Preencha nome, CPF/CNPJ, WhatsApp e e-mail.");
         return;
       }
       const avatar = (userProfileAvatarPending || "").trim();
       if(userProfileAvatarPrev && userProfileAvatarPrev !== avatar){
         void apiDeleteImage(userProfileAvatarPrev);
       }
-      saveUserProfile({ name, doc, avatar });
+      saveUserProfile({ name, doc, whatsapp, email, avatar });
+      const wasRequired = userProfileRequired;
       userProfileRequired = false;
       if(userProfileOverlay) userProfileOverlay.classList.remove("show");
+      if(wasRequired){
+        openStoresConfig({ required:true });
+      }
     }
 
     async function handleUserProfileLogout(){
@@ -11689,35 +11796,70 @@ navAtalhosBtn.addEventListener("click", ()=>{
           authResolver();
           authResolver = null;
         }
-      }catch(err){
-        setAuthError("Usuario ou senha invalidos.");
+        }catch(err){
+          const msg = (err && err.message) ? String(err.message) : "";
+          if(msg === "db_error" || msg === "db_schema_error" || msg === "server_error" || msg === "request_failed"){
+            setAuthError("Erro no servidor. Tente novamente.");
+          }else if(msg === "email_unverified"){
+            setAuthError("Confirme seu e-mail antes de entrar.");
+            if(resendVerificationBtn) resendVerificationBtn.style.display = "inline-flex";
+          }else{
+            setAuthError("Usuario ou senha invalidos.");
+            if(resendVerificationBtn) resendVerificationBtn.style.display = "inline-flex";
+          }
+        }
       }
-    }
 
     async function handleSetupSubmit(e){
       e.preventDefault();
       const username = (setupUsername?.value || "").trim();
       const displayName = (setupDisplayName?.value || "").trim();
+      const email = (setupEmail?.value || "").trim();
       const password = (setupPassword?.value || "").toString();
-      if(!username || !password){
-        setAuthError("Preencha usuario e senha.");
+      const captcha = (setupCaptcha?.value || "").trim();
+      if(!username || !password || !email || !captcha){
+        setAuthError("Preencha usuario, e-mail, senha e captcha.");
         return;
       }
       try{
-        const result = await apiRequest(`${API_BASE}/setup.php`, {
+        const endpoint = authMode === "register" ? `${API_BASE}/register.php` : `${API_BASE}/setup.php`;
+        const result = await apiRequest(endpoint, {
           username,
           display_name: displayName,
-          password
+          email,
+          password,
+          captcha
         });
-        currentUser = result.user || null;
         if(setupPassword) setupPassword.value = "";
-        hideAuthOverlay();
+        if(setupCaptcha) setupCaptcha.value = "";
+        showAuthOverlay("login", "Enviamos um e-mail de confirmacao. Acesse o link para liberar o acesso.");
         if(authResolver){
           authResolver();
           authResolver = null;
         }
       }catch(err){
-        setAuthError("Nao foi possivel criar o usuario.");
+        const msg = (err && err.message) ? String(err.message) : "";
+        if(msg === "db_error" || msg === "db_schema_error" || msg === "server_error" || msg === "request_failed"){
+          setAuthError("Erro no servidor. Tente novamente.");
+        }else if(msg === "email_invalid"){
+          setAuthError("E-mail invalido.");
+        }else if(msg === "email_in_use"){
+          setAuthError("E-mail ja cadastrado.");
+        }else if(msg === "username_in_use"){
+          setAuthError("Usuario ja cadastrado.");
+        }else if(msg === "already_configured"){
+          setAuthError("Cadastro inicial ja foi feito. Use Cadastre-se.");
+        }else if(msg === "captcha_invalid"){
+          setAuthError("Captcha invalido.");
+        }else if(msg === "captcha_expired"){
+          setAuthError("Captcha expirado. Tente novamente.");
+        }else if(msg === "email_send_failed"){
+          setAuthError("Falha ao enviar o e-mail de confirmacao.");
+        }else{
+          setAuthError("Nao foi possivel criar o usuario.");
+        }
+        if(setupCaptcha) setupCaptcha.value = "";
+        loadSetupCaptcha();
       }
     }
 
@@ -11728,8 +11870,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
         return;
       }
       const setupStatus = await apiSetupStatus().catch(() => ({}));
-      const needsSetup = Boolean(setupStatus?.needs_setup);
-      showAuthOverlay(needsSetup ? "setup" : "login");
+      needsSetupFlag = Boolean(setupStatus?.needs_setup);
+      showAuthOverlay(needsSetupFlag ? "setup" : "login");
 
       await new Promise((resolve) => {
         authResolver = resolve;
@@ -11737,9 +11879,20 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
 
     async function bootstrapStorage(){
-      const result = await apiStorageGetAll();
-      storageCache = result?.data && typeof result.data === "object" ? result.data : {};
-      storageReady = true;
+      try{
+        const result = await apiStorageGetAll();
+        storageCache = result?.data && typeof result.data === "object" ? result.data : {};
+        storageReady = true;
+      }catch(err){
+        const msg = (err && err.message) ? String(err.message) : "";
+        if(msg === "auth_required"){
+          // User not authenticated yet (e.g., awaiting email confirmation).
+          storageCache = {};
+          storageReady = true;
+          return;
+        }
+        throw err;
+      }
     }
 
     /***********************
@@ -11794,14 +11947,15 @@ navAtalhosBtn.addEventListener("click", ()=>{
       setView("search");
       ensureMiniCalendarNavPlacement();
 
-      if(!isUserProfileComplete(userProfile)){
-        openUserProfileOverlay({ required:true });
-        return;
+        if(!isUserProfileComplete(userProfile)){
+          openUserProfileOverlay({ required:true });
+          return;
+        }
+        if(!storageGet(STORAGE_KEY_STORES)){
+          openStoresConfig({ required:true });
+          return;
+        }
       }
-      if(!storageGet(STORAGE_KEY_STORES)){
-        openStoresConfig();
-      }
-    }
 
     bootstrapApp();
 
