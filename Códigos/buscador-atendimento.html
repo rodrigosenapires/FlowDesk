@@ -6,7 +6,7 @@
   <title>Flowdesk</title>
   <link rel="icon" href="../Favicon/favicon-versao-clara.png" media="(prefers-color-scheme: light)">
   <link rel="icon" href="../Favicon/favicon-versao-escura.png" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="styles.css?v=34">
+  <link rel="stylesheet" href="styles.css?v=48">
   <style>
     .copyRow > div{
       flex:1 1 0;
@@ -26,6 +26,7 @@
     <div class="authCard">
       <div class="authHeader">
         <h3 id="authTitle">Entrar</h3>
+        <button class="btn small authBackBtn" type="button" id="backToLoginBtn">Voltar</button>
       </div>
       <div class="authBody">
         <form class="authForm" id="loginForm" autocomplete="on">
@@ -49,19 +50,15 @@
           <input class="authInput" id="setupEmail" type="email" autocomplete="email" />
           <label class="authLabel" for="setupPassword">Senha</label>
           <input class="authInput" id="setupPassword" type="password" autocomplete="new-password" />
-          <div class="authCaptcha">
-            <label class="authLabel">CAPTCHA</label>
-            <div class="authCaptchaRow">
-              <div class="authCaptchaQuestion" id="setupCaptchaQuestion">Carregando...</div>
-              <button class="btn small" type="button" id="setupCaptchaRefreshBtn">Atualizar</button>
-            </div>
-            <input class="authInput" id="setupCaptcha" type="text" placeholder="Resposta" />
+          <div class="authDivider" aria-hidden="true"></div>
+          <div class="authLabel" style="margin-top:6px;">Tipo de usu&aacute;rio</div>
+          <div class="authRoleRow">
+            <div class="authRoleText" id="userRoleLabel">Usu&aacute;rio principal</div>
           </div>
+          <div class="authDivider" aria-hidden="true"></div>
           <button class="btn small primary authSubmit" type="submit">Criar usu&aacute;rio</button>
         </form>
-        <div class="authActions" id="authSetupActions" style="display:none;">
-          <button class="btn small" type="button" id="backToLoginBtn">Voltar</button>
-        </div>
+        <div class="authActions" id="authSetupActions" style="display:none;"></div>
 
         <div class="note authError" id="authError" style="display:none;"></div>
         <div class="note authHint" id="authHint"></div>
@@ -113,6 +110,15 @@
           <polyline points="8 12 11 15 16 9"></polyline>
         </svg>
         <span class="sideLabel">Tarefas encerradas</span>
+      </button>
+      <button class="themeBtn sideBtn" id="goToUsersBtn" title="Usu&aacute;rios" aria-label="Usu&aacute;rios" style="display:none;">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="9" cy="8" r="3"></circle>
+          <circle cx="17" cy="9" r="2.5"></circle>
+          <path d="M3 19c0-3.1 2.7-5.5 6-5.5s6 2.4 6 5.5"></path>
+          <path d="M14.5 19c.2-2 1.8-3.6 3.8-3.6 1.2 0 2.2.4 2.9 1.1"></path>
+        </svg>
+        <span class="sideLabel">Usu&aacute;rios</span>
       </button>
       <div class="sideDivider"></div>
       <button class="hambBtn sideBtn" id="openDrawerBtn" title="Menu Personaliz&aacute;vel" aria-label="Menu Personaliz&aacute;vel">
@@ -337,6 +343,7 @@
           <button class="btn small" id="navAtalhosBtn">Buscador</button>
           <button class="btn small" id="navToggleViewBtn">Tarefas</button>
           <button class="btn small" id="navTasksExtraBtn">Tarefas extras</button>
+          <button class="btn small" id="navUsersBtn" style="display:none;">Usu&aacute;rios</button>
         </div>
       </div>
 
@@ -740,6 +747,48 @@
           </div>
           <div class="bd">
             <div class="doneTaskList" id="doneTasksList" style="display:flex;flex-direction:column;gap:16px;"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ===== VIEW: USUARIOS ===== -->
+    <div id="viewUsers" class="viewScreen viewHidden">
+      <div class="grid single">
+        <section class="card usersCard">
+          <div class="hd">
+            <h2>Usu&aacute;rios</h2>
+            <div class="row" style="gap:10px; align-items:center;">
+              <button class="btn small iconBtn" id="addUserBtn" title="Adicionar usu&aacute;rio" aria-label="Adicionar usu&aacute;rio" style="display:none;">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+              <div class="count" id="usersCount"></div>
+            </div>
+          </div>
+          <div class="bd">
+            <div class="usersCards" id="usersCards"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ===== VIEW: RESUMO DE ATIVIDADES ===== -->
+    <div id="viewUserActivity" class="viewScreen viewHidden">
+      <div class="grid single">
+        <section class="card usersCard">
+          <div class="hd">
+            <div class="row" style="align-items:center; gap:10px;">
+              <button class="btn small" id="userActivityBackBtn">Voltar</button>
+              <h2 id="userActivityViewTitle">Resumo de atividades</h2>
+            </div>
+            <div class="count" id="userActivityViewMeta"></div>
+          </div>
+          <div class="bd">
+            <div class="userActivitySummary" id="userActivityViewSummary"></div>
+            <div class="userActivityList" id="userActivityViewList"></div>
           </div>
         </section>
       </div>
@@ -1412,6 +1461,40 @@
     </div>
   </div>
 
+  <!-- Modal: Filtros de usuarios -->
+  <div class="miniOverlay" id="usersFiltersOverlay">
+    <div class="miniModal">
+      <div class="mh">
+        <h3>Filtros de usu&aacute;rios</h3>
+        <button class="btn small" id="usersFiltersCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Loja</div>
+            <select id="usersSearchStore" title="Loja"></select>
+          </div>
+          <div>
+            <div class="label">Status</div>
+            <select id="usersSearchStatus">
+              <option value="" selected>Todos os status</option>
+              <option value="ativo">Ativo</option>
+              <option value="inativo">Inativo</option>
+              <option value="parado">Parado</option>
+              <option value="deslogado">Deslogado</option>
+              <option value="aguardando" data-admin-only="1">Aguardando libera&ccedil;&atilde;o</option>
+              <option value="bloqueado" data-admin-only="1">Bloqueado</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="usersFiltersClearBtn">Limpar filtros</button>
+        <button class="btn primary" id="usersFiltersApplyBtn">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Filtros de tarefas -->
   <div class="miniOverlay" id="tasksFiltersOverlay">
     <div class="miniModal">
@@ -1501,6 +1584,20 @@
       <div class="mf">
         <button class="btn" id="doneFiltersClearBtn">Limpar filtros</button>
         <button class="btn primary" id="doneFiltersApplyBtn">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Atividade do usuario -->
+  <div class="miniOverlay" id="userActivityOverlay">
+    <div class="miniModal userActivityModal">
+      <div class="mh">
+        <h3 id="userActivityTitle">Atividade do usu&aacute;rio</h3>
+        <button class="btn small" id="userActivityCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="userActivitySummary" id="userActivitySummary"></div>
+        <div class="userActivityList" id="userActivityList"></div>
       </div>
     </div>
   </div>
@@ -1801,7 +1898,7 @@
     </div>
   </div>
 
-<script src="app.js?v=24"></script>
+<script src="app.js?v=67"></script>
 
   </body>
 </html>

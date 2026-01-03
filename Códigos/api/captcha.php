@@ -2,6 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__ . "/_init.php";
 
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 if ($_SERVER["REQUEST_METHOD"] !== "GET") {
   respond(["ok" => false, "error" => "method_not_allowed"], 405);
 }

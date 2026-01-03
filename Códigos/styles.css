@@ -103,7 +103,8 @@
     #goToSearchBtn.isSearchView,
     #goToTasksBtn.isTasksView,
     #goToTasksExtraBtn.isTasksView,
-    #goToDoneTasksBtn.isDoneView{
+    #goToDoneTasksBtn.isDoneView,
+    #goToUsersBtn.isUsersView{
       background: color-mix(in srgb, var(--brand) 16%, transparent);
       border-color: color-mix(in srgb, var(--brand) 45%, transparent);
     }
@@ -182,6 +183,38 @@
       border-color: color-mix(in srgb, var(--brand) 70%, var(--line));
       box-shadow:0 0 0 2px color-mix(in srgb, var(--brand) 35%, transparent);
     }
+    .authRoleRow{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .authRoleOption{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      font-weight:700;
+      color: color-mix(in srgb, var(--text) 82%, transparent);
+    }
+    .authRoleText{
+      font-size:12px;
+      font-weight:800;
+      color: color-mix(in srgb, var(--text) 88%, transparent);
+    }
+    .authDivider{
+      height:1px;
+      margin:8px 0;
+      background: color-mix(in srgb, var(--line) 70%, transparent);
+    }
+    .authHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .authBackBtn{
+      display:none;
+    }
     .authCaptcha{
       display:flex;
       flex-direction:column;
@@ -207,7 +240,7 @@
       gap:8px;
     }
     .authError{
-      color:var(--danger);
+      color:#ef4444;
       font-weight:900;
     }
     .viewTitle{
@@ -2155,6 +2188,245 @@
     }
     body:not(.light) .emailOpenIcon{
       color:#ffffff;
+    }
+    .usersCards{
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+    .userCard{
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.09);
+      background:linear-gradient(140deg, rgba(16,24,40,.92), rgba(10,18,32,.9));
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      box-shadow:0 14px 24px rgba(0,0,0,.2);
+    }
+    .userCardHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+    }
+    .userCardTitle{
+      font-size:17px;
+      font-weight:800;
+      color:#e8f1ff;
+      word-break:break-word;
+    }
+    .userTitleRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .userActivityBtn{
+      padding:4px 6px;
+      line-height:1;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .userPresence{
+      width:12px;
+      height:12px;
+      border-radius:50%;
+      border:2px solid rgba(255,255,255,.2);
+      box-shadow:0 0 0 4px rgba(0,0,0,.12);
+    }
+    .userPresenceWrap{
+      display:flex;
+      align-items:center;
+      flex-direction:row;
+      flex-wrap:nowrap;
+      gap:10px;
+      white-space:nowrap;
+    }
+    .userPresenceWrap .userPresenceLabel{
+      order:0;
+    }
+    .userPresenceWrap .userPresence{
+      order:1;
+    }
+    .userPresenceLabel{
+      font-size:11px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+      color:#cfe1ff;
+    }
+    .userPresence.presenceActive{
+      background:#22c55e;
+      border-color:rgba(34,197,94,.55);
+      box-shadow:0 0 0 4px rgba(34,197,94,.18);
+    }
+    .userPresence.presenceIdle{
+      background:#facc15;
+      border-color:rgba(250,204,21,.55);
+      box-shadow:0 0 0 4px rgba(250,204,21,.18);
+    }
+    .userPresence.presenceStopped{
+      background:#a855f7;
+      border-color:rgba(168,85,247,.6);
+      box-shadow:0 0 0 4px rgba(168,85,247,.2);
+    }
+    .userPresence.presenceLoggedOut{
+      background:#ef4444;
+      border-color:rgba(239,68,68,.55);
+      box-shadow:0 0 0 4px rgba(239,68,68,.18);
+    }
+    .userPresence.presenceBlocked{
+      background:#7b4a12;
+      border-color:rgba(123,74,18,.65);
+      box-shadow:0 0 0 4px rgba(123,74,18,.2);
+    }
+    .userPresence.presencePending{
+      background:#38bdf8;
+      border-color:rgba(56,189,248,.6);
+      box-shadow:0 0 0 4px rgba(56,189,248,.2);
+    }
+    .userCardBody{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .userRowDivider{
+      height:1px;
+      background:rgba(255,255,255,.08);
+      border-radius:999px;
+    }
+    .userRow{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+      flex-wrap:wrap;
+    }
+    .userRowLabel{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+      color:#9fb0c8;
+      font-weight:700;
+    }
+    .userRowValue{
+      font-size:13px;
+      color:#e2ecff;
+      word-break:break-word;
+    }
+    .userRowActions{
+      align-items:center;
+    }
+    .userActionButtons{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .userBlockBtn.isBlocked{
+      border-color:rgba(239,68,68,.6);
+      color:#ef4444;
+    }
+    .userHash{
+      font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:12px;
+      color:#9fb0c8;
+      word-break:break-all;
+      background:rgba(255,255,255,.04);
+      padding:6px 8px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.07);
+    }
+    .userNameLink{
+      background:none;
+      border:0;
+      padding:0;
+      color:inherit;
+      font:inherit;
+      cursor:pointer;
+      text-align:left;
+    }
+    .userNameLink:hover{
+      text-decoration:underline;
+    }
+    .userActivityModal{
+      max-width:760px;
+      max-height:80vh;
+      height:80vh;
+      display:flex;
+      flex-direction:column;
+    }
+    .userActivityModal .mb{
+      overflow:auto;
+      flex:1 1 auto;
+      min-height:0;
+      padding-right:10px;
+    }
+    .userActivitySummary{
+      display:grid;
+      gap:8px;
+      margin-bottom:14px;
+      color:#cfe1ff;
+      font-size:13px;
+    }
+    .userActivityList{
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+    .userActivityList .activitySection{
+      padding-right:6px;
+    }
+    .activitySection{
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(10,18,32,.6);
+      padding:14px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .activitySectionTitle{
+      font-weight:800;
+      color:#e8f1ff;
+      font-size:14px;
+    }
+    .activityItem{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:10px 0;
+      border-top:1px solid rgba(255,255,255,.06);
+    }
+    .activityItem:first-child{
+      border-top:0;
+      padding-top:0;
+    }
+    .activityRow{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+      font-size:13px;
+      color:#dbe7ff;
+    }
+    .activityRowLabel{
+      color:#9fb0c8;
+      font-weight:700;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+      font-size:11px;
+    }
+    .activityBadge{
+      font-size:11px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(255,255,255,.04);
+      width:max-content;
     }
     .copyIconBtn{
       width:30px;

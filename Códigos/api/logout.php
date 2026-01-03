@@ -6,6 +6,11 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
   respond(["ok" => false, "error" => "method_not_allowed"], 405);
 }
 
+$user_id = current_user_id();
+if ($user_id) {
+  set_user_storage_value($user_id, "last_logout_at", (string)time());
+}
+
 $_SESSION = [];
 if (ini_get("session.use_cookies")) {
   $params = session_get_cookie_params();

@@ -14,8 +14,11 @@ define("DB_CHARSET", "utf8mb4");
 
 // Session settings.
 define("APP_SESSION_NAME", "flowdesk_session");
-define("APP_DEBUG", false);
+define("APP_DEBUG", true);
 define("APP_AUTO_MIGRATE", false);
+define("APP_ADMIN_USERNAME", "Rodrigosp");
+define("APP_ADMIN_USER_ID", 1);
+define("APP_ADMIN_DISPLAY_NAME", "Rodrigo");
 
 // Email settings.
 define("APP_BASE_URL", "https://beige-opossum-768581.hostingersite.com/C%C3%B3digos");

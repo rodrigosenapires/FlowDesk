@@ -11,9 +11,8 @@ $username = trim((string)($input["username"] ?? ""));
 $password = (string)($input["password"] ?? "");
 $display_name = trim((string)($input["display_name"] ?? ""));
 $email = trim((string)($input["email"] ?? ""));
-$captcha = trim((string)($input["captcha"] ?? ""));
 
-if ($username === "" || $password === "" || $email === "" || $captcha === "") {
+if ($username === "" || $password === "" || $email === "") {
   respond(["ok" => false, "error" => "missing_fields"], 400);
 }
 if (strlen($password) < 6) {
@@ -22,16 +21,6 @@ if (strlen($password) < 6) {
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
   respond(["ok" => false, "error" => "email_invalid"], 400);
 }
-
-$expectedCaptcha = isset($_SESSION["captcha_answer"]) ? (string)$_SESSION["captcha_answer"] : "";
-$captchaTs = isset($_SESSION["captcha_ts"]) ? (int)$_SESSION["captcha_ts"] : 0;
-if (!$expectedCaptcha || !$captchaTs || $captchaTs < (time() - 600)) {
-  respond(["ok" => false, "error" => "captcha_expired"], 400);
-}
-if (trim($expectedCaptcha) !== $captcha) {
-  respond(["ok" => false, "error" => "captcha_invalid"], 400);
-}
-unset($_SESSION["captcha_answer"], $_SESSION["captcha_ts"]);
 
 $usernameStmt = db()->prepare("SELECT id FROM users WHERE username = :username LIMIT 1");
 $usernameStmt->execute([":username" => $username]);
@@ -44,13 +33,36 @@ if ($emailStmt->fetch()) {
   respond(["ok" => false, "error" => "email_in_use"], 409);
 }
 
+$current_id = current_user_id();
+$current = $current_id ? fetch_user($current_id) : null;
+$creating_secondary = false;
+$owner_id = null;
+$role = "principal";
+if ($current) {
+  if (!is_principal_user($current) && !is_admin_user($current)) {
+    respond(["ok" => false, "error" => "forbidden"], 403);
+  }
+  $creating_secondary = true;
+  $role = "secundario";
+  $owner_id = (int)$current["id"];
+  if (!is_admin_user($current)) {
+    $countStmt = db()->prepare("SELECT COUNT(*) AS total FROM users WHERE owner_user_id = :owner_id AND role = 'secundario'");
+    $countStmt->execute([":owner_id" => $owner_id]);
+    $countRow = $countStmt->fetch();
+    $total = $countRow ? (int)$countRow["total"] : 0;
+    if ($total >= 2) {
+      respond(["ok" => false, "error" => "secondary_limit"], 403);
+    }
+  }
+}
+
 $hash = password_hash($password, PASSWORD_DEFAULT);
 $token = bin2hex(random_bytes(32));
 $tokenHash = hash("sha256", $token);
 $expiresAt = (new DateTimeImmutable("+24 hours"))->format("Y-m-d H:i:s");
 $stmt = db()->prepare(
-  "INSERT INTO users (username, display_name, password_hash, email, email_verified, email_verification_token, email_verification_expires_at, created_at, updated_at)
-   VALUES (:username, :display_name, :password_hash, :email, 0, :token, :expires_at, NOW(), NOW())"
+  "INSERT INTO users (username, display_name, password_hash, email, email_verified, email_verification_token, email_verification_expires_at, role, owner_user_id, access_blocked, access_pending, created_at, updated_at)
+   VALUES (:username, :display_name, :password_hash, :email, 0, :token, :expires_at, :role, :owner_user_id, :access_blocked, :access_pending, NOW(), NOW())"
 );
 $stmt->execute([
   ":username" => $username,
@@ -59,6 +71,10 @@ $stmt->execute([
   ":email" => $email,
   ":token" => $tokenHash,
   ":expires_at" => $expiresAt,
+  ":role" => $role,
+  ":owner_user_id" => $owner_id,
+  ":access_blocked" => $creating_secondary ? 0 : 1,
+  ":access_pending" => $creating_secondary ? 0 : 1,
 ]);
 
 $mailSent = send_verification_email($email, $token);

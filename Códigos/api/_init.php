@@ -168,11 +168,26 @@ function ensure_users_schema(): void {
   if (!column_exists("users", "email_verification_expires_at")) {
     $updates[] = "ADD COLUMN email_verification_expires_at DATETIME DEFAULT NULL";
   }
+  if (!column_exists("users", "role")) {
+    $updates[] = "ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'principal'";
+  }
+  if (!column_exists("users", "owner_user_id")) {
+    $updates[] = "ADD COLUMN owner_user_id INT UNSIGNED DEFAULT NULL";
+  }
+  if (!column_exists("users", "access_blocked")) {
+    $updates[] = "ADD COLUMN access_blocked TINYINT(1) NOT NULL DEFAULT 0";
+  }
+  if (!column_exists("users", "access_pending")) {
+    $updates[] = "ADD COLUMN access_pending TINYINT(1) NOT NULL DEFAULT 0";
+  }
   if ($updates) {
     db()->exec("ALTER TABLE users " . implode(", ", $updates));
   }
   if (!index_exists("users", "users_email_unique")) {
     db()->exec("ALTER TABLE users ADD UNIQUE KEY users_email_unique (email)");
+  }
+  if (!index_exists("users", "users_owner_user_id_idx")) {
+    db()->exec("ALTER TABLE users ADD KEY users_owner_user_id_idx (owner_user_id)");
   }
 }
 
@@ -436,10 +451,133 @@ function require_login(): int {
 }
 
 function fetch_user(int $user_id): ?array {
-  $stmt = db()->prepare("SELECT id, username, display_name FROM users WHERE id = :id LIMIT 1");
+  $stmt = db()->prepare("SELECT id, username, display_name, role, owner_user_id FROM users WHERE id = :id LIMIT 1");
   $stmt->execute([":id" => $user_id]);
   $row = $stmt->fetch();
   return $row ? $row : null;
 }
+
+function normalize_user_role(?string $role): string {
+  $raw = strtolower((string)$role);
+  return $raw === "secundario" ? "secundario" : "principal";
+}
+
+function is_admin_user(?array $user): bool {
+  if (!$user || empty($user["username"])) {
+    return false;
+  }
+  $admin = defined("APP_ADMIN_USERNAME") ? (string)APP_ADMIN_USERNAME : "";
+  $username = strtolower(trim((string)$user["username"]));
+  $adminName = strtolower(trim((string)$admin));
+  if ($adminName !== "" && $username === $adminName) {
+    return true;
+  }
+  $displayName = strtolower(trim((string)($user["display_name"] ?? "")));
+  $adminDisplay = defined("APP_ADMIN_DISPLAY_NAME") ? strtolower(trim((string)APP_ADMIN_DISPLAY_NAME)) : "";
+  if ($adminDisplay !== "" && $displayName !== "" && $displayName === $adminDisplay) {
+    return true;
+  }
+  $adminId = defined("APP_ADMIN_USER_ID") ? (int)APP_ADMIN_USER_ID : 0;
+  if ($adminId > 0) {
+    return (int)$user["id"] === $adminId;
+  }
+  return false;
+}
+
+function is_principal_user(?array $user): bool {
+  if (!$user) return false;
+  return normalize_user_role($user["role"] ?? null) !== "secundario";
+}
+
+function get_account_owner_id(?array $user): int {
+  if (!$user || empty($user["id"])) {
+    return 0;
+  }
+  $role = normalize_user_role($user["role"] ?? null);
+  if ($role === "secundario") {
+    $owner = (int)($user["owner_user_id"] ?? 0);
+    if ($owner > 0) return $owner;
+  }
+  return (int)$user["id"];
+}
+
+function can_manage_secondary(?array $current, ?array $target): bool {
+  if (!$current || !$target) return false;
+  if (is_admin_user($current)) return true;
+  if (!is_principal_user($current)) return false;
+  if (normalize_user_role($target["role"] ?? null) !== "secundario") return false;
+  return (int)($target["owner_user_id"] ?? 0) === (int)$current["id"];
+}
+
+function set_user_storage_value(int $user_id, string $key, string $value): void {
+  $stmt = db()->prepare(
+    "INSERT INTO user_storage (user_id, storage_key, storage_value, updated_at)
+     VALUES (:user_id, :key, :value, NOW())
+     ON DUPLICATE KEY UPDATE storage_value = VALUES(storage_value), updated_at = NOW()"
+  );
+  $stmt->execute([
+    ":user_id" => $user_id,
+    ":key" => $key,
+    ":value" => $value,
+  ]);
+}
+
+function get_user_storage_value(int $user_id, string $key): ?string {
+  $stmt = db()->prepare(
+    "SELECT storage_value FROM user_storage WHERE user_id = :user_id AND storage_key = :key LIMIT 1"
+  );
+  $stmt->execute([
+    ":user_id" => $user_id,
+    ":key" => $key,
+  ]);
+  $row = $stmt->fetch();
+  return $row ? (string)$row["storage_value"] : null;
+}
+
+function update_last_active(): void {
+  $user_id = current_user_id();
+  if (!$user_id) {
+    return;
+  }
+  $user = fetch_user($user_id);
+  if (!$user) {
+    unset($_SESSION["user_id"]);
+    return;
+  }
+  $now = time();
+  $lastPing = isset($_SESSION["last_active_ping"]) ? (int)$_SESSION["last_active_ping"] : 0;
+  if ($lastPing > 0 && ($now - $lastPing) < 60) {
+    return;
+  }
+  set_user_storage_value($user_id, "last_active_at", (string)$now);
+  $_SESSION["last_active_ping"] = $now;
+
+  $lastLogPing = isset($_SESSION["last_activity_log_ts"]) ? (int)$_SESSION["last_activity_log_ts"] : 0;
+  if ($lastLogPing > 0 && ($now - $lastLogPing) < 120) {
+    return;
+  }
+  $raw = get_user_storage_value($user_id, "activity_log");
+  $log = [];
+  if ($raw) {
+    $decoded = json_decode($raw, true);
+    if (is_array($decoded)) {
+      $log = $decoded;
+    }
+  }
+  $last = 0;
+  if ($log) {
+    $last = (int)$log[count($log) - 1];
+  }
+  if ($last !== $now) {
+    $log[] = $now;
+  }
+  if (count($log) > 1000) {
+    $log = array_slice($log, -1000);
+  }
+  set_user_storage_value($user_id, "activity_log", json_encode($log));
+  $_SESSION["last_activity_log_ts"] = $now;
+}
+
+update_last_active();
 
 

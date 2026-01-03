@@ -26,12 +26,13 @@
     const STORAGE_KEY_CALENDAR = "calendarHistory_v1";
     const STORAGE_KEY_SIDE_MENU = "side_menu_collapsed_v1";
     const STORAGE_KEY_USER_PROFILE = "user_profile_v1";
+    const ADMIN_USERNAME = "Rodrigosp";
 
     const PASSWORD = "123"; // usado para editar/excluir PERGUNTAS e importar
     const FILE_NAME_PREFIX = "base-atendimento";
     const BACKUP_VERSION = 10;
 
-    const API_BASE = "api";
+    const API_BASE = "./api";
     let storageCache = {};
     let storageReady = false;
     let currentUser = null;
@@ -42,6 +43,14 @@
     let storesRequired = false;
     let authMode = "login";
     let needsSetupFlag = false;
+    let usersCache = [];
+    let usersError = "";
+    let usersSearchName = "";
+    let usersSearchStore = "ALL";
+    let usersSearchStatus = "";
+    let activityPingTimer = null;
+    let usersAutoRefreshTimer = null;
+    let lastActivityPing = 0;
 
     function storageGet(key){
       return Object.prototype.hasOwnProperty.call(storageCache, key) ? storageCache[key] : null;
@@ -124,6 +133,14 @@
       setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, data.name, data.avatar);
     }
 
+    function updateAdminAccessUI(){
+      const canUsers = canAccessUsersView();
+      if(goToUsersBtn) goToUsersBtn.style.display = canUsers ? "" : "none";
+      if(navUsersBtn) navUsersBtn.style.display = canUsers ? "" : "none";
+      if(addUserBtn) addUserBtn.style.display = (isAdminUser() || isPrincipalUser()) ? "" : "none";
+      if(openRegisterBtn) openRegisterBtn.style.display = "none";
+    }
+
     async function apiRequest(path, body, options){
       const response = await fetch(path, {
         method: "POST",
@@ -144,6 +161,31 @@
       const response = await fetch(`${API_BASE}/session.php`, { credentials: "include" });
       const data = await response.json().catch(() => ({}));
       return data || {};
+    }
+
+    async function apiAdminUsers(){
+      const response = await fetch(`${API_BASE}/admin_users.php`, { credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok){
+        const msg = data?.error || "request_failed";
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    async function apiUserActivity(userId){
+      const id = String(userId || "").trim();
+      const response = await fetch(`${API_BASE}/user_activity.php?user_id=${encodeURIComponent(id)}`, { credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok){
+        const msg = data?.error || "request_failed";
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    async function apiAdminUserAction(action, userId){
+      return apiRequest(`${API_BASE}/admin_user_action.php`, { action, user_id: userId });
     }
 
     async function apiSetupStatus(){
@@ -181,6 +223,15 @@
     }
     async function apiDeleteImage(filename){
       return apiRequest(`${API_BASE}/delete_image.php`, { filename });
+    }
+    async function apiActivityPing(){
+      const response = await fetch(`${API_BASE}/ping.php`, { credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok){
+        const msg = data?.error || "request_failed";
+        throw new Error(msg);
+      }
+      return data;
     }
 
     const DEFAULT_DIARIO_LOGO = "https://acdn-us.mitiendanube.com/stores/003/800/267/themes/common/logo-1017420669-1696607286-3604afa78036bc99d42c4a45a62c9aac1696607286-480-0.webp";
@@ -816,9 +867,8 @@
     function loadStores(){
       const raw = storageGet(STORAGE_KEY_STORES);
       const parsed = safeJsonParse(raw);
-      const normalized = Array.isArray(parsed)
-        ? normalizeStores(parsed)
-        : normalizeStores([DEFAULT_STORES[0]]);
+      if(!Array.isArray(parsed)) return [];
+      const normalized = normalizeStores(parsed);
       const defaultsByName = new Map(DEFAULT_STORES.map(s => [s.name, s]));
       let changed = false;
       const backfilled = normalized.map(store => {
@@ -1511,7 +1561,8 @@
 
     function openStoresConfig(options){
       storesRequired = Boolean(options?.required);
-      const base = stores.length ? stores : [DEFAULT_STORES[0]];
+      const emptyStore = { name:"", logoUrl:"", siteUrl:"", stampsUrl:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailList: [] };
+      const base = stores.length ? stores : [emptyStore];
       storesDraft = cloneStoresList(base);
       renderStoresConfig();
       if(storesConfigCloseBtn){
@@ -1793,10 +1844,11 @@
     function getCalendarEntriesForDate(iso, options){
       if(!iso) return [];
       const applyStoreFilter = options?.applyStoreFilter !== false;
-      const base = (calendarHistory || [])
+      const visibleHistory = getVisibleCalendarHistoryList(calendarHistory);
+      const base = (visibleHistory || [])
         .filter(e => e.date === iso)
         .filter(e => !isCalendarRepeatEntry(e));
-      const repeatEntries = (calendarHistory || []).filter(isCalendarRepeatEntry);
+      const repeatEntries = (visibleHistory || []).filter(isCalendarRepeatEntry);
       const repeats = [];
       repeatEntries.forEach(entry => {
         if(isDailyRepeatCalendarEntry(entry)){
@@ -1852,8 +1904,15 @@
         || Boolean((doneSearchPeriodFromValue || "").trim())
         || Boolean((doneSearchPeriodToValue || "").trim());
       if(searchFilterBtn){
-        const active = currentView === "tasks" ? tasksActive : (currentView === "done" ? doneActive : searchActive);
-        searchFilterBtn.classList.toggle("isActive", active);
+        if(currentView === "users"){
+          const active = Boolean((usersSearchName || "").trim())
+            || ((usersSearchStore || "").trim() && (usersSearchStore || "").trim() !== "ALL")
+            || Boolean((usersSearchStatus || "").trim());
+          searchFilterBtn.classList.toggle("isActive", active);
+        }else{
+          const active = currentView === "tasks" ? tasksActive : (currentView === "done" ? doneActive : searchActive);
+          searchFilterBtn.classList.toggle("isActive", active);
+        }
       }
       if(calFilterBtn){
         calFilterBtn.classList.toggle("isActive", Boolean((calStoreFilterValue || "").trim()));
@@ -1869,6 +1928,8 @@
     const viewSearch  = document.getElementById("viewSearch");
     const viewTasks   = document.getElementById("viewTasks");
     const viewDone    = document.getElementById("viewDone");
+    const viewUsers   = document.getElementById("viewUsers");
+    const viewUserActivity = document.getElementById("viewUserActivity");
     const viewStack   = document.getElementById("viewStack");
     const sideMenu    = document.getElementById("sideMenu");
     const sideMenuToggle = document.getElementById("sideMenuToggle");
@@ -2276,7 +2337,9 @@
     const navAtalhosBtn = document.getElementById("navAtalhosBtn");
     const navToggleViewBtn = document.getElementById("navToggleViewBtn");
     const navTasksExtraBtn = document.getElementById("navTasksExtraBtn");
+    const navUsersBtn = document.getElementById("navUsersBtn");
     const goToDoneTasksBtn = document.getElementById("goToDoneTasksBtn");
+    const goToUsersBtn = document.getElementById("goToUsersBtn");
     const goToSearchBtn = document.getElementById("goToSearchBtn");
     const goToTasksBtn = document.getElementById("goToTasksBtn");
     const goToTasksExtraBtn = document.getElementById("goToTasksExtraBtn");
@@ -2309,6 +2372,24 @@
     const tasksList = document.getElementById("tasksList");
     const doneTasksCount = document.getElementById("doneTasksCount");
     const doneTasksList = document.getElementById("doneTasksList");
+    const usersCount = document.getElementById("usersCount");
+    const usersCards = document.getElementById("usersCards");
+    const usersSearchStoreSelect = document.getElementById("usersSearchStore");
+    const usersSearchStatusSelect = document.getElementById("usersSearchStatus");
+    const usersFiltersOverlay = document.getElementById("usersFiltersOverlay");
+    const usersFiltersCloseBtn = document.getElementById("usersFiltersCloseBtn");
+    const usersFiltersClearBtn = document.getElementById("usersFiltersClearBtn");
+    const usersFiltersApplyBtn = document.getElementById("usersFiltersApplyBtn");
+    const userActivityOverlay = document.getElementById("userActivityOverlay");
+    const userActivityTitle = document.getElementById("userActivityTitle");
+    const userActivitySummary = document.getElementById("userActivitySummary");
+    const userActivityList = document.getElementById("userActivityList");
+    const userActivityCloseBtn = document.getElementById("userActivityCloseBtn");
+    const userActivityViewTitle = document.getElementById("userActivityViewTitle");
+    const userActivityViewMeta = document.getElementById("userActivityViewMeta");
+    const userActivityViewSummary = document.getElementById("userActivityViewSummary");
+    const userActivityViewList = document.getElementById("userActivityViewList");
+    const userActivityBackBtn = document.getElementById("userActivityBackBtn");
     const tasksCountBadge = document.getElementById("tasksCountBadge");
     const tasksExtraCountBadge = document.getElementById("tasksExtraCountBadge");
 
@@ -2373,6 +2454,8 @@
     const setupCaptchaQuestion = document.getElementById("setupCaptchaQuestion");
     const setupCaptchaRefreshBtn = document.getElementById("setupCaptchaRefreshBtn");
     const openRegisterBtn = document.getElementById("openRegisterBtn");
+    const addUserBtn = document.getElementById("addUserBtn");
+    const userRoleLabel = document.getElementById("userRoleLabel");
     const resendVerificationBtn = document.getElementById("resendVerificationBtn");
     const backToLoginBtn = document.getElementById("backToLoginBtn");
     const authLoginActions = document.getElementById("authLoginActions");
@@ -3811,6 +3894,11 @@
       const editingId = (simpleTaskEditId || "").trim();
       const entryId = editingId || `simple-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
       const prevEntry = (calendarHistory || []).find(e => String(e.id || "") === entryId);
+      const prevTask = (tasks || []).find(t => String(t.id || "") === entryId);
+      const fallbackUserId = String(currentUser?.id || "");
+      const fallbackUserName = (currentUser?.display_name || currentUser?.username || "").toString().trim();
+      const createdById = (prevTask?.created_by_user_id || prevEntry?.created_by_user_id || fallbackUserId || "").toString();
+      const createdByName = (prevTask?.created_by_username || prevEntry?.created_by_username || (createdById === fallbackUserId ? fallbackUserName : "")).toString();
       let repeatWeekday = (repeatValue === "semanal" || repeatValue === "mensal_ultima")
         ? (Number.isFinite(prevEntry?.repeatWeekday) ? prevEntry.repeatWeekday : getWeekdayIndexFromISO(date))
         : null;
@@ -3862,6 +3950,8 @@
         repeatCount,
         extra: true,
         open: prevEntry ? Boolean(prevEntry.open) : true,
+        created_by_user_id: createdById,
+        created_by_username: createdByName,
         createdAt: prevEntry?.createdAt || nowIso,
         updatedAt: nowIso,
       };
@@ -3890,6 +3980,8 @@
         repeatUntil,
         repeatCount,
         isExtra: true,
+        created_by_user_id: createdById,
+        created_by_username: createdByName,
         createdAt: prevEntry?.createdAt || nowIso,
         updatedAt: nowIso,
       };
@@ -3953,6 +4045,8 @@
         phaseIdx: getLastPhaseIndex(t),
         lastPhaseText,
         open: true,
+        created_by_user_id: (t.created_by_user_id || prev?.created_by_user_id || "").toString(),
+        created_by_username: (t.created_by_username || prev?.created_by_username || "").toString(),
         createdAt: prev?.createdAt || nowIso,
         updatedAt: nowIso,
       };
@@ -3989,6 +4083,8 @@
         phaseIdx: getLastPhaseIndex(t) || (prev?.phaseIdx ?? 0),
         lastPhaseText,
         open: false,
+        created_by_user_id: (t.created_by_user_id || prev?.created_by_user_id || "").toString(),
+        created_by_username: (t.created_by_username || prev?.created_by_username || "").toString(),
         createdAt: prev?.createdAt || nowIso,
         updatedAt: nowIso,
       };
@@ -5014,6 +5110,108 @@
       if(Number.isNaN(d.getTime())) return raw;
       return d.toLocaleString("pt-BR");
     }
+    function formatDateTimeFromTs(value){
+      const ts = Number(value || 0);
+      if(!ts) return "-";
+      const d = new Date(ts * 1000);
+      if(Number.isNaN(d.getTime())) return "-";
+      return d.toLocaleString("pt-BR");
+    }
+    function formatDuration(seconds){
+      const total = Math.max(0, Number(seconds || 0));
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = Math.floor(total % 60);
+      if(h > 0) return `${h}h ${m}m`;
+      if(m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    }
+
+    function stopActivityTracking(){
+      if(activityPingTimer){
+        clearInterval(activityPingTimer);
+        activityPingTimer = null;
+      }
+      lastActivityPing = 0;
+    }
+
+    function sendActivityPing(force){
+      if(!currentUser) return;
+      const now = Date.now();
+      if(!force && (now - lastActivityPing) < 60000) return;
+      lastActivityPing = now;
+      apiActivityPing().catch(() => {});
+    }
+
+    function startActivityTracking(){
+      stopActivityTracking();
+      sendActivityPing(true);
+      activityPingTimer = setInterval(() => sendActivityPing(false), 60000);
+    }
+
+    function initActivityListeners(){
+      const handler = () => sendActivityPing(false);
+      document.addEventListener("mousemove", handler, { passive:true });
+      document.addEventListener("keydown", handler, { passive:true });
+      document.addEventListener("click", handler, { passive:true });
+      document.addEventListener("scroll", handler, { passive:true });
+      document.addEventListener("touchstart", handler, { passive:true });
+      document.addEventListener("visibilitychange", () => {
+        if(!document.hidden){
+          sendActivityPing(true);
+        }
+      });
+    }
+
+    function startUsersAutoRefresh(){
+      if(usersAutoRefreshTimer){
+        clearInterval(usersAutoRefreshTimer);
+      }
+      usersAutoRefreshTimer = setInterval(() => {
+        if(currentView === "users"){
+          refreshUsersView();
+        }
+      }, 60000);
+    }
+
+    function stopUsersAutoRefresh(){
+      if(usersAutoRefreshTimer){
+        clearInterval(usersAutoRefreshTimer);
+        usersAutoRefreshTimer = null;
+      }
+    }
+
+    function isAdminUser(){
+      if(!currentUser) return false;
+      if(typeof currentUser.is_admin !== "undefined") return Boolean(currentUser.is_admin);
+      if(!currentUser.username) return false;
+      return String(currentUser.username).trim().toLowerCase() === String(ADMIN_USERNAME).trim().toLowerCase();
+    }
+
+    function normalizeUserRole(role){
+      return String(role || "").toLowerCase() === "secundario" ? "secundario" : "principal";
+    }
+
+    function isSecondaryUser(){
+      if(!currentUser) return false;
+      return normalizeUserRole(currentUser.role) === "secundario";
+    }
+
+    function isPrincipalUser(){
+      if(!currentUser) return false;
+      return normalizeUserRole(currentUser.role) === "principal";
+    }
+
+    function canAccessUsersView(){
+      return isAdminUser() || isPrincipalUser();
+    }
+
+    function getAccountOwnerId(){
+      if(!currentUser) return 0;
+      const ownerId = Number(currentUser.owner_user_id || 0);
+      if(isSecondaryUser() && ownerId > 0) return ownerId;
+      return Number(currentUser.id || 0);
+    }
 
 
     function getNuvemshopOrderUrl(loja, pedido){
@@ -5045,9 +5243,17 @@
      ***********************/
     function setView(view){
       const prevView = currentView;
-      currentView = (view === "tasks" || view === "done") ? view : "search";
+      const allowedViews = ["search", "tasks", "done", "users", "userActivity"];
+      currentView = allowedViews.includes(view) ? view : "search";
       const toTasks = currentView === "tasks";
       const toDone = currentView === "done";
+      const toUsers = currentView === "users";
+      const toUserActivity = currentView === "userActivity";
+      if(currentView !== "users"){
+        stopUsersAutoRefresh();
+      }else{
+        startUsersAutoRefresh();
+      }
 
       if(searchInput){
         if(prevView === "tasks") tasksSearchQuery = (searchInput.value || "");
@@ -5071,8 +5277,12 @@
 
           viewSearch.classList.remove("isActive", "toLeft", "toRight");
           viewTasks.classList.remove("isActive", "toLeft", "toRight");
+          if(viewUsers) viewUsers.classList.remove("isActive", "toLeft", "toRight");
+          if(viewUserActivity) viewUserActivity.classList.remove("isActive", "toLeft", "toRight");
           viewSearch.classList.add("viewHidden");
           viewTasks.classList.add("viewHidden");
+          if(viewUsers) viewUsers.classList.add("viewHidden");
+          if(viewUserActivity) viewUserActivity.classList.add("viewHidden");
 
           viewDone.classList.remove("viewHidden", "toLeft", "toRight");
           viewDone.classList.add("isActive", "toRight");
@@ -5081,10 +5291,60 @@
             if(isFirst) viewStack.classList.remove("isInstant");
             viewDone.classList.remove("toRight");
           });
+        }else if(viewUsers && toUsers){
+          const isFirst = !viewStack.classList.contains("viewReady");
+          if(isFirst) viewStack.classList.add("isInstant");
+          viewStack.classList.add("viewReady");
+
+          viewSearch.classList.remove("isActive", "toLeft", "toRight");
+          viewTasks.classList.remove("isActive", "toLeft", "toRight");
+          if(viewDone) viewDone.classList.remove("isActive", "toLeft", "toRight");
+          if(viewUserActivity) viewUserActivity.classList.remove("isActive", "toLeft", "toRight");
+          viewSearch.classList.add("viewHidden");
+          viewTasks.classList.add("viewHidden");
+          if(viewDone) viewDone.classList.add("viewHidden");
+          if(viewUserActivity) viewUserActivity.classList.add("viewHidden");
+
+          viewUsers.classList.remove("viewHidden", "toLeft", "toRight");
+          viewUsers.classList.add("isActive", "toRight");
+
+          requestAnimationFrame(() => {
+            if(isFirst) viewStack.classList.remove("isInstant");
+            viewUsers.classList.remove("toRight");
+          });
+        }else if(viewUserActivity && toUserActivity){
+          const isFirst = !viewStack.classList.contains("viewReady");
+          if(isFirst) viewStack.classList.add("isInstant");
+          viewStack.classList.add("viewReady");
+
+          viewSearch.classList.remove("isActive", "toLeft", "toRight");
+          viewTasks.classList.remove("isActive", "toLeft", "toRight");
+          if(viewDone) viewDone.classList.remove("isActive", "toLeft", "toRight");
+          if(viewUsers) viewUsers.classList.remove("isActive", "toLeft", "toRight");
+          viewSearch.classList.add("viewHidden");
+          viewTasks.classList.add("viewHidden");
+          if(viewDone) viewDone.classList.add("viewHidden");
+          if(viewUsers) viewUsers.classList.add("viewHidden");
+
+          viewUserActivity.classList.remove("viewHidden", "toLeft", "toRight");
+          viewUserActivity.classList.add("isActive", "toRight");
+
+          requestAnimationFrame(() => {
+            if(isFirst) viewStack.classList.remove("isInstant");
+            viewUserActivity.classList.remove("toRight");
+          });
         }else{
           if(viewDone){
             viewDone.classList.remove("isActive", "toLeft", "toRight");
             viewDone.classList.add("viewHidden");
+          }
+          if(viewUsers){
+            viewUsers.classList.remove("isActive", "toLeft", "toRight");
+            viewUsers.classList.add("viewHidden");
+          }
+          if(viewUserActivity){
+            viewUserActivity.classList.remove("isActive", "toLeft", "toRight");
+            viewUserActivity.classList.add("viewHidden");
           }
           const incoming = toTasks ? viewTasks : viewSearch;
           const outgoing = toTasks ? viewSearch : viewTasks;
@@ -5116,7 +5376,7 @@
         animateFromRight(viewDone);
       }
 
-      const showSearchRow = true;
+      const showSearchRow = !toUserActivity;
       if(searchRow) searchRow.style.display = showSearchRow ? "" : "none";
       if(searchFilterBtn) searchFilterBtn.disabled = !showSearchRow;
       if(searchInput) searchInput.disabled = !showSearchRow;
@@ -5188,8 +5448,94 @@
           goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
           goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
         }
+        if(goToUsersBtn){
+          goToUsersBtn.classList.remove("isUsersView");
+          goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
+          goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
+        }
 
         renderDoneTasks();
+        scrollToTop();
+        updateFilterButtonsState();
+        return;
+      }
+
+      if(currentView === "users"){
+        navToggleViewBtn.textContent = "Tarefas";
+        navToggleViewBtn.classList.remove("primary");
+        if(viewTitleText) viewTitleText.textContent = "Usu\u00e1rios";
+        if(searchInput){
+          searchInput.placeholder = "Nome do usu\u00e1rio...";
+          searchInput.value = usersSearchName || "";
+        }
+        if(goToSearchBtn){
+          goToSearchBtn.classList.remove("isSearchView");
+          goToSearchBtn.setAttribute("title", "Ir para o buscador");
+          goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
+        }
+        if(goToTasksBtn){
+          goToTasksBtn.classList.remove("isTasksView");
+          goToTasksBtn.setAttribute("title", "Tarefas");
+          goToTasksBtn.setAttribute("aria-label", "Tarefas");
+        }
+        if(goToTasksExtraBtn){
+          goToTasksExtraBtn.classList.remove("isTasksView");
+          goToTasksExtraBtn.setAttribute("title", "Tarefas extras");
+          goToTasksExtraBtn.setAttribute("aria-label", "Tarefas extras");
+        }
+        if(goToDoneTasksBtn){
+          goToDoneTasksBtn.classList.remove("isDoneView");
+          goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
+          goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
+        }
+        if(goToUsersBtn){
+          goToUsersBtn.classList.remove("isUsersView");
+          goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
+          goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
+        }
+        if(goToUsersBtn){
+          goToUsersBtn.classList.add("isUsersView");
+          goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
+          goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
+        }
+        updateUsersStoreFilterOptions();
+        updateUsersStatusFilterOptions();
+        updateUsersFilterButtonState();
+        refreshUsersView();
+        scrollToTop();
+        updateFilterButtonsState();
+        return;
+      }
+
+      if(currentView === "userActivity"){
+        navToggleViewBtn.textContent = "Tarefas";
+        navToggleViewBtn.classList.remove("primary");
+        if(viewTitleText) viewTitleText.textContent = "Resumo de atividades";
+        if(goToSearchBtn){
+          goToSearchBtn.classList.remove("isSearchView");
+          goToSearchBtn.setAttribute("title", "Ir para o buscador");
+          goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
+        }
+        if(goToTasksBtn){
+          goToTasksBtn.classList.remove("isTasksView");
+          goToTasksBtn.setAttribute("title", "Tarefas");
+          goToTasksBtn.setAttribute("aria-label", "Tarefas");
+        }
+        if(goToTasksExtraBtn){
+          goToTasksExtraBtn.classList.remove("isTasksView");
+          goToTasksExtraBtn.setAttribute("title", "Tarefas extras");
+          goToTasksExtraBtn.setAttribute("aria-label", "Tarefas extras");
+        }
+        if(goToDoneTasksBtn){
+          goToDoneTasksBtn.classList.remove("isDoneView");
+          goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
+          goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
+        }
+        if(goToUsersBtn){
+          goToUsersBtn.classList.add("isUsersView");
+          goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
+          goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
+        }
         scrollToTop();
         updateFilterButtonsState();
         return;
@@ -5220,6 +5566,11 @@
         goToDoneTasksBtn.classList.remove("isDoneView");
         goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
         goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
+      }
+      if(goToUsersBtn){
+        goToUsersBtn.classList.remove("isUsersView");
+        goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
+        goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
       }
 
       render();
@@ -5586,16 +5937,37 @@ function fillAssuntoSelect(){
           : [],
         extraText: (t?.extraText || t?.text || "").toString(),
         isExtra: Boolean(t?.isExtra),
+        created_by_user_id: (t?.created_by_user_id || t?.createdByUserId || t?.created_by || t?.createdBy || "").toString(),
+        created_by_username: (t?.created_by_username || t?.createdByUsername || t?.created_by_name || t?.createdByName || "").toString(),
         createdAt: (t?.createdAt || "").toString(),
         updatedAt: (t?.updatedAt || "").toString(),
         });
       });
     }
 
+    function hydrateTaskOwnership(list){
+      const ownerId = getAccountOwnerId();
+      const ownerIdStr = ownerId ? String(ownerId) : "";
+      return (list || []).map(t => {
+        const createdId = (t.created_by_user_id || "").toString();
+        const createdName = (t.created_by_username || "").toString();
+        const nextId = createdId || ownerIdStr;
+        let nextName = createdName;
+        if(!nextName && currentUser && String(currentUser.id || "") === nextId){
+          nextName = (currentUser.username || "").toString();
+        }
+        return {
+          ...t,
+          created_by_user_id: nextId,
+          created_by_username: nextName
+        };
+      });
+    }
+
     function loadTasks(){
       const raw = storageGet(STORAGE_KEY_TASKS);
       const parsed = safeJsonParse(raw);
-      if(Array.isArray(parsed)) return normalizeTasks(parsed);
+      if(Array.isArray(parsed)) return hydrateTaskOwnership(normalizeTasks(parsed));
       return [];
     }
 
@@ -5667,6 +6039,8 @@ function fillAssuntoSelect(){
             ? e.repeatExclusions.map(v => (v || "").toString().trim()).filter(Boolean)
             : [],
           extraText: (e.extraText || e.text || "").toString(),
+          created_by_user_id: (e?.created_by_user_id || e?.createdByUserId || e?.created_by || e?.createdBy || "").toString(),
+          created_by_username: (e?.created_by_username || e?.createdByUsername || e?.created_by_name || e?.createdByName || "").toString(),
           whatsapp: (e.whatsapp || "").toString(),
           phaseIdx: Number.isFinite(e.phaseIdx) ? e.phaseIdx : Number.parseInt((e.phaseIdx || "0").toString(), 10) || 0,
           extra: Boolean(e.extra || e.simple),
@@ -5687,15 +6061,34 @@ function fillAssuntoSelect(){
       return [...map.values()];
     }
 
+    function hydrateCalendarOwnership(list){
+      const ownerId = getAccountOwnerId();
+      const ownerIdStr = ownerId ? String(ownerId) : "";
+      return (list || []).map(e => {
+        const createdId = (e.created_by_user_id || "").toString();
+        const createdName = (e.created_by_username || "").toString();
+        const nextId = createdId || ownerIdStr;
+        let nextName = createdName;
+        if(!nextName && currentUser && String(currentUser.id || "") === nextId){
+          nextName = (currentUser.username || "").toString();
+        }
+        return {
+          ...e,
+          created_by_user_id: nextId,
+          created_by_username: nextName
+        };
+      });
+    }
+
     function loadCalendarHistory(){
       const raw = storageGet(STORAGE_KEY_CALENDAR);
       const parsed = safeJsonParse(raw);
-      if(Array.isArray(parsed)) return normalizeCalendarHistory(parsed);
+      if(Array.isArray(parsed)) return hydrateCalendarOwnership(normalizeCalendarHistory(parsed));
       return [];
     }
 
     function saveCalendarHistory(next){
-      calendarHistory = normalizeCalendarHistory(next);
+      calendarHistory = hydrateCalendarOwnership(normalizeCalendarHistory(next));
       storageSet(STORAGE_KEY_CALENDAR, JSON.stringify(calendarHistory));
       renderMiniCalendar();
     }
@@ -7170,12 +7563,12 @@ function fillAssuntoSelect(){
     function loadTasksDone(){
       const raw = storageGet(STORAGE_KEY_TASKS_DONE);
       const parsed = safeJsonParse(raw);
-      if(Array.isArray(parsed)) return normalizeTasks(parsed);
+      if(Array.isArray(parsed)) return hydrateTaskOwnership(normalizeTasks(parsed));
       return [];
     }
 
     function saveTasksDone(next){
-      tasksDone = normalizeTasks(next);
+      tasksDone = hydrateTaskOwnership(normalizeTasks(next));
       storageSet(STORAGE_KEY_TASKS_DONE, JSON.stringify(tasksDone));
       renderMiniCalendar();
       renderDoneTasks();
@@ -8511,6 +8904,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(!validateTasksForm()) return;
 
       const obs = getDescPhasesFromUI();
+      const fallbackUserId = String(currentUser?.id || "");
+      const fallbackUserName = (currentUser?.display_name || currentUser?.username || "").toString().trim();
 
       const payload = {
         id: tasksEditId || uid(),
@@ -8525,6 +8920,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
         status: (tStatus ? (tStatus.value || "") : "").trim(),
         proxEtapa: (tProxEtapa ? (tProxEtapa.value || "") : "").trim(),
         obs: obs,
+        created_by_user_id: fallbackUserId,
+        created_by_username: fallbackUserName,
         createdAt: "",
         updatedAt: new Date().toISOString(),
       };
@@ -8537,7 +8934,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }else{
         const idx = next.findIndex(t => t.id === tasksEditId);
         if(idx >= 0){
-          payload.createdAt = next[idx].createdAt || "";
+          const prev = next[idx];
+          payload.createdAt = prev.createdAt || "";
+          payload.created_by_user_id = (prev.created_by_user_id || "").toString() || payload.created_by_user_id;
+          payload.created_by_username = (prev.created_by_username || "").toString() || payload.created_by_username;
           next[idx] = payload;
         }else{
           payload.createdAt = new Date().toISOString();
@@ -8656,13 +9056,34 @@ function getNuvemshopSupportBaseUrl(lojaText){
       return "Per\u00edodo: -";
     }
 
+    function isTaskVisibleToCurrentUser(t){
+      if(!isSecondaryUser()) return true;
+      const createdId = (t?.created_by_user_id || "").toString();
+      return createdId !== "" && createdId === String(currentUser?.id || "");
+    }
+
+    function getVisibleTasksList(list){
+      const base = Array.isArray(list) ? list : [];
+      if(!isSecondaryUser()) return base.slice();
+      return base.filter(isTaskVisibleToCurrentUser);
+    }
+
+    function getVisibleCalendarHistoryList(list){
+      const base = Array.isArray(list) ? list : [];
+      if(!isSecondaryUser()) return base.slice();
+      return base.filter(entry => {
+        const createdId = (entry?.created_by_user_id || "").toString();
+        return createdId !== "" && createdId === String(currentUser?.id || "");
+      });
+    }
+
     function getFilteredTasks(){
       const q = (tasksSearchQuery || "").trim().toLowerCase();
       const storeFilter = (tasksSearchStoreValue || "").trim();
       const periodFilter = (tasksSearchPeriodValue || "").trim();
       const statusFilter = (tasksSearchStatusValue || "").trim();
       const typeFilter = (tasksTypeFilter || "normal").trim().toLowerCase();
-      return tasks.filter(t => {
+      return getVisibleTasksList(tasks).filter(t => {
         const isExtraTask = Boolean(t.isExtra || t.extra);
         if(typeFilter === "extra" && !isExtraTask) return false;
         if(typeFilter !== "extra" && isExtraTask) return false;
@@ -8698,7 +9119,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
 
     function updateTaskCountBadges(){
-      const list = Array.isArray(tasks) ? tasks : [];
+      const list = getVisibleTasksList(tasks);
       const normalCount = list.filter(t => !t.isExtra).length;
       const extraCount = list.filter(t => t.isExtra).length;
       const isCollapsed = document.body.classList.contains("sideMenuCollapsed");
@@ -8819,6 +9240,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
 
         const rastEfetivo = (getEffectiveRastreioFromTask(t) || "").trim();
         const repeatTitle = repeatLabel ? `Repeti\u00e7\u00e3o: ${repeatLabel}` : "Definir repeti\u00e7\u00e3o";
+        const authorLabel = (t.created_by_username || "").toString().trim();
+        const showAuthor = isPrincipalUser()
+          && authorLabel
+          && String(t.created_by_user_id || "") !== String(currentUser?.id || "");
 
         return `
           <div class="taskCard ${dueToday ? "taskDueToday" : ""} ${isExtra ? "taskExtra" : ""}" data-task-id="${escapeHtml(t.id)}">
@@ -8836,6 +9261,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
               ${lojaText ? `<span class="pillMini">Loja: ${escapeHtml(lojaText)}</span>` : ""}
               <span class="pillMini">${isExtra ? "Hor\u00e1rio" : "Pr\u00f3xima Etapa"}: <b>${escapeHtml(prox)}</b></span>
               <span class="pillMini">Data inicial: <b>${escapeHtml(data)}</b></span>
+              ${showAuthor ? `<span class="pillMini">Usu\u00e1rio: <b>${escapeHtml(authorLabel)}</b></span>` : ""}
             </div>
 
             <div class="taskActions">
@@ -9228,7 +9654,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(currentView !== "done") return;
       if(!doneTasksList || !doneTasksCount) return;
 
-      let list = Array.isArray(tasksDone) ? tasksDone.slice() : [];
+      let list = getVisibleTasksList(tasksDone);
       list.sort((a, b) => {
         const ta = new Date(a.closedAt || a.updatedAt || a.createdAt || 0).getTime();
         const tb = new Date(b.closedAt || b.updatedAt || b.createdAt || 0).getTime();
@@ -9279,6 +9705,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const prox = isExtra ? timeLabel : formatDateBR(effDate);
         const data = formatDateBR(t.data || "");
         const closedAt = formatDateTimeBR(t.closedAt || t.updatedAt || t.createdAt || "");
+        const authorLabel = (t.created_by_username || "").toString().trim();
+        const showAuthor = isPrincipalUser()
+          && authorLabel
+          && String(t.created_by_user_id || "") !== String(currentUser?.id || "");
 
         const extraText = (t.extraText || "").toString().trim();
         const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
@@ -9323,6 +9753,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
               <span class="pillMini donePill">${isExtra ? "Hor\u00e1rio" : "Pr\u00f3xima Etapa"}: <b>${escapeHtml(prox)}</b></span>
               <span class="pillMini donePill">Data inicial: <b>${escapeHtml(data)}</b></span>
               <span class="pillMini donePill">Encerrada em: <b>${escapeHtml(closedAt)}</b></span>
+              ${showAuthor ? `<span class="pillMini donePill">Usu\u00e1rio: <b>${escapeHtml(authorLabel)}</b></span>` : ""}
             </div>
             ${detailsHtml}
             </div>
@@ -9387,9 +9818,384 @@ function getNuvemshopSupportBaseUrl(lojaText){
       });
     }
 
+    function getUserStoreLabel(u){
+      return (u?.store || u?.loja || u?.store_name || u?.storeName || "").toString().trim();
+    }
+
+    function getUserPresenceInfo(u){
+      const isBlocked = String(u?.access_blocked || "") === "1";
+      const isPending = String(u?.access_pending || "") === "1";
+      const lastActive = Number(u?.last_active_at || 0);
+      let presenceClass = "presenceLoggedOut";
+      let presenceLabel = "Deslogado";
+      let presenceKey = "deslogado";
+      if(isBlocked && isPending){
+        presenceClass = "presencePending";
+        presenceLabel = "Aguardando libera\u00e7\u00e3o";
+        presenceKey = "aguardando";
+      }else if(isBlocked){
+        presenceClass = "presenceBlocked";
+        presenceLabel = "Bloqueado";
+        presenceKey = "bloqueado";
+      }else if(lastActive > 0){
+        const diffMs = Date.now() - (lastActive * 1000);
+        if(diffMs <= 5 * 60 * 1000){
+          presenceClass = "presenceActive";
+          presenceLabel = "Ativo";
+          presenceKey = "ativo";
+        }else if(diffMs <= 60 * 60 * 1000 && diffMs >= 30 * 60 * 1000){
+          presenceClass = "presenceIdle";
+          presenceLabel = "Inativo";
+          presenceKey = "inativo";
+        }else if(diffMs >= 30 * 60 * 1000){
+          presenceClass = "presenceStopped";
+          presenceLabel = "Parado";
+          presenceKey = "parado";
+        }
+      }
+      return { presenceClass, presenceLabel, presenceKey };
+    }
+
+    function updateUsersStoreFilterOptions(){
+      if(!usersSearchStoreSelect) return;
+      const names = getStoreNames();
+      const options = ['<option value="ALL">Todas as lojas</option>']
+        .concat(names.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
+      usersSearchStoreSelect.innerHTML = options.join("");
+      usersSearchStoreSelect.value = (usersSearchStore || "").trim() || "ALL";
+    }
+
+    function updateUsersStatusFilterOptions(){
+      if(!usersSearchStatusSelect) return;
+      const adminOnlyOptions = usersSearchStatusSelect.querySelectorAll("[data-admin-only]");
+      adminOnlyOptions.forEach(opt => {
+        opt.style.display = isAdminUser() ? "" : "none";
+      });
+      if(!isAdminUser() && (usersSearchStatus || "").trim() === "bloqueado"){
+        usersSearchStatus = "";
+        usersSearchStatusSelect.value = "";
+      }
+    }
+
+    function updateUsersFilterButtonState(){
+      if(!searchFilterBtn) return;
+      const active = Boolean((usersSearchName || "").trim())
+        || ((usersSearchStore || "").trim() && (usersSearchStore || "").trim() !== "ALL")
+        || Boolean((usersSearchStatus || "").trim());
+      searchFilterBtn.classList.toggle("isActive", active);
+    }
+
+    function renderUsersView(){
+      if(currentView !== "users") return;
+      if(!usersCards || !usersCount) return;
+
+      if(!canAccessUsersView()){
+        usersCount.textContent = "0 item(ns)";
+        usersCards.innerHTML = `<div class="muted">Acesso restrito.</div>`;
+        return;
+      }
+      if(usersError){
+        usersCount.textContent = "0 item(ns)";
+        usersCards.innerHTML = `<div class="muted">${escapeHtml(usersError)}</div>`;
+        return;
+      }
+
+      const list = Array.isArray(usersCache) ? usersCache.slice() : [];
+      const nameFilter = normalizeLabelText(usersSearchName || "");
+      const storeFilter = (usersSearchStore || "").trim();
+      const statusFilter = (usersSearchStatus || "").trim();
+      const filtered = list.filter(u => {
+        if(nameFilter){
+          const username = normalizeLabelText(u?.username || "");
+          if(!username.includes(nameFilter)) return false;
+        }
+        if(storeFilter && storeFilter !== "ALL"){
+          const storeLabel = getUserStoreLabel(u);
+          if(!storeLabel || storeLabel !== storeFilter) return false;
+        }
+        if(statusFilter){
+          const info = getUserPresenceInfo(u);
+          if(info.presenceKey !== statusFilter) return false;
+        }
+        return true;
+      });
+
+      usersCount.textContent = `${filtered.length} item(ns)`;
+      if(!filtered.length){
+        usersCards.innerHTML = `<div class="muted">Nenhum usu&aacute;rio encontrado.</div>`;
+        return;
+      }
+
+      const canBlockUsers = isAdminUser();
+      usersCards.innerHTML = filtered.map(u => {
+        const username = (u?.username || "").toString();
+        const email = (u?.email || "").toString();
+        const hash = (u?.password_hash || "").toString();
+        const verified = Number(u?.email_verified) === 1;
+        const statusLabel = verified ? "Confirmado" : "Pendente";
+        const createdAt = formatDateTimeBR(u?.created_at || "");
+        const isBlocked = String(u?.access_blocked || "") === "1";
+        const presence = getUserPresenceInfo(u);
+        const presenceClass = presence.presenceClass;
+        const presenceLabel = presence.presenceLabel;
+        return `
+          <div class="userCard">
+            <div class="userCardHead">
+              <div class="userTitleRow">
+                <div class="userCardTitle">${escapeHtml(username || "-")}</div>
+              </div>
+              <div class="userPresenceWrap">
+                <div class="userPresenceLabel">${escapeHtml(presenceLabel)}</div>
+                <div class="userPresence ${presenceClass}" title="${presenceLabel}" aria-label="${presenceLabel}"></div>
+              </div>
+            </div>
+            <div class="userCardBody">
+              <div class="userRow">
+                <div class="userRowLabel">E-mail</div>
+                <div class="userRowValue">${escapeHtml(email || "-")}</div>
+              </div>
+              <div class="userRowDivider"></div>
+              <div class="userRow">
+                <div class="userRowLabel">Senha (hash)</div>
+                <div class="userRowValue userHash">${escapeHtml(hash || "-")}</div>
+              </div>
+              <div class="userRowDivider"></div>
+              <div class="userRow">
+                <div class="userRowLabel">Criado em</div>
+                <div class="userRowValue">${escapeHtml(createdAt)}</div>
+              </div>
+              <div class="userRowDivider"></div>
+              <div class="userRow">
+                <div class="userRowLabel">Confirma&ccedil;&atilde;o de e-mail</div>
+                <div class="userRowValue">${escapeHtml(statusLabel)}</div>
+              </div>
+              <div class="userRowDivider"></div>
+              <div class="userRow userRowActions">
+                <div class="userRowLabel">Resumo de atividades</div>
+                <button class="btn small iconBtn userActivityBtn" type="button" data-user-activity="${escapeHtml(String(u?.id || ""))}" data-user-name="${escapeHtml(username || "-")}" title="Resumo de atividades" aria-label="Resumo de atividades">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="6" y1="7" x2="20" y2="7"></line>
+                    <line x1="6" y1="12" x2="20" y2="12"></line>
+                    <line x1="6" y1="17" x2="20" y2="17"></line>
+                    <circle cx="4" cy="7" r="1"></circle>
+                    <circle cx="4" cy="12" r="1"></circle>
+                    <circle cx="4" cy="17" r="1"></circle>
+                  </svg>
+                </button>
+              </div>
+              <div class="userRowDivider"></div>
+              <div class="userRow userRowActions">
+                <div class="userRowLabel">A&ccedil;&otilde;es</div>
+                <div class="userActionButtons">
+                  ${canBlockUsers ? `
+                  <button class="btn small iconBtn userBlockBtn${isBlocked ? " isBlocked" : ""}" type="button" data-user-action="${escapeHtml(String(u?.id || ""))}" data-user-blocked="${isBlocked ? "1" : "0"}" data-user-name="${escapeHtml(username || "-")}" title="${isBlocked ? "Liberar acesso" : "Limitar acesso"}" aria-label="${isBlocked ? "Liberar acesso" : "Limitar acesso"}">
+                    ${isBlocked ? `
+                      <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                    ` : `
+                      <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 5-5"></path>
+                      </svg>
+                    `}
+                  </button>
+                  ` : ""}
+                  <button class="btn small iconBtn danger userDeleteBtn" type="button" data-user-delete="${escapeHtml(String(u?.id || ""))}" data-user-name="${escapeHtml(username || "-")}" title="Remover usu\u00e1rio" aria-label="Remover usu\u00e1rio">
+                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 6h18"></path>
+                      <path d="M8 6V4h8v2"></path>
+                      <rect x="6" y="6" width="12" height="14" rx="2"></rect>
+                      <path d="M10 10v6"></path>
+                      <path d="M14 10v6"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      usersCards.querySelectorAll("[data-user-activity]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const userId = (btn.getAttribute("data-user-activity") || "").trim();
+          const userName = (btn.getAttribute("data-user-name") || "").trim();
+          if(!userId) return;
+          await openUserActivity(userId, userName);
+        });
+      });
+
+      usersCards.querySelectorAll("[data-user-action]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const userId = (btn.getAttribute("data-user-action") || "").trim();
+          const isBlocked = (btn.getAttribute("data-user-blocked") || "") === "1";
+          const userName = (btn.getAttribute("data-user-name") || "").trim();
+          if(!userId) return;
+          const action = isBlocked ? "unblock" : "block";
+          const ok = await showConfirm(
+            `${isBlocked ? "Desbloquear" : "Bloquear"} o acesso do usuário ${userName || ""}?`,
+            isBlocked ? "Desbloquear acesso" : "Bloquear acesso"
+          );
+          if(!ok) return;
+          try{
+            await apiAdminUserAction(action, userId);
+            await refreshUsersView();
+          }catch(e){
+            showAlert("N\u00e3o foi poss\u00edvel atualizar o acesso.");
+          }
+        });
+      });
+
+      usersCards.querySelectorAll("[data-user-delete]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const userId = (btn.getAttribute("data-user-delete") || "").trim();
+          const userName = (btn.getAttribute("data-user-name") || "").trim();
+          if(!userId) return;
+          const ok = await showConfirm(
+            `Remover o usu\u00e1rio ${userName || ""}? Esta a\u00e7\u00e3o \u00e9 definitiva.`,
+            "Remover usu\u00e1rio"
+          );
+          if(!ok) return;
+          try{
+            await apiAdminUserAction("delete", userId);
+            await refreshUsersView();
+          }catch(e){
+            showAlert("N\u00e3o foi poss\u00edvel remover o usu\u00e1rio.");
+          }
+        });
+      });
+    }
+
+    async function openUserActivity(userId, userName){
+      const usePage = Boolean(viewUserActivity && userActivityViewSummary && userActivityViewList);
+      const titleText = `Atividade: ${userName || "Usu\u00e1rio"}`;
+      const summaryEl = usePage ? userActivityViewSummary : userActivitySummary;
+      const listEl = usePage ? userActivityViewList : userActivityList;
+
+      if(!summaryEl || !listEl) return;
+      if(usePage){
+        if(userActivityViewTitle) userActivityViewTitle.textContent = titleText;
+        if(userActivityViewMeta) userActivityViewMeta.textContent = "";
+        setView("userActivity");
+      }else{
+        if(!userActivityOverlay) return;
+        if(userActivityTitle) userActivityTitle.textContent = titleText;
+        userActivityOverlay.classList.add("show");
+      }
+
+      summaryEl.textContent = "Carregando...";
+      listEl.innerHTML = "";
+      try{
+        const data = await apiUserActivity(userId);
+        const summary = data?.summary || {};
+        const firstSeen = formatDateTimeFromTs(summary.first_seen);
+        const lastSeen = formatDateTimeFromTs(summary.last_seen);
+        const lastActive = formatDateTimeFromTs(summary.last_active_at);
+        const lastLogout = formatDateTimeFromTs(summary.last_logout_at);
+        summaryEl.innerHTML = `
+          <div><strong>Primeira atividade:</strong> ${escapeHtml(firstSeen)}</div>
+          <div><strong>\u00daltima atividade:</strong> ${escapeHtml(lastSeen)}</div>
+          <div><strong>\u00daltimo ping:</strong> ${escapeHtml(lastActive)}</div>
+          <div><strong>\u00daltimo logout:</strong> ${escapeHtml(lastLogout)}</div>
+        `;
+        const activePeriods = Array.isArray(data?.active_periods) ? data.active_periods : [];
+        const inactivePeriods = Array.isArray(data?.inactive_periods) ? data.inactive_periods : [];
+        const activeHtml = activePeriods.length ? activePeriods.map(p => {
+          const start = formatDateTimeFromTs(p.start);
+          const end = formatDateTimeFromTs(p.end);
+          const duration = formatDuration(p.duration_sec);
+          const ongoing = p.ongoing ? " (em andamento)" : "";
+          return `
+            <div class="activityItem">
+              <div class="activityBadge">Ativo${ongoing}</div>
+              <div class="activityRow"><span class="activityRowLabel">In\u00edcio</span><span>${escapeHtml(start)}</span></div>
+              <div class="activityRow"><span class="activityRowLabel">Fim</span><span>${escapeHtml(end)}</span></div>
+              <div class="activityRow"><span class="activityRowLabel">Dura\u00e7\u00e3o</span><span>${escapeHtml(duration)}</span></div>
+            </div>
+          `;
+        }).join("") : `<div class="activityItem"><div class="activityRow">Nenhum per\u00edodo ativo registrado.</div></div>`;
+        const inactiveSegments = [];
+        inactivePeriods.forEach(p => {
+          const startTs = Number(p.start || 0);
+          const endTs = Number(p.end || 0);
+          if(!startTs || !endTs || endTs <= startTs) return;
+          const inactiveWindowEnd = startTs + (30 * 60);
+          const firstEnd = Math.min(endTs, inactiveWindowEnd);
+          const secondStart = Math.min(endTs, inactiveWindowEnd);
+          if(firstEnd > startTs){
+            inactiveSegments.push({
+              label: "Inativo",
+              start: startTs,
+              end: firstEnd,
+              ongoing: p.ongoing && endTs === firstEnd
+            });
+          }
+          if(endTs > secondStart){
+            inactiveSegments.push({
+              label: "Parado",
+              start: secondStart,
+              end: endTs,
+              ongoing: p.ongoing
+            });
+          }
+        });
+
+        const inactiveHtml = inactiveSegments.length ? inactiveSegments.map(seg => {
+          const start = formatDateTimeFromTs(seg.start);
+          const end = formatDateTimeFromTs(seg.end);
+          const duration = formatDuration(seg.end - seg.start);
+          const ongoing = seg.ongoing ? " (em andamento)" : "";
+          return `
+            <div class="activityItem">
+              <div class="activityBadge">${escapeHtml(seg.label)}${ongoing}</div>
+              <div class="activityRow"><span class="activityRowLabel">In\u00edcio</span><span>${escapeHtml(start)}</span></div>
+              <div class="activityRow"><span class="activityRowLabel">Fim</span><span>${escapeHtml(end)}</span></div>
+              <div class="activityRow"><span class="activityRowLabel">Dura\u00e7\u00e3o</span><span>${escapeHtml(duration)}</span></div>
+            </div>
+          `;
+        }).join("") : `<div class="activityItem"><div class="activityRow">Nenhum per\u00edodo inativo registrado.</div></div>`;
+        listEl.innerHTML = `
+          <div class="activitySection">
+            <div class="activitySectionTitle">Per\u00edodos ativos</div>
+            ${activeHtml}
+          </div>
+          <div class="activitySection">
+            <div class="activitySectionTitle">Per\u00edodos inativos (gap &gt; 15 min)</div>
+            ${inactiveHtml}
+          </div>
+        `;
+      }catch(err){
+        summaryEl.textContent = "N\u00e3o foi poss\u00edvel carregar a atividade.";
+      }
+    }
+
+    function closeUserActivity(){
+      if(currentView === "userActivity"){
+        setView("users");
+        return;
+      }
+      if(userActivityOverlay) userActivityOverlay.classList.remove("show");
+    }
+    async function refreshUsersView(){
+      if(!viewUsers) return;
+      usersError = "";
+      try{
+        const result = await apiAdminUsers();
+        usersCache = Array.isArray(result?.users) ? result.users : [];
+      }catch(err){
+        usersCache = [];
+        const msg = (err && err.message) ? String(err.message) : "";
+        usersError = msg === "forbidden" ? "Acesso restrito." : "Nao foi possivel carregar os usuarios.";
+      }
+      renderUsersView();
+    }
+
     /***********************
      * EVENTS
      ***********************/
+    initActivityListeners();
     searchInput.addEventListener("input", ()=>{
       if(currentView === "tasks"){
         tasksSearchQuery = (searchInput.value || "");
@@ -9401,6 +10207,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(currentView === "done"){
         doneSearchQuery = (searchInput.value || "");
         renderDoneTasks();
+        return;
+      }
+      if(currentView === "users"){
+        usersSearchName = (searchInput.value || "");
+        renderUsersView();
+        updateUsersFilterButtonState();
         return;
       }
       render();
@@ -9417,6 +10229,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     if(searchFilterBtn){
       searchFilterBtn.addEventListener("click", ()=>{
+        if(currentView === "users"){
+          updateUsersStoreFilterOptions();
+          updateUsersStatusFilterOptions();
+          if(usersSearchStatusSelect) usersSearchStatusSelect.value = (usersSearchStatus || "").trim();
+          if(usersFiltersOverlay) usersFiltersOverlay.classList.add("show");
+          return;
+        }
         if(currentView === "tasks"){
           if(tasksSearchPeriodCustom && tasksSearchPeriod){
             const val = (tasksSearchPeriod.value || "").trim();
@@ -10366,16 +11185,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const prevNames = getStoreNames();
         const nextNames = next.map(s => (s.name || "").toString()).filter(Boolean);
         const removedNames = prevNames.filter(name => !nextNames.includes(name));
-        if(removedNames.length){
-          const fallback = nextNames[0] || "";
+        const hasStored = Boolean(storageGet(STORAGE_KEY_STORES));
+        if(removedNames.length && hasStored){
           const lines = [
-            "Voc█ est▀ removendo lojas do cadastro.",
+            "Voc\u00ea est\u00e1 removendo lojas do cadastro.",
             "",
-            `Lojas removidas: ${removedNames.join(", ")}`,
+            "Lojas removidas: " + removedNames.join(", "),
             "",
             "O sistema vai remover dados ligados a essas lojas:",
-            "- Perguntas/Respostas e Tarefas Diarias",
-            "- Produtos e Hist¥rico do Calend▀rio",
+            "- Perguntas/Respostas e Tarefas Di\u00e1rias",
+            "- Produtos e Hist\u00f3rico do Calend\u00e1rio",
             "- Links da Nuvemshop",
             "",
             "Os itens ser\u00e3o deletados definitivamente.",
@@ -10937,6 +11756,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
           renderDoneTasks();
           return;
         }
+        if(currentView === "users"){
+          usersSearchName = "";
+          usersSearchStore = "ALL";
+          usersSearchStatus = "";
+          if(usersSearchStoreSelect) usersSearchStoreSelect.value = "ALL";
+          if(usersSearchStatusSelect) usersSearchStatusSelect.value = "";
+          renderUsersView();
+          updateUsersFilterButtonState();
+          return;
+        }
         if(searchStoreSelect) searchStoreSelect.value = "";
         showAllCards = false;
         currentSingleIndex = 0;
@@ -11178,6 +12007,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
         closeDrawer();
       });
     }
+    if(navUsersBtn){
+      navUsersBtn.addEventListener("click", ()=>{
+        setView("users");
+        closeDrawer();
+      });
+    }
     if(goToSearchBtn){
       goToSearchBtn.addEventListener("click", ()=>{
         setView("search");
@@ -11198,6 +12033,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
     if(goToDoneTasksBtn){
       goToDoneTasksBtn.addEventListener("click", ()=>{
         setView("done");
+      });
+    }
+    if(goToUsersBtn){
+      goToUsersBtn.addEventListener("click", ()=>{
+        setView("users");
       });
     }
 
@@ -11508,7 +12348,16 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(openRegisterBtn){
       openRegisterBtn.addEventListener("click", ()=>{
+        if(currentUser && !isPrincipalUser() && !isAdminUser()){
+          setAuthError("Apenas o usu\u00e1rio principal pode cadastrar novos usu\u00e1rios.");
+          return;
+        }
         showAuthOverlay("register");
+      });
+    }
+    if(addUserBtn){
+      addUserBtn.addEventListener("click", ()=>{
+        showAuthOverlay("register", "Crie um usu\u00e1rio secund\u00e1rio.");
       });
     }
     if(resendVerificationBtn){
@@ -11540,13 +12389,16 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(backToLoginBtn){
       backToLoginBtn.addEventListener("click", ()=>{
+        if(authMode === "register" && authRegisterFromApp){
+          hideAuthOverlay();
+          return;
+        }
         showAuthOverlay(needsSetupFlag ? "setup" : "login");
       });
     }
     if(setupCaptchaRefreshBtn){
       setupCaptchaRefreshBtn.addEventListener("click", (e)=>{
         e.preventDefault();
-        loadSetupCaptcha();
       });
     }
     if(openUserProfileBtn){
@@ -11564,6 +12416,57 @@ navAtalhosBtn.addEventListener("click", ()=>{
         if(e.key === "Escape" && userProfileOverlay.classList.contains("show")){
           closeUserProfileOverlay();
         }
+      });
+    }
+    if(userActivityOverlay){
+      userActivityOverlay.addEventListener("click", (e)=>{
+        if(e.target !== userActivityOverlay) return;
+        closeUserActivity();
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key === "Escape" && userActivityOverlay.classList.contains("show")){
+          closeUserActivity();
+        }
+      });
+    }
+    if(userActivityCloseBtn){
+      userActivityCloseBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        closeUserActivity();
+      });
+    }
+    if(usersFiltersCloseBtn && usersFiltersOverlay){
+      usersFiltersCloseBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        usersFiltersOverlay.classList.remove("show");
+      });
+    }
+    if(usersFiltersApplyBtn && usersFiltersOverlay){
+      usersFiltersApplyBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        usersSearchStore = (usersSearchStoreSelect ? (usersSearchStoreSelect.value || "").trim() : "ALL") || "ALL";
+        usersSearchStatus = (usersSearchStatusSelect ? (usersSearchStatusSelect.value || "").trim() : "");
+        usersFiltersOverlay.classList.remove("show");
+        renderUsersView();
+        updateUsersFilterButtonState();
+      });
+    }
+    if(usersFiltersClearBtn){
+      usersFiltersClearBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        usersSearchStore = "ALL";
+        usersSearchStatus = "";
+        if(usersSearchStoreSelect) usersSearchStoreSelect.value = "ALL";
+        if(usersSearchStatusSelect) usersSearchStatusSelect.value = "";
+        if(usersFiltersOverlay) usersFiltersOverlay.classList.remove("show");
+        renderUsersView();
+        updateUsersFilterButtonState();
+      });
+    }
+    if(userActivityBackBtn){
+      userActivityBackBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        closeUserActivity();
       });
     }
     if(userProfileAvatarBtn && userProfileAvatarFile){
@@ -11651,10 +12554,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
      * AUTH / STORAGE BOOTSTRAP
      ***********************/
     let authResolver = null;
+    let authRegisterFromApp = false;
 
     function showAuthOverlay(mode, hint){
       if(!authOverlay) return;
       authMode = (mode === "register") ? "register" : (mode === "setup" ? "setup" : "login");
+      authRegisterFromApp = authMode === "register" && Boolean(currentUser && currentUser.id);
       const isSetup = authMode !== "login";
       if(loginForm) loginForm.style.display = isSetup ? "none" : "flex";
       if(setupForm) setupForm.style.display = isSetup ? "flex" : "none";
@@ -11666,8 +12571,21 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(authHint){
         const defaultHint = authMode === "setup"
           ? "Crie o primeiro usuario para comecar."
-          : (authMode === "register" ? "Crie sua conta e confirme o e-mail." : "");
+          : (authMode === "register"
+            ? (authRegisterFromApp
+              ? "Crie um usuario secundario."
+              : "Crie sua conta, confirme o e-mail e aguarde liberacao.")
+            : "");
         authHint.textContent = hint || defaultHint;
+      }
+      if(userRoleLabel){
+        if(authMode === "setup"){
+          userRoleLabel.textContent = "Usu\u00e1rio principal";
+        }else if(authMode === "register"){
+          userRoleLabel.textContent = authRegisterFromApp ? "Usu\u00e1rio secund\u00e1rio" : "Usu\u00e1rio principal";
+        }else{
+          userRoleLabel.textContent = "";
+        }
       }
         if(authError){
           authError.style.display = "none";
@@ -11676,7 +12594,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
         if(resendVerificationBtn) resendVerificationBtn.style.display = authMode === "login" ? "inline-flex" : "none";
       if(isSetup) loadSetupCaptcha();
         if(authLoginActions) authLoginActions.style.display = authMode === "login" ? "flex" : "none";
-        if(authSetupActions) authSetupActions.style.display = authMode === "register" ? "flex" : "none";
+        if(authSetupActions) authSetupActions.style.display = "none";
+        if(backToLoginBtn) backToLoginBtn.style.display = authMode === "register" ? "inline-flex" : "none";
       authOverlay.classList.add("show");
       authOverlay.setAttribute("aria-hidden", "false");
     }
@@ -11687,21 +12606,19 @@ navAtalhosBtn.addEventListener("click", ()=>{
       authOverlay.setAttribute("aria-hidden", "true");
     }
 
-    function setAuthError(message){
+    function setAuthError(message, options){
       if(!authError) return;
-      authError.textContent = message || "Falha na autenticacao.";
+      const msg = message || "Falha na autenticacao.";
+      if(options && options.html){
+        authError.innerHTML = msg;
+      }else{
+        authError.textContent = msg;
+      }
       authError.style.display = "block";
     }
 
     async function loadSetupCaptcha(){
-      if(!setupCaptchaQuestion) return;
-      try{
-        const response = await fetch(`${API_BASE}/captcha.php`, { credentials: "include" });
-        const data = await response.json().catch(() => ({}));
-        setupCaptchaQuestion.textContent = data?.question || "Quanto e 1 + 1?";
-      }catch(e){
-        setupCaptchaQuestion.textContent = "Quanto e 1 + 1?";
-      }
+      return;
     }
 
     function setUserProfileError(message){
@@ -11775,6 +12692,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
         // ignore
       }
       currentUser = null;
+      stopActivityTracking();
+      updateAdminAccessUI();
       if(userProfileOverlay) userProfileOverlay.classList.remove("show");
       showAuthOverlay("login");
     }
@@ -11790,8 +12709,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
       try{
         const result = await apiRequest(`${API_BASE}/login.php`, { username, password });
         currentUser = result.user || null;
+        updateAdminAccessUI();
         if(loginPassword) loginPassword.value = "";
         hideAuthOverlay();
+        startActivityTracking();
         if(authResolver){
           authResolver();
           authResolver = null;
@@ -11800,6 +12721,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
           const msg = (err && err.message) ? String(err.message) : "";
           if(msg === "db_error" || msg === "db_schema_error" || msg === "server_error" || msg === "request_failed"){
             setAuthError("Erro no servidor. Tente novamente.");
+        }else if(msg === "access_pending"){
+          setAuthError("Aguardando a libera\u00e7\u00e3o do administrador.");
+        }else if(msg === "access_blocked"){
+          setAuthError("Usu\u00e1rio bloqueado.");
           }else if(msg === "email_unverified"){
             setAuthError("Confirme seu e-mail antes de entrar.");
             if(resendVerificationBtn) resendVerificationBtn.style.display = "inline-flex";
@@ -11816,9 +12741,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
       const displayName = (setupDisplayName?.value || "").trim();
       const email = (setupEmail?.value || "").trim();
       const password = (setupPassword?.value || "").toString();
-      const captcha = (setupCaptcha?.value || "").trim();
-      if(!username || !password || !email || !captcha){
-        setAuthError("Preencha usuario, e-mail, senha e captcha.");
+      if(!username || !password || !email){
+        setAuthError("Preencha usuario, e-mail e senha.");
         return;
       }
       try{
@@ -11827,11 +12751,9 @@ navAtalhosBtn.addEventListener("click", ()=>{
           username,
           display_name: displayName,
           email,
-          password,
-          captcha
+          password
         });
         if(setupPassword) setupPassword.value = "";
-        if(setupCaptcha) setupCaptcha.value = "";
         showAuthOverlay("login", "Enviamos um e-mail de confirmacao. Acesse o link para liberar o acesso.");
         if(authResolver){
           authResolver();
@@ -11841,6 +12763,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
         const msg = (err && err.message) ? String(err.message) : "";
         if(msg === "db_error" || msg === "db_schema_error" || msg === "server_error" || msg === "request_failed"){
           setAuthError("Erro no servidor. Tente novamente.");
+        }else if(msg === "auth_required" || msg === "forbidden"){
+          setAuthError("Somente o usu\u00e1rio principal pode cadastrar novos usu\u00e1rios.");
+        }else if(msg === "secondary_limit"){
+          setAuthError("Limite de usu\u00e1rios secund\u00e1rios atingido.");
         }else if(msg === "email_invalid"){
           setAuthError("E-mail invalido.");
         }else if(msg === "email_in_use"){
@@ -11849,17 +12775,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
           setAuthError("Usuario ja cadastrado.");
         }else if(msg === "already_configured"){
           setAuthError("Cadastro inicial ja foi feito. Use Cadastre-se.");
-        }else if(msg === "captcha_invalid"){
-          setAuthError("Captcha invalido.");
-        }else if(msg === "captcha_expired"){
-          setAuthError("Captcha expirado. Tente novamente.");
         }else if(msg === "email_send_failed"){
           setAuthError("Falha ao enviar o e-mail de confirmacao.");
         }else{
           setAuthError("Nao foi possivel criar o usuario.");
         }
-        if(setupCaptcha) setupCaptcha.value = "";
-        loadSetupCaptcha();
       }
     }
 
@@ -11867,6 +12787,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       const session = await apiSession().catch(() => ({}));
       if(session && session.authenticated){
         currentUser = session.user || null;
+        updateAdminAccessUI();
         return;
       }
       const setupStatus = await apiSetupStatus().catch(() => ({}));
@@ -11942,10 +12863,13 @@ navAtalhosBtn.addEventListener("click", ()=>{
       renderExtraMenuLinks();
       render();
       updateUserProfileUI();
+      updateAdminAccessUI();
       updateTaskCountBadges();
       initTasksUI();
       setView("search");
       ensureMiniCalendarNavPlacement();
+      startActivityTracking();
+      startUsersAutoRefresh();
 
         if(!isUserProfileComplete(userProfile)){
           openUserProfileOverlay({ required:true });
@@ -11958,6 +12882,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }
 
     bootstrapApp();
+
 
 
 

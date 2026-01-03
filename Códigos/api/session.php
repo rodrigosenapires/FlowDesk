@@ -15,5 +15,12 @@ if (!$user) {
 respond([
   "ok" => true,
   "authenticated" => true,
-  "user" => $user,
+  "user" => [
+    "id" => (int)$user["id"],
+    "username" => $user["username"],
+    "display_name" => $user["display_name"],
+    "role" => normalize_user_role($user["role"] ?? null),
+    "owner_user_id" => $user["owner_user_id"],
+    "is_admin" => is_admin_user($user),
+  ],
 ]);
