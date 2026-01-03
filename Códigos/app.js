@@ -25,6 +25,7 @@
     // Mant\u00e9m registros mesmo ap\u00f3s remover chamados (para aparecer vermelho no calend\u00e1rio)
     const STORAGE_KEY_CALENDAR = "calendarHistory_v1";
     const STORAGE_KEY_SIDE_MENU = "side_menu_collapsed_v1";
+    const STORAGE_KEY_USER_PROFILE = "user_profile_v1";
 
     const PASSWORD = "123"; // usado para editar/excluir PERGUNTAS e importar
     const FILE_NAME_PREFIX = "base-atendimento";
@@ -34,6 +35,10 @@
     let storageCache = {};
     let storageReady = false;
     let currentUser = null;
+    let userProfile = null;
+    let userProfileAvatarPending = "";
+    let userProfileAvatarPrev = "";
+    let userProfileRequired = false;
 
     function storageGet(key){
       return Object.prototype.hasOwnProperty.call(storageCache, key) ? storageCache[key] : null;
@@ -55,6 +60,63 @@
       if(Object.keys(payload).length){
         void apiStorageSetMany(payload);
       }
+    }
+
+    function normalizeUserProfile(profile){
+      const data = profile && typeof profile === "object" ? profile : {};
+      return {
+        name: (data.name || "").toString().trim(),
+        doc: (data.doc || "").toString().trim(),
+        avatar: (data.avatar || "").toString().trim()
+      };
+    }
+
+    function loadUserProfile(){
+      const raw = storageGet(STORAGE_KEY_USER_PROFILE);
+      const parsed = safeJsonParse(raw);
+      return normalizeUserProfile(parsed);
+    }
+
+    function saveUserProfile(profile){
+      userProfile = normalizeUserProfile(profile);
+      storageSet(STORAGE_KEY_USER_PROFILE, JSON.stringify(userProfile));
+      updateUserProfileUI();
+    }
+
+    function isUserProfileComplete(profile){
+      const data = normalizeUserProfile(profile);
+      return Boolean(data.name) && Boolean(data.doc);
+    }
+
+    function getInitials(name){
+      const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+      if(!parts.length) return "U";
+      const first = parts[0].charAt(0) || "";
+      const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : "";
+      return (first + last).toUpperCase() || "U";
+    }
+
+    function setAvatarElements(imgEl, fallbackEl, name, avatar){
+      if(!imgEl || !fallbackEl) return;
+      const initials = getInitials(name);
+      fallbackEl.textContent = initials;
+      const avatarFile = (avatar || "").toString().trim();
+      if(avatarFile){
+        imgEl.src = `imagens/${encodeURIComponent(avatarFile)}`;
+        imgEl.style.display = "block";
+        fallbackEl.style.display = "none";
+      }else{
+        imgEl.removeAttribute("src");
+        imgEl.style.display = "none";
+        fallbackEl.style.display = "block";
+      }
+    }
+
+    function updateUserProfileUI(){
+      const data = normalizeUserProfile(userProfile);
+      if(userNameLabel) userNameLabel.textContent = data.name || "Minha conta";
+      setAvatarElements(userAvatarImg, userAvatarFallback, data.name, data.avatar);
+      setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, data.name, data.avatar);
     }
 
     async function apiRequest(path, body, options){
@@ -1800,6 +1862,10 @@
     const viewStack   = document.getElementById("viewStack");
     const sideMenu    = document.getElementById("sideMenu");
     const sideMenuToggle = document.getElementById("sideMenuToggle");
+    const openUserProfileBtn = document.getElementById("openUserProfileBtn");
+    const userAvatarImg = document.getElementById("userAvatarImg");
+    const userAvatarFallback = document.getElementById("userAvatarFallback");
+    const userNameLabel = document.getElementById("userName");
 
     const searchInput = document.getElementById("search");
     const searchStoreSelect = document.getElementById("searchStore");
@@ -2292,6 +2358,20 @@
     const setupUsername = document.getElementById("setupUsername");
     const setupDisplayName = document.getElementById("setupDisplayName");
     const setupPassword = document.getElementById("setupPassword");
+    const userProfileOverlay = document.getElementById("userProfileOverlay");
+    const userProfileCloseBtn = document.getElementById("userProfileCloseBtn");
+    const userProfileName = document.getElementById("userProfileName");
+    const userProfileDoc = document.getElementById("userProfileDoc");
+    const userProfileAvatarPreview = document.getElementById("userProfileAvatarPreview");
+    const userProfileAvatarImg = document.getElementById("userProfileAvatarImg");
+    const userProfileAvatarFallback = document.getElementById("userProfileAvatarFallback");
+    const userProfileAvatarFile = document.getElementById("userProfileAvatarFile");
+    const userProfileAvatarBtn = document.getElementById("userProfileAvatarBtn");
+    const userProfileAvatarClearBtn = document.getElementById("userProfileAvatarClearBtn");
+    const userProfileSaveBtn = document.getElementById("userProfileSaveBtn");
+    const userProfileLogoutBtn = document.getElementById("userProfileLogoutBtn");
+    const userProfileStoresBtn = document.getElementById("userProfileStoresBtn");
+    const userProfileError = document.getElementById("userProfileError");
 
     /***********************
      * STATE
@@ -11403,6 +11483,76 @@ navAtalhosBtn.addEventListener("click", ()=>{
     if(setupForm){
       setupForm.addEventListener("submit", handleSetupSubmit);
     }
+    if(openUserProfileBtn){
+      openUserProfileBtn.addEventListener("click", ()=> openUserProfileOverlay({ required:false }));
+    }
+    if(userProfileCloseBtn){
+      userProfileCloseBtn.addEventListener("click", closeUserProfileOverlay);
+    }
+    if(userProfileOverlay){
+      userProfileOverlay.addEventListener("click", (e)=>{
+        if(e.target !== userProfileOverlay) return;
+        closeUserProfileOverlay();
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key === "Escape" && userProfileOverlay.classList.contains("show")){
+          closeUserProfileOverlay();
+        }
+      });
+    }
+    if(userProfileAvatarBtn && userProfileAvatarFile){
+      userProfileAvatarBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        userProfileAvatarFile.value = "";
+        userProfileAvatarFile.click();
+      });
+    }
+    if(userProfileAvatarFile){
+      userProfileAvatarFile.addEventListener("change", async ()=>{
+        const file = userProfileAvatarFile.files && userProfileAvatarFile.files[0];
+        if(!file) return;
+        try{
+          const filename = await apiUploadImage(file);
+          userProfileAvatarPending = filename;
+          const name = (userProfileName?.value || "").trim();
+          setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, name, filename);
+        }catch(err){
+          setUserProfileError("Nao foi possivel enviar a imagem.");
+        }
+      });
+    }
+    if(userProfileAvatarClearBtn){
+      userProfileAvatarClearBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        userProfileAvatarPending = "";
+        const name = (userProfileName?.value || "").trim();
+        setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, name, "");
+      });
+    }
+    if(userProfileName){
+      userProfileName.addEventListener("input", ()=>{
+        const name = (userProfileName.value || "").trim();
+        setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, name, userProfileAvatarPending);
+      });
+    }
+    if(userProfileSaveBtn){
+      userProfileSaveBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        handleUserProfileSave();
+      });
+    }
+    if(userProfileLogoutBtn){
+      userProfileLogoutBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        handleUserProfileLogout();
+      });
+    }
+    if(userProfileStoresBtn){
+      userProfileStoresBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        openStoresConfig();
+      });
+    }
 
     function hasOpenOverlay(){
       const overlays = [
@@ -11411,7 +11561,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
         phaseEditOverlay,
         menuEditOverlay,
         closeTaskOverlay,
-        backupOverlay
+        backupOverlay,
+        userProfileOverlay
       ].filter(Boolean);
       return overlays.some(el => el.classList.contains("show"));
     }
@@ -11456,6 +11607,69 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(!authError) return;
       authError.textContent = message || "Falha na autenticacao.";
       authError.style.display = "block";
+    }
+
+    function setUserProfileError(message){
+      if(!userProfileError) return;
+      if(message){
+        userProfileError.textContent = message;
+        userProfileError.style.display = "block";
+      }else{
+        userProfileError.textContent = "";
+        userProfileError.style.display = "none";
+      }
+    }
+
+    function fillUserProfileForm(data){
+      if(userProfileName) userProfileName.value = data.name || "";
+      if(userProfileDoc) userProfileDoc.value = data.doc || "";
+      userProfileAvatarPending = data.avatar || "";
+      userProfileAvatarPrev = data.avatar || "";
+      setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, data.name, data.avatar);
+    }
+
+    function openUserProfileOverlay(options){
+      if(!userProfileOverlay) return;
+      userProfileRequired = Boolean(options?.required);
+      const data = normalizeUserProfile(userProfile);
+      fillUserProfileForm(data);
+      setUserProfileError("");
+      if(userProfileCloseBtn){
+        userProfileCloseBtn.style.display = userProfileRequired ? "none" : "inline-flex";
+      }
+      userProfileOverlay.classList.add("show");
+    }
+
+    function closeUserProfileOverlay(){
+      if(userProfileRequired) return;
+      if(userProfileOverlay) userProfileOverlay.classList.remove("show");
+    }
+
+    async function handleUserProfileSave(){
+      const name = (userProfileName?.value || "").trim();
+      const doc = (userProfileDoc?.value || "").trim();
+      if(!name || !doc){
+        setUserProfileError("Preencha nome e CPF/CNPJ.");
+        return;
+      }
+      const avatar = (userProfileAvatarPending || "").trim();
+      if(userProfileAvatarPrev && userProfileAvatarPrev !== avatar){
+        void apiDeleteImage(userProfileAvatarPrev);
+      }
+      saveUserProfile({ name, doc, avatar });
+      userProfileRequired = false;
+      if(userProfileOverlay) userProfileOverlay.classList.remove("show");
+    }
+
+    async function handleUserProfileLogout(){
+      try{
+        await apiRequest(`${API_BASE}/logout.php`);
+      }catch(e){
+        // ignore
+      }
+      currentUser = null;
+      if(userProfileOverlay) userProfileOverlay.classList.remove("show");
+      showAuthOverlay("login");
     }
 
     async function handleLoginSubmit(e){
@@ -11558,6 +11772,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       tasksDone = loadTasksDone();
       calendarHistory = loadCalendarHistory();
       seedTransportadorasLinks();
+      userProfile = loadUserProfile();
 
       initTheme();
       initSideMenu();
@@ -11573,11 +11788,16 @@ navAtalhosBtn.addEventListener("click", ()=>{
       renderDrawer();
       renderExtraMenuLinks();
       render();
+      updateUserProfileUI();
       updateTaskCountBadges();
       initTasksUI();
       setView("search");
       ensureMiniCalendarNavPlacement();
 
+      if(!isUserProfileComplete(userProfile)){
+        openUserProfileOverlay({ required:true });
+        return;
+      }
       if(!storageGet(STORAGE_KEY_STORES)){
         openStoresConfig();
       }

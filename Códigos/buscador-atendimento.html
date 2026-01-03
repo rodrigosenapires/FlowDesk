@@ -6,7 +6,7 @@
   <title>Flowdesk</title>
   <link rel="icon" href="../Favicon/favicon-versao-clara.png" media="(prefers-color-scheme: light)">
   <link rel="icon" href="../Favicon/favicon-versao-escura.png" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="styles.css?v=31">
   <style>
     .copyRow > div{
       flex:1 1 0;
@@ -166,7 +166,19 @@
       </div>
       
     </div>
-  </aside>  <header>
+  </aside>
+  <div class="userBar" id="userBar">
+    <div class="userBarInner">
+      <button class="userChip" id="openUserProfileBtn" type="button" title="Minha conta" aria-label="Minha conta">
+        <span class="userAvatar" id="userAvatar">
+          <img id="userAvatarImg" alt="Avatar do usuário" />
+          <span class="userAvatarFallback" id="userAvatarFallback">U</span>
+        </span>
+        <span class="userName" id="userName">Minha conta</span>
+      </button>
+    </div>
+  </div>
+  <header>
     <div class="wrap">
       <div class="toprow">
         <button class="hambBtn mobileHambBtn" id="openDrawerBtnMobile" title="Menu" aria-label="Menu">
@@ -222,6 +234,12 @@
           <p class="menuTitle">A&ccedil;&otilde;es do cabe&ccedil;alho</p>
         </div>
         <div class="mobileHeaderActions">
+          <button class="themeBtn" type="button" data-header-proxy="openUserProfileBtn" title="Minha conta" aria-label="Minha conta">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4"></circle>
+              <path d="M4 20a8 8 0 0 1 16 0"></path>
+            </svg>
+          </button>
           <button class="themeBtn" type="button" data-header-proxy="sakChatBtn" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
             <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
               <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
@@ -1469,6 +1487,46 @@
       </div>
     </div>
   </div>
+  <div class="miniOverlay" id="userProfileOverlay">
+    <div class="miniModal userProfileModal">
+      <div class="mh">
+        <h3>Minha conta</h3>
+        <button class="btn small" id="userProfileCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="formGrid">
+          <div>
+            <div class="label">Nome <span class="count">obrigat&oacute;rio</span></div>
+            <input id="userProfileName" type="text" placeholder="Nome completo" />
+          </div>
+          <div>
+            <div class="label">CPF/CNPJ <span class="count">obrigat&oacute;rio</span></div>
+            <input id="userProfileDoc" type="text" placeholder="CPF ou CNPJ" />
+          </div>
+          <div>
+            <div class="label">Avatar <span class="count">opcional</span></div>
+            <div class="row" style="gap:12px; align-items:center; flex-wrap:wrap;">
+              <div class="userAvatarPreview" id="userProfileAvatarPreview">
+                <img id="userProfileAvatarImg" alt="Avatar do usu&aacute;rio" />
+                <span class="userAvatarFallback" id="userProfileAvatarFallback">U</span>
+              </div>
+              <div class="row" style="gap:8px;">
+                <button class="btn small" id="userProfileAvatarBtn">Enviar imagem</button>
+                <button class="btn small" id="userProfileAvatarClearBtn">Remover</button>
+              </div>
+              <input id="userProfileAvatarFile" type="file" accept="image/*" style="display:none;">
+            </div>
+          </div>
+        </div>
+        <div class="note authError" id="userProfileError" style="display:none;"></div>
+      </div>
+      <div class="mf">
+        <button class="btn" id="userProfileStoresBtn">Cadastrar lojas</button>
+        <button class="btn danger" id="userProfileLogoutBtn">Deslogar</button>
+        <button class="btn primary" id="userProfileSaveBtn">Salvar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal: Fechar app -->
   <div class="miniOverlay" id="closeAppOverlay">
@@ -1717,10 +1775,15 @@
     </div>
   </div>
 
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 
   </body>
 </html>
+
+
+
+
+
 
 
 

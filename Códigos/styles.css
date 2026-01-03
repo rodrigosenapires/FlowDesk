@@ -216,6 +216,59 @@
       flex-wrap:nowrap;
       padding-right:0;
     }
+    .userChip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      margin-bottom:0;
+      border-radius:999px;
+      border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg) 75%, transparent);
+      color:var(--text);
+      cursor:pointer;
+    }
+    .userBar{
+      width:100%;
+      padding:8px 16px 0;
+    }
+    .userBarInner{
+      max-width:1100px;
+      margin:0 auto;
+      display:flex;
+      justify-content:flex-end;
+    }
+    .userAvatar,
+    .userAvatarPreview{
+      width:28px;
+      height:28px;
+      border-radius:999px;
+      background: color-mix(in srgb, var(--line) 70%, transparent);
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      font-size:12px;
+      font-weight:700;
+      color:var(--text);
+    }
+    .userAvatar img,
+    .userAvatarPreview img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:none;
+    }
+    .userAvatarFallback{line-height:1;}
+    .userName{
+      font-size:12px;
+      font-weight:600;
+      white-space:nowrap;
+    }
+    .userProfileModal .userAvatarPreview{
+      width:56px;
+      height:56px;
+      font-size:18px;
+    }
     /* Holding Sena maior */
     .brandright strong{
       color:var(--text);
@@ -564,18 +617,19 @@
     }
     .card .hd h2{margin:0;font-size:14px;font-weight:900}
     .card .bd{padding:14px}
-    .resultsCard .hd,
-    #viewTasks .card .hd{
+    .resultsCard .hd{
       display:grid;
-      grid-template-columns:1fr auto;
-      align-items:start;
+      grid-template-columns:auto 1fr auto;
+      align-items:center;
     }
-    .resultsCard .hd h2,
-    #viewTasks .card .hd h2{justify-self:start}
-    .resultsCard .hd #openQuestionModalBtn,
-    #viewTasks .card .hd #openTaskModalBtn{justify-self:center}
-    .resultsCard .hd .count,
-    #viewTasks .card .hd .count{justify-self:end}
+    .resultsCard .hd h2{justify-self:start}
+    .resultsCard .hd #openQuestionModalBtn{justify-self:center}
+    .resultsCard .hd .count{justify-self:end}
+    #viewTasks .card .hd{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
     .taskHeaderTitle{
       display:flex;
       flex-direction:column;
@@ -3967,4 +4021,5 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator{
     @media (max-width: 1024px){
       body.hasSideMenu{padding-left:0}
       .sideMenu{display:none}
+      .userBar{display:none}
     }
