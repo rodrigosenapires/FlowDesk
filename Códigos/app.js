@@ -12591,7 +12591,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
           authError.style.display = "none";
           authError.textContent = "";
         }
-        if(resendVerificationBtn) resendVerificationBtn.style.display = authMode === "login" ? "inline-flex" : "none";
+        if(resendVerificationBtn) resendVerificationBtn.style.display = "none";
       if(isSetup) loadSetupCaptcha();
         if(authLoginActions) authLoginActions.style.display = authMode === "login" ? "flex" : "none";
         if(authSetupActions) authSetupActions.style.display = "none";
@@ -12755,6 +12755,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         });
         if(setupPassword) setupPassword.value = "";
         showAuthOverlay("login", "Enviamos um e-mail de confirmacao. Acesse o link para liberar o acesso.");
+        if(resendVerificationBtn) resendVerificationBtn.style.display = "inline-flex";
         if(authResolver){
           authResolver();
           authResolver = null;

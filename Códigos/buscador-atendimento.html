@@ -6,7 +6,7 @@
   <title>Flowdesk</title>
   <link rel="icon" href="../Favicon/favicon-versao-clara.png" media="(prefers-color-scheme: light)">
   <link rel="icon" href="../Favicon/favicon-versao-escura.png" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="styles.css?v=48">
+  <link rel="stylesheet" href="styles.css?v=55">
   <style>
     .copyRow > div{
       flex:1 1 0;
@@ -23,45 +23,71 @@
 
 <body class="hasSideMenu">
   <div class="authOverlay" id="authOverlay" aria-hidden="true">
-    <div class="authCard">
-      <div class="authHeader">
-        <h3 id="authTitle">Entrar</h3>
-        <button class="btn small authBackBtn" type="button" id="backToLoginBtn">Voltar</button>
-      </div>
-      <div class="authBody">
-        <form class="authForm" id="loginForm" autocomplete="on">
-          <label class="authLabel" for="loginUsername">Usu&aacute;rio</label>
-          <input class="authInput" id="loginUsername" type="text" autocomplete="username" />
-          <label class="authLabel" for="loginPassword">Senha</label>
-          <input class="authInput" id="loginPassword" type="password" autocomplete="current-password" />
-          <button class="btn small primary authSubmit" type="submit">Entrar</button>
-        </form>
-        <div class="authActions" id="authLoginActions">
-          <button class="btn small" type="button" id="openRegisterBtn">Cadastre-se</button>
-          <button class="btn small" type="button" id="resendVerificationBtn">Reenviar c&oacute;digo</button>
+      <div class="authShell authShellFull">
+        <div class="authHero">
+          <img class="authHeroImg" src="imagens/inicio.jfif" alt="FlowDesk">
         </div>
-
-        <form class="authForm" id="setupForm" autocomplete="on" style="display:none;">
-          <label class="authLabel" for="setupUsername">Usu&aacute;rio</label>
-          <input class="authInput" id="setupUsername" type="text" autocomplete="username" />
-          <label class="authLabel" for="setupDisplayName">Nome (opcional)</label>
-          <input class="authInput" id="setupDisplayName" type="text" autocomplete="name" />
-          <label class="authLabel" for="setupEmail">E-mail</label>
-          <input class="authInput" id="setupEmail" type="email" autocomplete="email" />
-          <label class="authLabel" for="setupPassword">Senha</label>
-          <input class="authInput" id="setupPassword" type="password" autocomplete="new-password" />
-          <div class="authDivider" aria-hidden="true"></div>
-          <div class="authLabel" style="margin-top:6px;">Tipo de usu&aacute;rio</div>
-          <div class="authRoleRow">
-            <div class="authRoleText" id="userRoleLabel">Usu&aacute;rio principal</div>
+        <div class="authPanel">
+          <div class="authPanelInner">
+            <div class="authBrand">
+              <img class="authBrandLogo" src="../Extras/logo/logo-fundo-escuro.png" alt="FlowDesk">
+            </div>
+          <div class="authHeader">
+            <h3 id="authTitle">Entrar</h3>
+            <button class="btn small authBackBtn" type="button" id="backToLoginBtn">Voltar</button>
           </div>
-          <div class="authDivider" aria-hidden="true"></div>
-          <button class="btn small primary authSubmit" type="submit">Criar usu&aacute;rio</button>
-        </form>
-        <div class="authActions" id="authSetupActions" style="display:none;"></div>
+          <div class="authBody">
+            <form class="authForm" id="loginForm" autocomplete="on">
+              <label class="authLabel" for="loginUsername">Nome do usu&aacute;rio</label>
+              <input class="authInput" id="loginUsername" type="text" autocomplete="username" placeholder="Digite seu usu&aacute;rio" />
+              <label class="authLabel" for="loginPassword">Senha</label>
+              <input class="authInput" id="loginPassword" type="password" autocomplete="current-password" placeholder="Digite sua senha" />
+              <a class="authLink" href="javascript:void(0)" style="color:#6ecbff !important; text-decoration: underline !important;">Esqueci minha senha</a>
+              <div class="authLoginRow">
+                <button class="btn small primary authSubmit" type="submit">Entrar</button>
+                <button class="btn small" type="button" id="openRegisterBtn">Cadastre-se</button>
+              </div>
+            </form>
 
-        <div class="note authError" id="authError" style="display:none;"></div>
-        <div class="note authHint" id="authHint"></div>
+            <div class="authActions" id="authLoginActions">
+              <button class="btn small" type="button" id="resendVerificationBtn">Reenviar c&oacute;digo</button>
+            </div>
+
+            <div class="authOr"><span>ou</span></div>
+            <button class="authGoogleBtn" type="button">
+              <img src="imagens/google.png" alt="Google">
+              <span>Acessar com Google</span>
+            </button>
+
+            <div class="authPartner">
+              Ainda n&atilde;o tem uma loja na Nuvemshop?
+              <a class="authLink" href="https://www.nuvemshop.com.br/partners/print-academy" target="_blank" rel="noopener" style="color:#6ecbff !important; text-decoration: underline !important;">Criar loja agora</a>
+            </div>
+            <div class="authCoupon">Cupom: <span class="authCouponHighlight">25% de desconto</span> na primeira mensalidade da Nuvemshop.</div>
+
+            <form class="authForm" id="setupForm" autocomplete="on" style="display:none;">
+              <label class="authLabel" for="setupUsername">Usu&aacute;rio</label>
+              <input class="authInput" id="setupUsername" type="text" autocomplete="username" />
+              <label class="authLabel" for="setupDisplayName">Nome (opcional)</label>
+              <input class="authInput" id="setupDisplayName" type="text" autocomplete="name" />
+              <label class="authLabel" for="setupEmail">E-mail</label>
+              <input class="authInput" id="setupEmail" type="email" autocomplete="email" />
+              <label class="authLabel" for="setupPassword">Senha</label>
+              <input class="authInput" id="setupPassword" type="password" autocomplete="new-password" />
+              <div class="authDivider" aria-hidden="true"></div>
+              <div class="authLabel" style="margin-top:6px;">Tipo de usu&aacute;rio</div>
+              <div class="authRoleRow">
+                <div class="authRoleText" id="userRoleLabel">Usu&aacute;rio principal</div>
+              </div>
+              <div class="authDivider" aria-hidden="true"></div>
+              <button class="btn small primary authSubmit" type="submit">Criar usu&aacute;rio</button>
+            </form>
+            <div class="authActions" id="authSetupActions" style="display:none;"></div>
+
+            <div class="note authError" id="authError" style="display:none;"></div>
+            <div class="note authHint" id="authHint"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1898,7 +1924,7 @@
     </div>
   </div>
 
-<script src="app.js?v=67"></script>
+<script src="app.js?v=68"></script>
 
   </body>
 </html>
