@@ -57,8 +57,52 @@ register_shutdown_function(function (): void {
   echo json_encode($payload);
 });
 
+// Ensure session cookie path matches the app base directory after renames.
+$cookiePath = "/";
+$scriptName = $_SERVER["SCRIPT_NAME"] ?? "";
+if ($scriptName !== "") {
+  $dir = str_replace("\\", "/", dirname($scriptName));
+  if ($dir !== "/" && substr($dir, -4) === "/api") {
+    $dir = substr($dir, 0, -4);
+  }
+  $dir = $dir === "/" ? "/" : rtrim($dir, "/");
+  $cookiePath = $dir === "" ? "/" : $dir;
+}
+ini_set("session.cookie_path", $cookiePath);
+$cookieParams = session_get_cookie_params();
+if (PHP_VERSION_ID >= 70300) {
+  $cookieParams["path"] = $cookiePath;
+  session_set_cookie_params($cookieParams);
+} else {
+  session_set_cookie_params(
+    $cookieParams["lifetime"],
+    $cookiePath,
+    $cookieParams["domain"],
+    $cookieParams["secure"],
+    $cookieParams["httponly"]
+  );
+}
+
 session_name(APP_SESSION_NAME);
 session_start();
+
+// Refresh session cookie to ensure the current path is applied after renames.
+if (!headers_sent() && session_id() !== "") {
+  // Remove any stale session cookie set on "/" so only the scoped path remains.
+  setcookie(session_name(), "", time() - 42000, "/");
+  $params = session_get_cookie_params();
+  $cookie = [
+    "expires" => 0,
+    "path" => $params["path"] ?? "/",
+    "domain" => $params["domain"] ?? "",
+    "secure" => $params["secure"] ?? false,
+    "httponly" => $params["httponly"] ?? false,
+  ];
+  if (isset($params["samesite"])) {
+    $cookie["samesite"] = $params["samesite"];
+  }
+  setcookie(session_name(), session_id(), $cookie);
+}
 
 if (!function_exists("str_contains")) {
   function str_contains(string $haystack, string $needle): bool {
@@ -179,6 +223,12 @@ function ensure_users_schema(): void {
   }
   if (!column_exists("users", "access_pending")) {
     $updates[] = "ADD COLUMN access_pending TINYINT(1) NOT NULL DEFAULT 0";
+  }
+  if (!column_exists("users", "password_reset_token")) {
+    $updates[] = "ADD COLUMN password_reset_token VARCHAR(64) DEFAULT NULL";
+  }
+  if (!column_exists("users", "password_reset_expires_at")) {
+    $updates[] = "ADD COLUMN password_reset_expires_at DATETIME DEFAULT NULL";
   }
   if ($updates) {
     db()->exec("ALTER TABLE users " . implode(", ", $updates));
@@ -415,6 +465,88 @@ function send_verification_email(string $email, string $token): bool {
   if (defined("APP_SMTP_HOST") && APP_SMTP_HOST !== "" && str_contains($from, "@")) {
     $smtpOk = send_via_smtp($from, $email, $smtpData);
     return $smtpOk;
+  }
+  $ok = $params
+    ? mail($email, $subject, $body, $headersStr, $params)
+    : mail($email, $subject, $body, $headersStr);
+  if (!$ok && $plain) {
+    $fallbackHeaders = [
+      "From: " . encode_mail_header($fromName) . " <" . $from . ">",
+      "Reply-To: " . $from,
+      "Message-ID: " . $messageId,
+      "X-Mailer: PHP/" . PHP_VERSION,
+      "Content-Type: text/plain; charset=UTF-8",
+    ];
+    return $params
+      ? mail($email, $subject, $plain, implode("\r\n", $fallbackHeaders), $params)
+      : mail($email, $subject, $plain, implode("\r\n", $fallbackHeaders));
+  }
+  return $ok;
+}
+
+function send_password_reset_email(string $email, string $token): bool {
+  $base = get_app_base_url();
+  $link = $base ? ($base . "/?reset=" . urlencode($token)) : "";
+  $logo = $base ? ($base . "/Extras/logo/logo-fundo-claro.png") : "";
+  $hostRaw = $_SERVER["HTTP_HOST"] ?? "localhost";
+  $host = preg_replace("/:\\d+$/", "", $hostRaw);
+  $from = defined("APP_MAIL_FROM") && APP_MAIL_FROM ? APP_MAIL_FROM : ("no-reply@" . $host);
+  $fromName = defined("APP_MAIL_FROM_NAME") && APP_MAIL_FROM_NAME ? APP_MAIL_FROM_NAME : "FlowDesk";
+  $subjectRaw = "Redefinir senha do FlowDesk";
+  $subject = encode_mail_header($subjectRaw);
+  $plain = "Ola!\n\nRecebemos um pedido para redefinir sua senha.\n\nClique no link para criar uma nova senha:\n"
+    . $link . "\n\nSe voce nao solicitou, ignore este e-mail.\n\nEquipe FlowDesk";
+
+  $html = '<!doctype html><html lang="pt-br"><head><meta charset="utf-8" />'
+    . '<meta name="viewport" content="width=device-width, initial-scale=1" />'
+    . '<title>Redefinir senha</title></head>'
+    . '<body style="margin:0;padding:0;background:#0b1220;color:#e9eef7;font-family:Arial,sans-serif;">'
+    . '<div style="max-width:560px;margin:0 auto;padding:32px 20px;">'
+    . '<div style="background:#0f1b2e;border:1px solid #20324f;border-radius:16px;padding:28px 24px;">'
+    . ($logo ? '<div style="text-align:center;margin-bottom:18px;"><img src="' . htmlspecialchars($logo, ENT_QUOTES, "UTF-8") . '" alt="FlowDesk" style="max-width:160px;height:auto;" /></div>' : '')
+    . '<h2 style="margin:0 0 10px;font-size:20px;">Redefinir senha</h2>'
+    . '<p style="margin:0 0 16px;line-height:1.5;color:#c5d2e8;">Recebemos um pedido para redefinir sua senha.</p>'
+    . '<div style="text-align:center;margin:22px 0;">'
+    . '<a href="' . htmlspecialchars($link, ENT_QUOTES, "UTF-8") . '" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#7c8cff;color:#0b1220;text-decoration:none;font-weight:bold;">Criar nova senha</a>'
+    . '</div>'
+    . '<p style="margin:0;color:#9fb0c8;font-size:12px;line-height:1.4;">Se voce nao solicitou, ignore este e-mail.</p>'
+    . '</div>'
+    . '<div style="text-align:center;color:#7b8aa6;font-size:12px;margin-top:12px;">Equipe FlowDesk</div>'
+    . '</div></body></html>';
+
+  $boundary = "flowdesk_" . bin2hex(random_bytes(12));
+  $messageId = "<" . bin2hex(random_bytes(16)) . "@" . $host . ">";
+  $explicitFrom = (defined("APP_MAIL_FROM") && APP_MAIL_FROM);
+  $headers = [
+    "From: " . encode_mail_header($fromName) . " <" . $from . ">",
+    "Reply-To: " . $from,
+    "MIME-Version: 1.0",
+    "Date: " . gmdate("D, d M Y H:i:s") . " +0000",
+    "Message-ID: " . $messageId,
+    "X-Mailer: PHP/" . PHP_VERSION,
+    "Content-Type: multipart/alternative; boundary=\"" . $boundary . "\"",
+  ];
+  $body = "--" . $boundary . "\r\n"
+    . "Content-Type: text/plain; charset=UTF-8\r\n"
+    . "Content-Transfer-Encoding: 8bit\r\n\r\n"
+    . $plain . "\r\n\r\n"
+    . "--" . $boundary . "\r\n"
+    . "Content-Type: text/html; charset=UTF-8\r\n"
+    . "Content-Transfer-Encoding: 8bit\r\n\r\n"
+    . $html . "\r\n\r\n"
+    . "--" . $boundary . "--";
+
+  $params = "";
+  if ($explicitFrom && $from && str_contains($from, "@")) {
+    $params = "-f" . $from;
+  }
+  $headersStr = implode("\r\n", $headers);
+  $smtpData = "To: " . $email . "\r\n"
+    . "Subject: " . $subject . "\r\n"
+    . $headersStr . "\r\n\r\n"
+    . $body;
+  if (defined("APP_SMTP_HOST") && APP_SMTP_HOST !== "" && str_contains($from, "@")) {
+    return send_via_smtp($from, $email, $smtpData);
   }
   $ok = $params
     ? mail($email, $subject, $body, $headersStr, $params)

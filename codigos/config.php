@@ -6,10 +6,12 @@ if (php_sapi_name() !== "cli" && basename(__FILE__) === basename($_SERVER["SCRIP
 }
 
 // Database settings (fill these after creating the MySQL database).
+$appHost = strtolower((string)($_SERVER["HTTP_HOST"] ?? $_SERVER["SERVER_NAME"] ?? ""));
+$isLocal = ($appHost === "localhost" || $appHost === "127.0.0.1" || str_ends_with($appHost, ".localhost"));
 define("DB_HOST", "127.0.0.1");
-define("DB_NAME", "u748231595_Flowdesk");
-define("DB_USER", "u748231595_Flowdesk");
-define("DB_PASS", "Rs@252534");
+define("DB_NAME", $isLocal ? "u748231595_flowdesk" : "u748231595_Flowdesk");
+define("DB_USER", $isLocal ? "root" : "u748231595_Flowdesk");
+define("DB_PASS", $isLocal ? "" : "Rs@252534");
 define("DB_CHARSET", "utf8mb4");
 
 // Session settings.
@@ -21,7 +23,7 @@ define("APP_ADMIN_USER_ID", 1);
 define("APP_ADMIN_DISPLAY_NAME", "Rodrigo");
 
 // Email settings.
-define("APP_BASE_URL", "https://beige-opossum-768581.hostingersite.com/C%C3%B3digos");
+define("APP_BASE_URL", "");
 define("APP_MAIL_FROM", "rodrigosenamkt@gmail.com");
 define("APP_MAIL_FROM_NAME", "FlowDesk");
 define("APP_SMTP_HOST", "smtp.gmail.com");

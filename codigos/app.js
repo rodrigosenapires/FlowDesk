@@ -32,7 +32,19 @@
     const FILE_NAME_PREFIX = "base-atendimento";
     const BACKUP_VERSION = 10;
 
-    const API_BASE = "./api";
+    const API_BASE = (() => {
+      const url = new URL(window.location.href);
+      let path = url.pathname || "/";
+      if (!path.endsWith("/")) {
+        const last = path.split("/").pop() || "";
+        if (last && !last.includes(".")) {
+          path += "/";
+        } else {
+          path = path.slice(0, path.lastIndexOf("/") + 1);
+        }
+      }
+      return `${path}api`;
+    })();
     let storageCache = {};
     let storageReady = false;
     let currentUser = null;
@@ -2446,6 +2458,12 @@
     const loginUsername = document.getElementById("loginUsername");
     const loginPassword = document.getElementById("loginPassword");
     const setupForm = document.getElementById("setupForm");
+    const resetRequestForm = document.getElementById("resetRequestForm");
+    const resetPasswordForm = document.getElementById("resetPasswordForm");
+    const resetIdentifier = document.getElementById("resetIdentifier");
+    const resetPassword = document.getElementById("resetPassword");
+    const resetPasswordConfirm = document.getElementById("resetPasswordConfirm");
+    const resetTokenInput = document.getElementById("resetToken");
     const setupUsername = document.getElementById("setupUsername");
     const setupDisplayName = document.getElementById("setupDisplayName");
     const setupEmail = document.getElementById("setupEmail");
@@ -2454,6 +2472,7 @@
     const setupCaptchaQuestion = document.getElementById("setupCaptchaQuestion");
     const setupCaptchaRefreshBtn = document.getElementById("setupCaptchaRefreshBtn");
     const openRegisterBtn = document.getElementById("openRegisterBtn");
+    const forgotPasswordLink = document.getElementById("forgotPasswordLink");
     const addUserBtn = document.getElementById("addUserBtn");
     const userRoleLabel = document.getElementById("userRoleLabel");
     const resendVerificationBtn = document.getElementById("resendVerificationBtn");
@@ -12346,6 +12365,17 @@ navAtalhosBtn.addEventListener("click", ()=>{
     if(setupForm){
       setupForm.addEventListener("submit", handleSetupSubmit);
     }
+    if(resetRequestForm){
+      resetRequestForm.addEventListener("submit", handleResetRequestSubmit);
+    }
+    if(resetPasswordForm){
+      resetPasswordForm.addEventListener("submit", handleResetPasswordSubmit);
+    }
+    if(forgotPasswordLink){
+      forgotPasswordLink.addEventListener("click", ()=>{
+        showAuthOverlay("reset_request", "Informe seu e-mail ou usuario.");
+      });
+    }
     if(openRegisterBtn){
       openRegisterBtn.addEventListener("click", ()=>{
         if(currentUser && !isPrincipalUser() && !isAdminUser()){
@@ -12387,15 +12417,15 @@ navAtalhosBtn.addEventListener("click", ()=>{
         }
       });
     }
-    if(backToLoginBtn){
-      backToLoginBtn.addEventListener("click", ()=>{
-        if(authMode === "register" && authRegisterFromApp){
-          hideAuthOverlay();
-          return;
-        }
-        showAuthOverlay(needsSetupFlag ? "setup" : "login");
-      });
-    }
+      if(backToLoginBtn){
+        backToLoginBtn.addEventListener("click", ()=>{
+          if(authMode === "register" && authRegisterFromApp){
+            hideAuthOverlay();
+            return;
+          }
+          showAuthOverlay(needsSetupFlag ? "setup" : "login");
+        });
+      }
     if(setupCaptchaRefreshBtn){
       setupCaptchaRefreshBtn.addEventListener("click", (e)=>{
         e.preventDefault();
@@ -12558,15 +12588,21 @@ navAtalhosBtn.addEventListener("click", ()=>{
 
     function showAuthOverlay(mode, hint){
       if(!authOverlay) return;
-      authMode = (mode === "register") ? "register" : (mode === "setup" ? "setup" : "login");
+      authMode = (mode === "register") ? "register" : (mode === "setup" ? "setup" : (mode === "reset_request" ? "reset_request" : (mode === "reset_password" ? "reset_password" : "login")));
       authRegisterFromApp = authMode === "register" && Boolean(currentUser && currentUser.id);
       const isSetup = authMode !== "login";
-      if(loginForm) loginForm.style.display = isSetup ? "none" : "flex";
-      if(setupForm) setupForm.style.display = isSetup ? "flex" : "none";
+      if(loginForm) loginForm.style.display = authMode === "login" ? "flex" : "none";
+      if(setupForm) setupForm.style.display = authMode === "setup" || authMode === "register" ? "flex" : "none";
+      if(resetRequestForm) resetRequestForm.style.display = authMode === "reset_request" ? "flex" : "none";
+      if(resetPasswordForm) resetPasswordForm.style.display = authMode === "reset_password" ? "flex" : "none";
       if(authTitle){
         authTitle.textContent = authMode === "setup"
           ? "Criar primeiro usuario"
-          : (authMode === "register" ? "Criar conta" : "Entrar");
+          : (authMode === "register"
+            ? "Criar conta"
+            : (authMode === "reset_request"
+              ? "Recuperar senha"
+              : (authMode === "reset_password" ? "Definir nova senha" : "Entrar")));
       }
       if(authHint){
         const defaultHint = authMode === "setup"
@@ -12575,7 +12611,9 @@ navAtalhosBtn.addEventListener("click", ()=>{
             ? (authRegisterFromApp
               ? "Crie um usuario secundario."
               : "Crie sua conta, confirme o e-mail e aguarde liberacao.")
-            : "");
+            : (authMode === "reset_request"
+              ? "Informe seu e-mail ou usu\u00e1rio para receber o link."
+              : (authMode === "reset_password" ? "Crie uma nova senha para acessar." : "")));
         authHint.textContent = hint || defaultHint;
       }
       if(userRoleLabel){
@@ -12595,7 +12633,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(isSetup) loadSetupCaptcha();
         if(authLoginActions) authLoginActions.style.display = authMode === "login" ? "flex" : "none";
         if(authSetupActions) authSetupActions.style.display = "none";
-        if(backToLoginBtn) backToLoginBtn.style.display = authMode === "register" ? "inline-flex" : "none";
+        if(backToLoginBtn) backToLoginBtn.style.display = authMode === "register" || authMode === "reset_request" || authMode === "reset_password" ? "inline-flex" : "none";
       authOverlay.classList.add("show");
       authOverlay.setAttribute("aria-hidden", "false");
     }
@@ -12784,6 +12822,74 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }
     }
 
+    async function handleResetRequestSubmit(e){
+      e.preventDefault();
+      const identifier = (resetIdentifier?.value || "").trim();
+      if(!identifier){
+        setAuthError("Informe o e-mail ou usuario.");
+        return;
+      }
+      try{
+        await apiRequest(`${API_BASE}/request_password_reset.php`, { identifier });
+        showAuthOverlay("login", "Se o usuario existir, enviamos um link para redefinir a senha.");
+      }catch(err){
+        const msg = (err && err.message) ? String(err.message) : "";
+        if(msg === "email_invalid"){
+          setAuthError("E-mail invalido.");
+        }else if(msg === "user_not_found"){
+          setAuthError("Usuario nao encontrado.");
+        }else if(msg === "email_send_failed"){
+          setAuthError("Nao foi possivel enviar o e-mail.");
+        }else{
+          setAuthError("Nao foi possivel solicitar a recuperacao.");
+        }
+      }
+    }
+
+    async function handleResetPasswordSubmit(e){
+      e.preventDefault();
+      const token = (resetTokenInput?.value || "").trim();
+      const password = (resetPassword?.value || "").toString();
+      const confirm = (resetPasswordConfirm?.value || "").toString();
+      if(!token){
+        setAuthError("Token invalido.");
+        return;
+      }
+      if(!password || !confirm){
+        setAuthError("Informe a nova senha.");
+        return;
+      }
+      if(password !== confirm){
+        setAuthError("As senhas nao conferem.");
+        return;
+      }
+      try{
+        await apiRequest(`${API_BASE}/reset_password.php`, { token, password });
+        if(resetPassword) resetPassword.value = "";
+        if(resetPasswordConfirm) resetPasswordConfirm.value = "";
+        showAuthOverlay("login", "Senha atualizada. Entre com a nova senha.");
+      }catch(err){
+        const msg = (err && err.message) ? String(err.message) : "";
+        if(msg === "weak_password"){
+          setAuthError("Senha fraca. Use pelo menos 6 caracteres.");
+        }else if(msg === "token_invalid" || msg === "token_expired"){
+          setAuthError("Link expirado. Solicite novamente.");
+        }else{
+          setAuthError("Nao foi possivel atualizar a senha.");
+        }
+      }
+    }
+
+    function getResetTokenFromUrl(){
+      try{
+        const params = new URLSearchParams(window.location.search || "");
+        const token = params.get("reset") || "";
+        return token.trim();
+      }catch(_err){
+        return "";
+      }
+    }
+
     async function ensureAuthenticated(){
       const session = await apiSession().catch(() => ({}));
       if(session && session.authenticated){
@@ -12793,7 +12899,13 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }
       const setupStatus = await apiSetupStatus().catch(() => ({}));
       needsSetupFlag = Boolean(setupStatus?.needs_setup);
-      showAuthOverlay(needsSetupFlag ? "setup" : "login");
+      const resetToken = getResetTokenFromUrl();
+      if(resetToken){
+        if(resetTokenInput) resetTokenInput.value = resetToken;
+        showAuthOverlay("reset_password");
+      }else{
+        showAuthOverlay(needsSetupFlag ? "setup" : "login");
+      }
 
       await new Promise((resolve) => {
         authResolver = resolve;

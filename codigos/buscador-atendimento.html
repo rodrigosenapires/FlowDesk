@@ -42,7 +42,7 @@
               <input class="authInput" id="loginUsername" type="text" autocomplete="username" placeholder="Digite seu usu&aacute;rio" />
               <label class="authLabel" for="loginPassword">Senha</label>
               <input class="authInput" id="loginPassword" type="password" autocomplete="current-password" placeholder="Digite sua senha" />
-              <a class="authLink" href="javascript:void(0)" style="color:#6ecbff !important; text-decoration: underline !important;">Esqueci minha senha</a>
+              <a class="authLink" id="forgotPasswordLink" href="javascript:void(0)" style="color:#6ecbff !important; text-decoration: underline !important;">Esqueci minha senha</a>
               <div class="authLoginRow">
                 <button class="btn small primary authSubmit" type="submit">Entrar</button>
                 <button class="btn small" type="button" id="openRegisterBtn">Cadastre-se</button>
@@ -83,6 +83,21 @@
               <button class="btn small primary authSubmit" type="submit">Criar usu&aacute;rio</button>
             </form>
             <div class="authActions" id="authSetupActions" style="display:none;"></div>
+
+            <form class="authForm" id="resetRequestForm" autocomplete="on" style="display:none;">
+              <label class="authLabel" for="resetIdentifier">E-mail ou usu&aacute;rio</label>
+              <input class="authInput" id="resetIdentifier" type="text" autocomplete="username email" placeholder="Digite seu e-mail ou usu&aacute;rio" />
+              <button class="btn small primary authSubmit" type="submit">Enviar link</button>
+            </form>
+
+            <form class="authForm" id="resetPasswordForm" autocomplete="on" style="display:none;">
+              <input id="resetToken" type="hidden" />
+              <label class="authLabel" for="resetPassword">Nova senha</label>
+              <input class="authInput" id="resetPassword" type="password" autocomplete="new-password" placeholder="Digite a nova senha" />
+              <label class="authLabel" for="resetPasswordConfirm">Confirmar senha</label>
+              <input class="authInput" id="resetPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirme a nova senha" />
+              <button class="btn small primary authSubmit" type="submit">Atualizar senha</button>
+            </form>
 
             <div class="note authError" id="authError" style="display:none;"></div>
             <div class="note authHint" id="authHint"></div>
@@ -1924,7 +1939,7 @@
     </div>
   </div>
 
-<script src="app.js?v=68"></script>
+<script src="app.js?v=69"></script>
 
   </body>
 </html>

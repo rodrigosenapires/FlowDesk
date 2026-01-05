@@ -1,3 +1,3 @@
 <?php
-header("Location: /CÃ³digos/");
+header("Location: codigos/");
 exit;
