@@ -1014,6 +1014,12 @@
       align-items:center;
       margin-bottom:8px;
     }
+    .fieldStack{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      flex:1;
+    }
     .socialExtraRow input{
       flex:1;
     }
@@ -1111,15 +1117,11 @@
       position:relative;
       padding-top:24px;
     }
-    .taskCard .linksBlock::after{
-      content:"";
-      position:absolute;
-      left:0;
-      right:0;
-      top:8px;
+    .taskCard .linksBlock.phaseBlock{
       border-top:1px dashed rgba(255,255,255,0.6);
+      padding-top:12px;
+      margin-top:12px;
     }
-
     .phaseHeaderRow{
       display:flex;
       align-items:center;
@@ -1176,29 +1178,6 @@
        </div>
        Por isso, aplicamos a borda a partir do 3º filho (Fase 2 em diante).
     */
-    .taskCard .linksBlock > div:not(:first-child){
-      position:relative;
-      margin-top:16px;
-      padding-top:24px;
-      padding-bottom:0;
-    }
-    .taskCard .linksBlock > div:not(:first-child)::before{
-      content:"";
-      position:absolute;
-      left:0;
-      right:0;
-      top:0;
-      border-top:1px dashed rgba(255,255,255,0.6);
-    }
-    .taskCard .linksBlock > div:not(:first-child)::after{
-      content:"";
-      position:absolute;
-      left:0;
-      right:0;
-      top:8px;
-      border-top:1px dashed rgba(255,255,255,0.6);
-    }
-
     .phaseDivider{
       margin:12px 0;
       border-top:2px dashed rgba(255,255,255,0.6);
@@ -1818,6 +1797,9 @@
       padding:18px;
       z-index:1200;
     }
+    #popupOverlay{
+      z-index:1400;
+    }
     .miniOverlay.show{display:flex}
     .miniModal{
       width:min(720px, 100%);
@@ -1933,6 +1915,18 @@
       max-height:90vh;
       display:flex;
       flex-direction:column;
+    }
+    .phaseActionDivider{
+      margin:12px 0 8px 0;
+      border-top:1px dashed rgba(255,255,255,0.6);
+      opacity:0.9;
+      height:0;
+    }
+    #phaseEditOverlay.isCalendarContext{
+      z-index:1300;
+    }
+    #phaseEditOverlay.isTaskContext{
+      z-index:1400;
     }
     #phaseEditOverlay .miniModal .mb{
       overflow:auto;
@@ -2206,6 +2200,21 @@
       color:var(--muted);
       text-align:center;
     }
+    .popupInlineActions{
+      margin-top:12px;
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      flex-wrap:wrap;
+    }
+    .popupInlineActions .btn{
+      padding:8px 12px;
+      font-size:12px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+    }
     .popupQuickPick{
       margin-top:10px;
       display:flex;
@@ -2311,10 +2320,85 @@
     body:not(.light) .emailOpenIcon{
       color:#ffffff;
     }
-    .usersCards{
+.usersCards{
       display:flex;
       flex-direction:column;
       gap:16px;
+    }
+    .usersHeader{
+      display:grid;
+      grid-template-columns:1fr auto 1fr;
+      align-items:center;
+      width:100%;
+      gap:10px;
+    }
+    .usersHeaderTitle{
+      justify-self:start;
+    }
+    .usersHeaderActions{
+      justify-self:center;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .usersHeaderMeta{
+      justify-self:end;
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:2px;
+    }
+    .usersHeaderCount{
+      white-space:nowrap;
+    }
+    .usersRefreshStatus{
+      min-height:14px;
+      font-size:11px;
+      color: color-mix(in srgb, var(--brand2) 65%, var(--text));
+      opacity:0;
+      transition:opacity .2s ease;
+      white-space:nowrap;
+    }
+    .usersRefreshStatus.isVisible{
+      opacity:1;
+    }
+    .usersRefreshStatus.isError{
+      color: color-mix(in srgb, var(--danger) 70%, var(--text));
+    }
+    #usersRefreshBtn .iconStroke{
+      transform-origin:50% 50%;
+    }
+    #usersRefreshBtn.isLoading{
+      pointer-events:none;
+      opacity:0.7;
+    }
+    #usersRefreshBtn.isLoading .iconStroke{
+      animation: usersRefreshSpin 0.8s linear infinite;
+    }
+    #usersRefreshBtn.isSuccess{
+      border-color: color-mix(in srgb, var(--brand2) 55%, var(--line));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand2) 25%, transparent);
+    }
+    #usersRefreshBtn.isError{
+      border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 18%, transparent);
+    }
+    @keyframes usersRefreshSpin{
+      to{transform:rotate(360deg);}
+    }
+    @media (max-width: 640px){
+      .usersHeader{
+        grid-template-columns:1fr;
+        justify-items:center;
+      }
+      .usersHeaderTitle,
+      .usersHeaderActions,
+      .usersHeaderMeta{
+        justify-self:center;
+      }
+      .usersHeaderMeta{
+        align-items:center;
+      }
     }
     .userCard{
       border-radius:18px;
@@ -2573,6 +2657,15 @@
       fill:none;
       stroke-linecap:round;
       stroke-linejoin:round;
+    }
+    
+    .copiedFlash{
+      animation: copiedFlash 0.35s ease;
+    }
+    @keyframes copiedFlash{
+      0%{transform:scale(1); box-shadow:0 0 0 0 color-mix(in srgb, var(--brand) 55%, transparent);}
+      60%{transform:scale(1.06); box-shadow:0 0 0 4px color-mix(in srgb, var(--brand) 30%, transparent);}
+      100%{transform:scale(1); box-shadow:0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent);}
     }
     .attentionBtn{
       border-color: color-mix(in srgb, var(--danger) 70%, transparent);
@@ -3388,6 +3481,11 @@
       display:none;
     }
     .phaseItem{scroll-margin-top:80px}
+    .phaseItem + .phaseItem{
+      border-top:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      margin-top:12px;
+      padding-top:12px;
+    }
     .phaseItem.phaseFocus{
       outline:2px solid color-mix(in srgb, var(--brand2) 55%, transparent);
       border-radius:10px;
@@ -3520,6 +3618,11 @@
     .taskDueToday{
       border-color: color-mix(in srgb, var(--brand2) 55%, var(--line));
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand2) 25%, transparent);
+    }
+
+    .taskOverdue{
+      border-color: color-mix(in srgb, var(--danger) 70%, var(--line));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 25%, transparent);
     }
 
     .taskActions{
@@ -3836,6 +3939,10 @@
       background: color-mix(in srgb, var(--card) 85%, transparent);
       border-radius:14px;
       padding:10px;
+    }
+    .calDetailRow.calOverdue{
+      border-color: color-mix(in srgb, var(--danger) 70%, var(--line));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 35%, transparent);
     }
     .calDetailRow.isFocus{
       outline:2px solid color-mix(in srgb, var(--brand2) 55%, transparent);
@@ -4293,6 +4400,7 @@
     .calDetailRow .dot.open{ background:#0f8f5f; }
     .calDetailRow .dot.closed{ background:#e03131; }
     .calDetailRow .dot.extra{ background:#ff922b; }
+    .calDetailRow .dot.overdue{ background:#e03131; }
     .calDetailRow .txt{ flex:1; min-width:220px; }
     .calDetailRow .txt .title{ font-weight:950; margin-top:8px; font-size:13px; }
     .calDetailRow .txt .extraMeta{ color:#ff922b; }
@@ -4311,6 +4419,19 @@
     }
     .calDetailRow .txt .meta > div{font-weight:600}
     .calDetailRow .txt .meta > div > span{font-weight:800}
+    .calDetailRow .txt .meta a{
+      color:#6ecbff;
+      text-decoration:none;
+    }
+    .calPhoneLink{
+      padding:0;
+      border:0;
+      background:transparent;
+      cursor:pointer;
+      color:#6ecbff;
+      text-decoration:none;
+      font:inherit;
+    }
 
 /* ===== Ícone do calendário (inputs type=date) — branco no tema escuro ===== */
 input[type="date"]::-webkit-calendar-picker-indicator{

@@ -53,17 +53,17 @@
               <button class="btn small" type="button" id="resendVerificationBtn">Reenviar c&oacute;digo</button>
             </div>
 
-            <div class="authOr"><span>ou</span></div>
-            <button class="authGoogleBtn" type="button">
+            <div class="authOr" id="authOr"><span>ou</span></div>
+            <button class="authGoogleBtn" id="authGoogleBtn" type="button">
               <img src="imagens/google.png" alt="Google">
               <span>Acessar com Google</span>
             </button>
 
-            <div class="authPartner">
+            <div class="authPartner" id="authPartner">
               Ainda n&atilde;o tem uma loja na Nuvemshop?
               <a class="authLink" href="https://www.nuvemshop.com.br/partners/print-academy" target="_blank" rel="noopener" style="color:#6ecbff !important; text-decoration: underline !important;">Criar loja agora</a>
             </div>
-            <div class="authCoupon">Cupom: <span class="authCouponHighlight">25% de desconto</span> na primeira mensalidade da Nuvemshop.</div>
+            <div class="authCoupon" id="authCoupon">Cupom: <span class="authCouponHighlight">25% de desconto</span> na primeira mensalidade da Nuvemshop.</div>
 
             <form class="authForm" id="setupForm" autocomplete="on" style="display:none;">
               <label class="authLabel" for="setupUsername">Usu&aacute;rio</label>
@@ -179,22 +179,7 @@
           <line x1="9" y1="5" x2="9" y2="19"></line>
         </svg>
         <span class="sideLabel">Menu extra</span>
-      </div>
-      <button class="themeBtn sideBtn" id="sakChatBtn" type="button" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
-        <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
-          <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
-          <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
-        </svg>
-        <span class="sideLabel">Suporte</span>
-      </button>
-      
-      <button class="themeBtn sideBtn" id="storeLinksBtn" type="button" title="WhatsApp lojas" aria-label="WhatsApp lojas">
-        <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
-          <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
-        </svg>
-        <span class="sideLabel">WhatsApp</span>
-      </button>
-      <button class="themeBtn sideBtn quickLinkBtn" id="metaInboxBtn" type="button" data-quick-link="metaInbox" title="Meta" aria-label="Meta">
+      </div><button class="themeBtn sideBtn quickLinkBtn" id="metaInboxBtn" type="button" data-quick-link="metaInbox" title="Meta" aria-label="Meta">
         <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="4" width="16" height="16" rx="5"></rect>
           <circle cx="12" cy="12" r="4"></circle>
@@ -303,14 +288,7 @@
               <circle cx="12" cy="8" r="4"></circle>
               <path d="M4 20a8 8 0 0 1 16 0"></path>
             </svg>
-          </button>
-          <button class="themeBtn" type="button" data-header-proxy="sakChatBtn" title="Suporte Nuvemshop" aria-label="Suporte Nuvemshop">
-            <svg class="nuvemIcon" viewBox="0 0 48 48" aria-hidden="true">
-              <circle class="nuvemLeft" cx="17.5" cy="26.5" r="9.5"></circle>
-              <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
-            </svg>
-          </button>
-          <button class="themeBtn" type="button" data-header-proxy="metaInboxBtn" title="Meta" aria-label="Meta">
+          </button><button class="themeBtn" type="button" data-header-proxy="metaInboxBtn" title="Meta" aria-label="Meta">
             <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
               <rect x="4" y="4" width="16" height="16" rx="5"></rect>
               <circle cx="12" cy="12" r="4"></circle>
@@ -642,12 +620,13 @@
               <div class="productDetailsHeader">
                 <div class="label" style="margin:0;" id="productVideoTitle">V&iacute;deo do produto</div>
               </div>
-              <div class="productVideoRow">
-                <input class="productVideoInput" id="productVideoWhatsapp" type="text" placeholder="WhatsApp do cliente (ex: 21999999999)">
-                <button class="btn small" id="productVideoSendBtn">Enviar v&iacute;deo</button>
-              </div>
-              <div class="note">O link do v&iacute;deo ser&aacute; enviado via WhatsApp para o n&uacute;mero informado.</div>
+            <div class="productVideoRow">
+              <input class="productVideoInput" id="productVideoWhatsapp" type="text" placeholder="WhatsApp do cliente (ex: 21999999999)">
+              <button class="btn small" id="productVideoSendBtn">Enviar v&iacute;deo</button>
             </div>
+            <div class="fieldError" data-error-for="productVideoWhatsapp"></div>
+            <div class="note">O link do v&iacute;deo ser&aacute; enviado via WhatsApp para o n&uacute;mero informado.</div>
+          </div>
 
             <div class="productDetailsSection" id="productDetailsTableSection">
               <div class="productDetailsHeader">
@@ -798,15 +777,28 @@
       <div class="grid single">
         <section class="card usersCard">
           <div class="hd">
-            <h2>Usu&aacute;rios</h2>
-            <div class="row" style="gap:10px; align-items:center;">
-              <button class="btn small iconBtn" id="addUserBtn" title="Adicionar usu&aacute;rio" aria-label="Adicionar usu&aacute;rio" style="display:none;">
-                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-              </button>
-              <div class="count" id="usersCount"></div>
+            <div class="usersHeader">
+              <div class="usersHeaderTitle">
+                <h2>Usu&aacute;rios</h2>
+              </div>
+              <div class="usersHeaderActions">
+                <button class="btn small iconBtn" id="usersRefreshBtn" title="Atualizar usu&aacute;rios" aria-label="Atualizar usu&aacute;rios">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                    <polyline points="21 3 21 9 15 9"></polyline>
+                  </svg>
+                </button>
+                <button class="btn small iconBtn" id="addUserBtn" title="Adicionar usu&aacute;rio" aria-label="Adicionar usu&aacute;rio" style="display:none;">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+              </div>
+              <div class="usersHeaderMeta">
+                <div class="count usersHeaderCount" id="usersCount"></div>
+                <div class="usersRefreshStatus" id="usersRefreshStatus" aria-live="polite"></div>
+              </div>
             </div>
           </div>
           <div class="bd">
@@ -941,16 +933,19 @@
           <div>
             <div class="label">Data inicial <span class="count">obrigat&oacute;rio</span></div>
             <input id="tData" type="date" />
+            <div class="fieldError" data-error-for="tData"></div>
           </div>
 
           <div>
             <div class="label">Cliente <span class="count">obrigat&oacute;rio</span></div>
             <input id="tCliente" type="text" placeholder="Nome do cliente" />
+            <div class="fieldError" data-error-for="tCliente"></div>
           </div>
 
           <div>
             <div class="label">N&uacute;mero do WhatsApp <span class="count">obrigat&oacute;rio</span></div>
             <input id="tWhatsapp" type="text" placeholder="Ex: (11) 99674-1444" />
+            <div class="fieldError" data-error-for="tWhatsapp"></div>
           </div>
 
           <div>
@@ -960,22 +955,19 @@
               <option value="Di&aacute;rio Nerdify">Di&aacute;rio Nerdify</option>
               <option value="Shop 80">Shop 80</option>
             </select>
+            <div class="fieldError" data-error-for="tLoja"></div>
           </div>
 
           <div>
             <div class="label">Pedido <span class="count">obrigat&oacute;rio</span></div>
             <input id="tPedido" type="text" placeholder="N&uacute;mero do pedido" />
-          </div>
-
-          <div>
-            <div class="label">Assunto <span class="count">obrigat&oacute;rio</span></div>
-            <select id="tAssunto"></select>
+            <div class="fieldError" data-error-for="tPedido"></div>
           </div>
 
           <hr class="dashDivider">
           <div class="row" style="gap:10px; flex-wrap:wrap;">
             <button class="btn" id="tasksClearBtn">Limpar</button>
-            <button class="btn primary" id="tasksSaveBtn">Salvar</button>
+            <button class="btn primary" id="tasksSaveBtn">Pr&oacute;ximo</button>
           </div>
         </div>
       </div>
@@ -1146,46 +1138,89 @@
       <div class="mb">
         <div class="formGrid">
           <div style="grid-column:1 / -1;">
-            <div class="label">Descri&ccedil;&atilde;o da fase</div>
+            <div class="label">Descri&ccedil;&atilde;o da fase <span class="count">obrigat&oacute;rio</span></div>
             <textarea id="phaseEditText" rows="5" placeholder="Descreva esta fase..."></textarea>
+            <div class="fieldError" data-error-for="phaseEditText"></div>
           </div>
 
           <div>
-            <div class="label">Data inicial da fase</div>
+            <div class="label">Data inicial da fase <span class="count">obrigat&oacute;rio</span></div>
             <input type="date" id="phaseEditDate" />
+            <div class="fieldError" data-error-for="phaseEditDate"></div>
           </div>
 
           <div>
-            <div class="label">Prazo de resolu&ccedil;&atilde;o da fase</div>
+            <div class="label">Prazo de resolu&ccedil;&atilde;o da fase <span class="count">obrigat&oacute;rio</span></div>
             <input type="date" id="phaseEditPrazo" />
+            <div class="fieldError" data-error-for="phaseEditPrazo"></div>
           </div>
           <div>
             <div class="label">Hor&aacute;rio do prazo</div>
             <input type="time" id="phaseEditPrazoHora" />
+            <div class="fieldError" data-error-for="phaseEditPrazoHora"></div>
           </div>
 
           <div>
             <div class="label">N&uacute;mero do Chamado Nuvemshop</div>
-            <input type="text" id="phaseEditChamado" placeholder="Opcional" />
+            <input type="text" id="phaseEditChamado" />
           </div>
 
           <div>
             <div class="label">Etiqueta Reversa</div>
-            <input type="text" id="phaseEditEtiqueta" placeholder="Opcional" />
+            <input type="text" id="phaseEditEtiqueta" />
           </div>
 
           <div>
-            <div class="label">Status</div>
+            <div class="label">Status <span class="count">obrigat&oacute;rio</span></div>
             <select id="phaseEditStatus"></select>
+            <div class="fieldError" data-error-for="phaseEditStatus"></div>
           </div>
 
           <div>
-            <div class="label">Novo pedido</div>
-            <input type="text" id="phaseEditNovoPedido" placeholder="Se houver troca/novo envio" />
+            <div class="label">Novo pedido <span class="count">obrigat&oacute;rio</span></div>
+            <input type="text" id="phaseEditNovoPedido" />
+            <div class="fieldError" data-error-for="phaseEditNovoPedido"></div>
+
+            <div id="phaseEditSizeWrap" style="display:none;">
+            <div class="label">Tamanho original (troca) <span class="count">obrigat&oacute;rio</span></div>
+            <select id="phaseEditSizeFrom">
+              <option value="">Selecione</option>
+              <option value="P">P</option>
+              <option value="M">M</option>
+              <option value="G">G</option>
+              <option value="GG">GG</option>
+              <option value="XG">XG</option>
+              <option value="XGG">XGG</option>
+              <option value="G1">G1</option>
+              <option value="G2">G2</option>
+              <option value="G3">G3</option>
+              <option value="G4">G4</option>
+              <option value="G5">G5</option>
+            </select>
+            <div class="fieldError" data-error-for="phaseEditSizeFrom"></div>
+
+            <div class="label">Tamanho da troca <span class="count">obrigat&oacute;rio</span></div>
+            <select id="phaseEditSizeTo">
+              <option value="">Selecione</option>
+              <option value="P">P</option>
+              <option value="M">M</option>
+              <option value="G">G</option>
+              <option value="GG">GG</option>
+              <option value="XG">XG</option>
+              <option value="XGG">XGG</option>
+              <option value="G1">G1</option>
+              <option value="G2">G2</option>
+              <option value="G3">G3</option>
+              <option value="G4">G4</option>
+              <option value="G5">G5</option>
+            </select>
+            <div class="fieldError" data-error-for="phaseEditSizeTo"></div>
+            </div>
           </div>
           <div>
-            <div class="label">Rastreio da fase</div>
-            <input type="text" id="phaseEditRastreio" placeholder="Opcional" />
+            <div class="label">Rastreio da fase <span class="count">obrigat&oacute;rio</span></div>
+            <input type="text" id="phaseEditRastreio" />
+            <div class="fieldError" data-error-for="phaseEditRastreio"></div>
           </div>
           <div class="attentionRow">
             <label class="attentionToggle">
@@ -1210,6 +1245,7 @@
           </svg>
         </button>
         <div class="phaseEditActionsMain">
+          <button class="btn danger" id="phaseEditCloseTaskBtn">Encerrar tarefa</button>
           <button class="btn primary" id="phaseEditSaveBtn">Salvar</button>
         </div>
       </div>
@@ -1653,18 +1689,22 @@
           <div>
             <div class="label">Nome <span class="count">obrigat&oacute;rio</span></div>
             <input id="userProfileName" type="text" placeholder="Nome completo" />
+            <div class="fieldError" data-error-for="userProfileName"></div>
           </div>
           <div>
             <div class="label">CPF/CNPJ <span class="count">obrigat&oacute;rio</span></div>
             <input id="userProfileDoc" type="text" placeholder="CPF ou CNPJ" />
+            <div class="fieldError" data-error-for="userProfileDoc"></div>
           </div>
           <div>
             <div class="label">WhatsApp <span class="count">obrigat&oacute;rio</span></div>
             <input id="userProfileWhatsapp" type="text" placeholder="Ex: (11) 99999-9999" />
+            <div class="fieldError" data-error-for="userProfileWhatsapp"></div>
           </div>
           <div>
             <div class="label">E-mail <span class="count">obrigat&oacute;rio</span></div>
             <input id="userProfileEmail" type="email" placeholder="email@dominio.com" />
+            <div class="fieldError" data-error-for="userProfileEmail"></div>
           </div>
           <div>
             <div class="label">Avatar <span class="count">opcional</span></div>
@@ -1679,9 +1719,9 @@
               </div>
               <input id="userProfileAvatarFile" type="file" accept="image/*" style="display:none;">
             </div>
+            <div class="fieldError" data-error-for="userProfileAvatarFile"></div>
           </div>
         </div>
-        <div class="note authError" id="userProfileError" style="display:none;"></div>
       </div>
       <div class="mf">
         <button class="btn" id="userProfileStoresBtn">Cadastrar lojas</button>

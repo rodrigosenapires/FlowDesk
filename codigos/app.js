@@ -1,4 +1,4 @@
-Ôªø/***********************
+/***********************
      * CONFIG / STORAGE
      ***********************/
     const STORAGE_KEY_BASE  = "baseAtendimento_v5";
@@ -26,6 +26,7 @@
     const STORAGE_KEY_CALENDAR = "calendarHistory_v1";
     const STORAGE_KEY_SIDE_MENU = "side_menu_collapsed_v1";
     const STORAGE_KEY_USER_PROFILE = "user_profile_v1";
+    const STORAGE_KEY_VIEW = "view_state_v1";
     const ADMIN_USERNAME = "Rodrigosp";
 
     const PASSWORD = "123"; // usado para editar/excluir PERGUNTAS e importar
@@ -62,6 +63,7 @@
     let usersSearchStatus = "";
     let activityPingTimer = null;
     let usersAutoRefreshTimer = null;
+    let usersRefreshStatusTimer = null;
     let lastActivityPing = 0;
 
     function storageGet(key){
@@ -1365,21 +1367,19 @@
       const list = (stores && stores.length) ? stores : DEFAULT_STORES;
       const options = (list || [])
         .map(s => ({ name: (s?.name || "").toString().trim() }))
-        .filter(s => s.name)
-        .map(s => ({ name: s.name, url: getNuvemshopSupportBaseUrl(s.name) }))
-        .filter(s => s.url);
+        .filter(s => s.name);
       if(!options.length){
         showAlert("Nenhum suporte configurado.");
         return;
       }
       if(options.length === 1){
-        window.open(options[0].url, "_blank", "noopener");
+        openNuvemshopSupportPopup(options[0].name, "");
         return;
       }
       openPopup({ title: "Suporte Nuvemshop", message: "", okLabel: "", showCancel: false });
       if(!popupMessage) return;
       const buttons = options.map(o => (
-        `<button class="btn small" type="button" data-support-link="${escapeHtml(o.url)}">${escapeHtml(o.name)}</button>`
+        `<button class="btn small" type="button" data-support-store-name="${escapeHtml(o.name)}">${escapeHtml(o.name)}</button>`
       )).join("");
       popupMessage.innerHTML = `
         <div class="popupQuickPick">
@@ -1387,11 +1387,11 @@
           <div class="popupQuickPickOptions">${buttons}</div>
         </div>
       `;
-      popupMessage.querySelectorAll("[data-support-link]").forEach(btn=>{
+      popupMessage.querySelectorAll("[data-support-store-name]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
-          const url = (btn.getAttribute("data-support-link") || "").trim();
-          if(url) window.open(url, "_blank", "noopener");
+          const storeName = (btn.getAttribute("data-support-store-name") || "").trim();
           closePopup(false);
+          if(storeName) openNuvemshopSupportPopup(storeName, "");
         });
       });
     }
@@ -1505,25 +1505,46 @@
       if(!storesConfigHost) return;
       const list = storesDraft.length ? storesDraft : [];
       const cards = list.map((store, idx) => {
+        const fieldId = (name) => `store-${idx}-${name}`;
         const extras = Array.isArray(store.socialExtras) ? store.socialExtras : [];
         const extrasHtml = extras.length
-          ? extras.map((item, j) => `
+          ? extras.map((item, j) => {
+              const nameId = `store-${idx}-social-${j}-name`;
+              const urlId = `store-${idx}-social-${j}-url`;
+              return `
               <div class="socialExtraRow" data-social-extra-row="${j}">
-                <input type="text" data-social-extra-field="name" data-social-extra-index="${j}" placeholder="Nome da rede" value="${escapeHtml(item?.name || "")}">
-                <input type="text" data-social-extra-field="url" data-social-extra-index="${j}" placeholder="Link de atendimento" value="${escapeHtml(item?.url || "")}">
+                <div class="fieldStack">
+                  <input id="${nameId}" type="text" data-social-extra-field="name" data-social-extra-index="${j}" placeholder="Nome da rede" value="${escapeHtml(item?.name || "")}">
+                  <div class="fieldError" data-error-for="${nameId}"></div>
+                </div>
+                <div class="fieldStack">
+                  <input id="${urlId}" type="text" data-social-extra-field="url" data-social-extra-index="${j}" placeholder="Link de atendimento" value="${escapeHtml(item?.url || "")}">
+                  <div class="fieldError" data-error-for="${urlId}"></div>
+                </div>
                 <button class="specsRemoveBtn" type="button" data-social-extra-remove="${j}" title="Remover" aria-label="Remover">x</button>
               </div>
-            `).join("")
+            `;
+            }).join("")
           : `<div class="note">Nenhuma rede adicional cadastrada.</div>`;
         const emails = Array.isArray(store.emailList) ? store.emailList : [];
         const emailsHtml = emails.length
-          ? emails.map((item, j) => `
+          ? emails.map((item, j) => {
+              const emailId = `store-${idx}-email-${j}-email`;
+              const openId = `store-${idx}-email-${j}-open`;
+              return `
               <div class="emailExtraRow" data-email-row="${j}">
-                <input type="text" data-email-field="email" data-email-index="${j}" placeholder="E-mail" value="${escapeHtml(item?.email || "")}">
-                <input type="text" data-email-field="openUrl" data-email-index="${j}" placeholder="Link de acesso" value="${escapeHtml(item?.openUrl || "")}">
+                <div class="fieldStack">
+                  <input id="${emailId}" type="text" data-email-field="email" data-email-index="${j}" placeholder="E-mail" value="${escapeHtml(item?.email || "")}">
+                  <div class="fieldError" data-error-for="${emailId}"></div>
+                </div>
+                <div class="fieldStack">
+                  <input id="${openId}" type="text" data-email-field="openUrl" data-email-index="${j}" placeholder="Link de acesso" value="${escapeHtml(item?.openUrl || "")}">
+                  <div class="fieldError" data-error-for="${openId}"></div>
+                </div>
                 <button class="specsRemoveBtn" type="button" data-email-remove="${j}" title="Remover" aria-label="Remover">x</button>
               </div>
-            `).join("")
+            `;
+            }).join("")
           : `<div class="note">Nenhum e-mail cadastrado.</div>`;
         return `
           <div class="menuCard" data-store-index="${idx}">
@@ -1533,20 +1554,25 @@
             </div>
             <div class="formGrid">
               <div class="label">Nome da loja</div>
-              <input type="text" data-store-field="name" placeholder="Nome da loja" value="${escapeHtml(store.name || "")}">
+              <input id="${fieldId("name")}" type="text" data-store-field="name" placeholder="Nome da loja" value="${escapeHtml(store.name || "")}">
+              <div class="fieldError" data-error-for="${fieldId("name")}"></div>
               <div class="label">Link da logo</div>
               <div class="note">Informe o link da logo ou envie o arquivo abaixo.</div>
-              <input type="text" data-store-field="logoUrl" placeholder="Link da logo" value="${escapeHtml(store.logoUrl || "")}">
+              <input id="${fieldId("logoUrl")}" type="text" data-store-field="logoUrl" placeholder="Link da logo" value="${escapeHtml(store.logoUrl || "")}">
+              <div class="fieldError" data-error-for="${fieldId("logoUrl")}"></div>
               <div class="label">Enviar logo</div>
-              <input type="file" data-store-field="logoFile" accept="image/*">
+              <input id="${fieldId("logoFile")}" type="file" data-store-field="logoFile" accept="image/*">
               <div class="label">Link do site da loja</div>
-              <input type="text" data-store-field="siteUrl" placeholder="Link do site da loja" value="${escapeHtml(store.siteUrl || "")}">
+              <input id="${fieldId("siteUrl")}" type="text" data-store-field="siteUrl" placeholder="Link do site da loja" value="${escapeHtml(store.siteUrl || "")}">
+              <div class="fieldError" data-error-for="${fieldId("siteUrl")}"></div>
               <div class="label">Link das estampas</div>
-              <input type="text" data-store-field="stampsUrl" placeholder="Link das estampas" value="${escapeHtml(store.stampsUrl || "")}">
+              <input id="${fieldId("stampsUrl")}" type="text" data-store-field="stampsUrl" placeholder="Link das estampas" value="${escapeHtml(store.stampsUrl || "")}">
+              <div class="fieldError" data-error-for="${fieldId("stampsUrl")}"></div>
               <div class="label">WhatsApp (atendimento)</div>
-              <input type="text" data-store-field="whatsappUrl" placeholder="Link de atendimento do WhatsApp" value="${escapeHtml(store.whatsappUrl || "")}">
+              <input id="${fieldId("whatsappUrl")}" type="text" data-store-field="whatsappUrl" placeholder="Link de atendimento do WhatsApp" value="${escapeHtml(store.whatsappUrl || "")}">
+              <div class="fieldError" data-error-for="${fieldId("whatsappUrl")}"></div>
               <div class="label">Redes sociais</div>
-              <div class="note">Use o link do atendimento/caixa de entrada (onde voc&ecirc; responde aos clientes), n&atilde;o o link do perfil da rede social.</div>
+              <div class="note">Use o link do atendimento/caixa de entrada (onde voce responde aos clientes), nao o link do perfil da rede social.</div>
               ${extrasHtml}
               <button class="btn small" type="button" data-social-extra-add="${idx}">+ Adicionar rede</button>
               <div class="label">E-mails</div>
@@ -1554,7 +1580,8 @@
               ${emailsHtml}
               <button class="btn small" type="button" data-email-add="${idx}">+ Adicionar e-mail</button>
               <div class="label">WhatsApp suporte Nuvemshop</div>
-              <input type="text" data-store-field="supportWhatsapp" placeholder="Link do WhatsApp de suporte" value="${escapeHtml(store.supportWhatsapp || "")}">
+              <input id="${fieldId("supportWhatsapp")}" type="text" data-store-field="supportWhatsapp" placeholder="Link do WhatsApp de suporte" value="${escapeHtml(store.supportWhatsapp || "")}">
+              <div class="fieldError" data-error-for="${fieldId("supportWhatsapp")}"></div>
             </div>
             ${idx > 0 ? `<div class="menuToolsRow"><button class="btn small danger iconBtn" type="button" data-store-remove="${idx}" title="Excluir" aria-label="Excluir">
               <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
@@ -1629,7 +1656,113 @@
       return normalizeStores(next);
     }
 
-    function updateStoresUI(){
+    function validateStoresConfigForm(){
+      if(!storesConfigHost) return false;
+      const cards = Array.from(storesConfigHost.querySelectorAll("[data-store-index]"));
+      if(!cards.length) return false;
+      let ok = true;
+
+      cards.forEach(card => {
+        const inputs = Array.from(card.querySelectorAll("input, textarea, select"));
+        inputs.forEach(clearFieldError);
+
+        const read = (field) => {
+          const el = card.querySelector(`[data-store-field="${field}"]`);
+          return el ? (el.value || "").toString().trim() : "";
+        };
+        const get = (field) => card.querySelector(`[data-store-field="${field}"]`);
+
+        const nameInput = get("name");
+        const logoInput = get("logoUrl");
+        const siteInput = get("siteUrl");
+        const stampsInput = get("stampsUrl");
+        const whatsappInput = get("whatsappUrl");
+        const supportInput = get("supportWhatsapp");
+
+        const nameVal = read("name");
+        const logoVal = read("logoUrl");
+        const siteVal = read("siteUrl");
+        const stampsVal = read("stampsUrl");
+        const whatsappVal = read("whatsappUrl");
+        const supportVal = read("supportWhatsapp");
+
+        if(!nameVal){
+          setFieldError(nameInput, "Preencha o nome da loja.");
+          ok = false;
+        }
+        if(!logoVal){
+          setFieldError(logoInput, "Informe o link da logo.");
+          ok = false;
+        }else if(!isValidUrl(logoVal, { allowData:true })){
+          setFieldError(logoInput, "Link da logo invalido.");
+          ok = false;
+        }
+        if(siteVal && !isValidUrl(siteVal)){
+          setFieldError(siteInput, "Link do site invalido.");
+          ok = false;
+        }
+        if(stampsVal && !isValidUrl(stampsVal)){
+          setFieldError(stampsInput, "Link das estampas invalido.");
+          ok = false;
+        }
+        if(!whatsappVal){
+          setFieldError(whatsappInput, "Informe o link do WhatsApp.");
+          ok = false;
+        }else if(!isValidUrl(whatsappVal)){
+          setFieldError(whatsappInput, "Link do WhatsApp invalido.");
+          ok = false;
+        }
+        if(supportVal && !isValidUrl(supportVal)){
+          setFieldError(supportInput, "Link de suporte invalido.");
+          ok = false;
+        }
+
+        card.querySelectorAll("[data-social-extra-row]").forEach(row => {
+          const nameInput = row.querySelector('[data-social-extra-field="name"]');
+          const urlInput = row.querySelector('[data-social-extra-field="url"]');
+          const nameVal = nameInput ? (nameInput.value || "").toString().trim() : "";
+          const urlVal = urlInput ? (urlInput.value || "").toString().trim() : "";
+          if(nameVal || urlVal){
+            if(!nameVal){
+              setFieldError(nameInput, "Informe o nome da rede.");
+              ok = false;
+            }
+            if(!urlVal){
+              setFieldError(urlInput, "Informe o link da rede.");
+              ok = false;
+            }else if(!isValidUrl(urlVal)){
+              setFieldError(urlInput, "Link invalido.");
+              ok = false;
+            }
+          }
+        });
+
+        card.querySelectorAll("[data-email-row]").forEach(row => {
+          const emailInput = row.querySelector('[data-email-field="email"]');
+          const openInput = row.querySelector('[data-email-field="openUrl"]');
+          const emailVal = emailInput ? (emailInput.value || "").toString().trim() : "";
+          const openVal = openInput ? (openInput.value || "").toString().trim() : "";
+          if(emailVal || openVal){
+            if(!emailVal){
+              setFieldError(emailInput, "Informe o e-mail.");
+              ok = false;
+            }else if(!isValidEmail(emailVal)){
+              setFieldError(emailInput, "E-mail invalido.");
+              ok = false;
+            }
+            if(!openVal){
+              setFieldError(openInput, "Informe o link de acesso.");
+              ok = false;
+            }else if(!isValidUrl(openVal)){
+              setFieldError(openInput, "Link de acesso invalido.");
+              ok = false;
+            }
+          }
+        });
+      });
+
+      return ok;
+    }    function updateStoresUI(){
       const list = stores || [];
       const names = getStoreNames();
 
@@ -2164,7 +2297,48 @@
     const popupCancelBtn = document.getElementById("popupCancelBtn");
     const popupOkBtn = document.getElementById("popupOkBtn");
     const popupActions = document.getElementById("popupActions");
+    const popupImagesWrap = document.getElementById("popupImagesWrap");
+    const popupImagesLabel = document.getElementById("popupImagesLabel");
+    const popupImagesInput = document.getElementById("popupImagesInput");
+    const popupImagesHint = document.getElementById("popupImagesHint");
+    const popupImagesList = document.getElementById("popupImagesList");
+    let popupImageFiles = [];
+    let popupImageUrls = [];
+    let popupLastImages = [];
+    let popupGalleryFiles = [];
     let popupShortcutContext = null;
+    let popupInlineActions = null;
+
+    function clearPopupInlineActions(){
+      if(popupInlineActions && popupInlineActions.parentNode){
+        popupInlineActions.parentNode.removeChild(popupInlineActions);
+      }
+      popupInlineActions = null;
+    }
+
+    function mountPopupInlineActions(labels){
+      if(!popupInputWrap) return;
+      clearPopupInlineActions();
+      const okLabel = (labels?.okLabel || "Enviar").toString();
+      const wrap = document.createElement("div");
+      wrap.className = "popupInlineActions";
+      wrap.innerHTML = `
+        <button class="btn primary" type="button" data-popup-inline-ok>${escapeHtml(okLabel)}</button>
+      `;
+      const okBtn = wrap.querySelector("[data-popup-inline-ok]");
+      if(okBtn){
+        okBtn.addEventListener("click", ()=> {
+          if(popupOkBtn){
+            popupOkBtn.click();
+          }else{
+            closePopup(true);
+          }
+        });
+      }
+      popupInputWrap.appendChild(wrap);
+      popupInlineActions = wrap;
+      if(popupActions) popupActions.classList.add("isHidden");
+    }
 
     function getTaskRefById(taskId){
       const id = (taskId || "").toString().trim();
@@ -2214,6 +2388,62 @@
       if(popupTextarea && popupTextarea.style.display !== "none") return popupTextarea;
       return popupInput;
     }
+
+    function clearPopupImageUrls(){
+      popupImageUrls.forEach(url => URL.revokeObjectURL(url));
+      popupImageUrls = [];
+    }
+
+    function resetPopupImages(){
+      popupImageFiles = [];
+      clearPopupImageUrls();
+      if(popupImagesInput) popupImagesInput.value = "";
+      if(popupImagesList) popupImagesList.innerHTML = "";
+    }
+
+    function buildPopupImagesGrid(files, options){
+      const list = Array.isArray(files) ? files : [];
+      const allowRemove = Boolean(options && options.allowRemove);
+      clearPopupImageUrls();
+      if(!list.length){
+        return "<div class='note'>Nenhuma imagem selecionada.</div>";
+      }
+      const cards = list.map((file, idx)=>{
+        const url = URL.createObjectURL(file);
+        popupImageUrls.push(url);
+        const name = (file && file.name) ? file.name : `Imagem ${idx + 1}`;
+        const removeBtn = allowRemove
+          ? `<button class=\"btn small danger\" type=\"button\" data-popup-image-remove=\"${idx}\" title=\"Remover imagem\" aria-label=\"Remover imagem\"><svg class=\"iconStroke\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 6h18\"></path><path d=\"M8 6V4h8v2\"></path><rect x=\"6\" y=\"6\" width=\"12\" height=\"14\" rx=\"2\"></rect><path d=\"M10 10v6\"></path><path d=\"M14 10v6\"></path></svg></button>`
+          : "";
+        return `
+          <div class=\"popupImageCard\">
+            <img src=\"${url}\" alt=\"Imagem selecionada\" data-popup-image-copy=\"${idx}\" data-popup-image-url=\"${url}\">
+            <div class=\"popupImageMeta\">
+              <span>${escapeHtml(name)}</span>
+              ${removeBtn}
+            </div>
+          </div>
+        `;
+      }).join("");
+      return `<div class=\"popupImagesGrid\">${cards}</div>`;
+    }
+
+function renderPopupImages(){
+      if(!popupImagesList) return;
+      popupImagesList.innerHTML = buildPopupImagesGrid(popupImageFiles, { allowRemove: true });
+    }
+
+    function showPopupImageGallery(images, title){
+      const list = Array.isArray(images) ? images : [];
+      if(!list.length) return;
+      popupGalleryFiles = list.slice();
+      popupImageFiles = [];
+      openPopup({ title: title || "Imagens", message: "", okLabel: "Fechar", showCancel: false });
+      if(popupMessage){
+        popupMessage.innerHTML = buildPopupImagesGrid(popupGalleryFiles, { allowRemove: false });
+      }
+    }
+
 
     function insertPopupValue(value){
       const input = getActivePopupInput();
@@ -2289,6 +2519,7 @@
     const calNavSlot = document.getElementById("calNavSlot");
     const calDayTitle = document.getElementById("calDayTitle");
     const calDayDetails = document.getElementById("calDayDetails");
+    let calDayDetailsBound = false;
     const calSide = document.getElementById("calSide");
     const calAddSimpleBtn = document.getElementById("calAddSimpleBtn");
     const calAddTaskBtn = document.getElementById("calAddTaskBtn");
@@ -2332,6 +2563,9 @@
     const phaseEditDate = document.getElementById("phaseEditDate");
     const phaseEditNovoPedido = document.getElementById("phaseEditNovoPedido");
     const phaseEditRastreio = document.getElementById("phaseEditRastreio");
+    const phaseEditSizeFrom = document.getElementById("phaseEditSizeFrom");
+    const phaseEditSizeTo = document.getElementById("phaseEditSizeTo");
+    const phaseEditSizeWrap = document.getElementById("phaseEditSizeWrap");
     const phaseEditAttention = document.getElementById("phaseEditAttention");
     const phaseEditAttentionWrap = document.getElementById("phaseEditAttentionWrap");
     const phaseEditAttentionNote = document.getElementById("phaseEditAttentionNote");
@@ -2341,6 +2575,7 @@
     const phaseEditPrazoHora = document.getElementById("phaseEditPrazoHora");
     const phaseEditStatus = document.getElementById("phaseEditStatus");
     const phaseEditSaveBtn = document.getElementById("phaseEditSaveBtn");
+    const phaseEditCloseTaskBtn = document.getElementById("phaseEditCloseTaskBtn");
     const phaseEditDeleteBtn = document.getElementById("phaseEditDeleteBtn");
     const phaseEditCancelBtn = document.getElementById("phaseEditCancelBtn");
 
@@ -2454,6 +2689,10 @@
     const authTitle = document.getElementById("authTitle");
     const authError = document.getElementById("authError");
     const authHint = document.getElementById("authHint");
+    const authOr = document.getElementById("authOr");
+    const authGoogleBtn = document.getElementById("authGoogleBtn");
+    const authPartner = document.getElementById("authPartner");
+    const authCoupon = document.getElementById("authCoupon");
     const loginForm = document.getElementById("loginForm");
     const loginUsername = document.getElementById("loginUsername");
     const loginPassword = document.getElementById("loginPassword");
@@ -2474,6 +2713,8 @@
     const openRegisterBtn = document.getElementById("openRegisterBtn");
     const forgotPasswordLink = document.getElementById("forgotPasswordLink");
     const addUserBtn = document.getElementById("addUserBtn");
+    const usersRefreshBtn = document.getElementById("usersRefreshBtn");
+    const usersRefreshStatus = document.getElementById("usersRefreshStatus");
     const userRoleLabel = document.getElementById("userRoleLabel");
     const resendVerificationBtn = document.getElementById("resendVerificationBtn");
     const backToLoginBtn = document.getElementById("backToLoginBtn");
@@ -2495,7 +2736,6 @@
     const userProfileLogoutBtn = document.getElementById("userProfileLogoutBtn");
     const userProfileStoresBtn = document.getElementById("userProfileStoresBtn");
     const userProfileNextBtn = document.getElementById("userProfileNextBtn");
-    const userProfileError = document.getElementById("userProfileError");
 
     /***********************
      * STATE
@@ -2515,6 +2755,8 @@
     let phaseEditTaskId = "";
     let phaseEditIndex = -1;
     let phaseEditMode = "add"; // add | edit
+    let phaseEditOrigin = "";
+    let pendingPhaseSave = null;
 
     // drawer
     let menuButtons = [];
@@ -2574,6 +2816,7 @@
     let tasks = [];
     let tasksDone = [];
     let tasksEditId = null;
+    let pendingTaskDraft = null;
     let tasksTypeFilter = "normal";
 
     // tasks list view state (\u00daltimo chamado / pr\u00f3ximo / todos + busca)
@@ -2621,6 +2864,7 @@
         "Novo Envio",
         "Atraso",
         "Dificuldades na entrega",
+        "Link de rastreio desatualizado",
         "Aguardando o retorno da Nuvemshop",
         "Cliente alega n\u00e3o ter recebido",
         "Acarea\u00e7\u00e3o",
@@ -3505,24 +3749,30 @@
     async function copyTextToClipboard(text, btn, doneLabel){
       try{
         if(!navigator.clipboard){
-          showAlert("C¬•pia de texto n√äo suportada neste navegador.");
+          showAlert("C•pia de texto n o suportada neste navegador.");
           return;
         }
         await navigator.clipboard.writeText(text);
         if(btn){
-          const original = btn.textContent;
-          btn.textContent = doneLabel || "Copiado!";
-          setTimeout(()=>{ btn.textContent = original; }, 900);
+          const hasIcon = !!btn.querySelector("svg");
+          if(hasIcon){
+            btn.classList.add("copiedFlash");
+            setTimeout(()=>{ btn.classList.remove("copiedFlash"); }, 350);
+          }else{
+            const original = btn.textContent;
+            btn.textContent = doneLabel || "Copiado!";
+            setTimeout(()=>{ btn.textContent = original; }, 900);
+          }
         }
       }catch(e){
-        showAlert("N√äo foi poss¬¶vel copiar o texto.");
+        showAlert("N o foi poss¶vel copiar o texto.");
       }
     }
 
     async function copyImageToClipboard(url, btn, defaultLabel){
       try{
         if(!navigator.clipboard || !window.ClipboardItem){
-          showAlert("C¬•pia de imagem n√äo suportada neste navegador.");
+          showAlert("C•pia de imagem n o suportada neste navegador.");
           return;
         }
         const res = await fetch(url);
@@ -3530,12 +3780,18 @@
         const blob = await res.blob();
         await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
         if(btn){
-          const original = defaultLabel || btn.textContent;
-          btn.textContent = "Copiado!";
-          setTimeout(()=>{ btn.textContent = original; }, 900);
+          const hasIcon = !!btn.querySelector("svg");
+          if(hasIcon){
+            btn.classList.add("copiedFlash");
+            setTimeout(()=>{ btn.classList.remove("copiedFlash"); }, 350);
+          }else{
+            const original = defaultLabel || btn.textContent;
+            btn.textContent = "Copiado!";
+            setTimeout(()=>{ btn.textContent = original; }, 900);
+          }
         }
       }catch(e){
-        showAlert("N√äo foi poss¬¶vel copiar a imagem.");
+        showAlert("N o foi poss¶vel copiar a imagem.");
       }
     }
 
@@ -3545,6 +3801,7 @@
 
     function openPopup(options){
       if(!popupOverlay) return Promise.resolve(false);
+      clearPopupInlineActions();
       const title = (options?.title || "Aviso").toString();
       const message = (options?.message || "").toString();
       const hasOkLabel = Object.prototype.hasOwnProperty.call(options || {}, "okLabel");
@@ -3555,18 +3812,21 @@
       const useInput = Boolean(options?.input);
       const centerMessage = Boolean(options?.centerMessage);
       const multiline = Boolean(options?.multiline);
+      const useImages = Boolean(options?.images);
       popupActionSource = "dismiss";
       popupMode = useInput ? "prompt" : (showCancel ? "confirm" : "alert");
       if(popupTitle) popupTitle.textContent = title;
       if(popupMessage) popupMessage.textContent = message;
       if(popupOkBtn) popupOkBtn.textContent = okLabel;
+      if(showCancel && !okLabel && popupOkBtn){ popupOkBtn.textContent = "Enviar"; }
       if(popupCancelBtn) popupCancelBtn.textContent = cancelLabel;
       if(popupCancelBtn) popupCancelBtn.style.display = showCancel ? "inline-flex" : "none";
-      if(popupOkBtn) popupOkBtn.style.display = okLabel ? "inline-flex" : "none";
+      if(popupOkBtn) popupOkBtn.style.display = (showCancel || okLabel) ? "inline-flex" : "none";
       if(popupActions){
         popupActions.classList.toggle("isHidden", !showCancel && !okLabel);
       }
       if(popupInputWrap) popupInputWrap.style.display = useInput ? "block" : "none";
+      if(popupImagesWrap) popupImagesWrap.style.display = useImages ? "block" : "none";
       if(popupModal){
         popupModal.classList.toggle("isCentered", Boolean(useInput));
         popupModal.classList.toggle("isMessageCentered", centerMessage);
@@ -3579,6 +3839,14 @@
           ? "Atalhos: Ctrl+P pedido | Ctrl+O rastreio"
           : "";
         popupShortcutHint.style.display = options?.shortcutsHint ? "block" : "none";
+      }
+      popupLastImages = [];
+      if(useImages){
+        resetPopupImages();
+        if(popupImagesLabel) popupImagesLabel.textContent = (options?.imagesLabel || "Imagens (opcional)").toString();
+        if(popupImagesHint) popupImagesHint.textContent = (options?.imagesHint || "Clique na imagem para copiar.").toString();
+      }else{
+        resetPopupImages();
       }
       if(multiline && popupTextarea){
         popupTextarea.value = (options?.inputValue || "").toString();
@@ -3627,9 +3895,32 @@
         popupModal.classList.remove("isCentered");
         popupModal.classList.remove("isMessageCentered");
       }
+      popupLastImages = popupImageFiles.slice();
+      popupGalleryFiles = [];
+      resetPopupImages();
+      if(popupImagesWrap) popupImagesWrap.style.display = "none";
       popupShortcutContext = null;
       clearPopupQuickPick();
+      clearPopupInlineActions();
       handleDrawerReturnAfterClose(popupOverlay, [popupCloseBtn]);
+    }
+
+    if(popupImagesInput){
+      popupImagesInput.addEventListener("change", ()=>{
+        popupImageFiles = Array.from(popupImagesInput.files || []);
+        renderPopupImages();
+      });
+    }
+    if(popupOverlay){
+      popupOverlay.addEventListener("click", (e)=>{
+        const btn = e.target.closest("[data-popup-image-copy]");
+        if(!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const url = (btn.getAttribute("data-popup-image-url") || "").toString().trim();
+        if(!url) return;
+        copyImageToClipboard(url, btn, "Copiar");
+      });
     }
 
     function showAlert(message, title){
@@ -3757,7 +4048,9 @@
       if(simpleTaskDate) simpleTaskDate.value = iso;
       if(simpleTaskStart) simpleTaskStart.value = (ref?.startTime || "").toString().trim();
       if(simpleTaskEnd) simpleTaskEnd.value = (ref?.endTime || "").toString().trim();
-      if(simpleTaskStore) simpleTaskStore.value = (ref?.loja || "").toString().trim();
+      const fallbackTask = ref ? (tasks || []).find(t => String(t.id || "") === String(ref.id || "")) : null;
+      const storeValue = (ref?.loja || fallbackTask?.loja || "").toString().trim();
+      if(simpleTaskStore) simpleTaskStore.value = storeValue;
       if(simpleTaskSubject) simpleTaskSubject.value = (ref?.assunto || "").toString().trim();
       if(simpleTaskText) simpleTaskText.value = (ref?.extraText || "").toString().trim();
       updateSimpleTaskRepeatLabels(iso);
@@ -4020,11 +4313,11 @@
       const id = (taskId || "").trim();
       if(!id) return;
       const t = (tasks || []).find(x => String(x.id || "") === id);
-      if(!t) return;
+      if(!t) return false;
       const ok = await showConfirm("Encerrar esta tarefa extra?");
       if(!ok) return;
       const nowIso = new Date().toISOString();
-      addTaskToDone(t, { closedAt: nowIso, isExtra: true });
+      addTaskToDone(t, { closedAt: nowIso, closedById: (currentUser?.id || "").toString(), closedByName: (currentUser?.display_name || currentUser?.username || "").toString().trim(), isExtra: true });
       tasks = (tasks || []).filter(x => String(x.id || "") !== id);
       saveTasks(tasks);
       const prev = (calendarHistory || []).find(e => String(e.id || "") === id);
@@ -4038,8 +4331,8 @@
     }
 
     function upsertCalendarFromTask(t){
-      if(!t) return;
-      const date = (getEffectivePhaseDate(t) || (t.proxEtapa || "")).trim();
+      if(!t) return false;
+      const date = getTaskDisplayDate(t) || (t.proxEtapa || "").trim();
       if(!date) return; // s\u00f3 entra no calend\u00e1rio se tiver Pr\u00f3xima Etapa
 
       const assunto = getCalendarAssuntoFromTask(t);
@@ -4075,7 +4368,7 @@
     }
 
     function markCalendarClosed(t){
-      if(!t) return;
+      if(!t) return false;
       const prev = (calendarHistory || []).find(x => x.id === t.id);
       const date = ((getEffectivePhaseDate(t) || t.proxEtapa || prev?.date || "")).trim();
       if(!date) return;
@@ -4161,6 +4454,7 @@
 
       // sempre sincroniza para garantir cores corretas
       syncCalendarOpenFlags();
+      syncOverdueCalendarEntries();
       syncCalendarNavPlacement();
 
       buildWeekHeader();
@@ -4189,7 +4483,10 @@
         const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
         const entries = getCalendarEntriesForDate(iso)
           .sort((a,b) => {
-            if(Boolean(a.open) !== Boolean(b.open)) return a.open ? -1 : 1;
+            const overA = isCalendarEntryOverdue(a);
+            const overB = isCalendarEntryOverdue(b);
+            if(overA != overB) return overA ? -1 : 1;
+            if(Boolean(a.open) != Boolean(b.open)) return a.open ? -1 : 1;
             return (a.assunto||"").localeCompare(b.assunto||"");
           });
         cells.push({ blank:false, dayNum, iso, entries, valid:true });
@@ -4226,6 +4523,7 @@
           ? `<div class="calItem open" title="${normalCount} tarefas">${normalCount} tarefas</div>`
           : normalEntries.map(e => {
               const cls = e.open ? "open" : "closed";
+        const isOverdue = isCalendarEntryOverdue(e);
               return `<div class="calItem ${cls}" title="${escapeHtml(e.assunto)}">${escapeHtml(e.assunto)}</div>`;
             }).join("");
         const extraList = extraCount > 1
@@ -4301,8 +4599,9 @@
       for(let dayNum = 1; dayNum <= daysInMonth; dayNum++){
         const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
         const entries = getCalendarEntriesForDate(iso, { applyStoreFilter:false });
-        const normalCount = entries.filter(e => !(e.extra || e.simple)).length;
-        const extraCount = entries.filter(e => (e.extra || e.simple)).length;
+        const openEntries = entries.filter(e => e.open !== false);
+        const normalCount = openEntries.filter(e => !(e.extra || e.simple)).length;
+        const extraCount = openEntries.filter(e => (e.extra || e.simple)).length;
         cells.push({ blank:false, dayNum, iso, normalCount, extraCount });
       }
 
@@ -4321,7 +4620,7 @@
         const extraHtml = c.extraCount
           ? `<span class="miniCalCount miniCalCountExtra">${c.extraCount}</span>`
           : "";
-        const ariaSuffix = c.isOtherMonth ? " (m‚ñàs anterior)" : "";
+        const ariaSuffix = c.isOtherMonth ? " (m¶s anterior)" : "";
         const ariaLabel = `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
         const isoAttr = c.isOtherMonth ? "" : ` data-mini-iso="${c.iso}"`;
         return `
@@ -4352,6 +4651,7 @@
         const dataInicial = formatDateBR(p?.date || "");
         const prazo = formatDateBR(p?.prazo || "");
         const texto = (p?.text || "").toString().trim() || "-";
+        const author = (p?.created_by_username || ref?.created_by_username || "").toString().trim();
         return `
           <div class="summaryPhase">
             <div class="summaryPhaseHeader">
@@ -4363,6 +4663,7 @@
               <div class="summaryMetaItem"><span class="popupSummaryLabel">Cliente</span> ${escapeHtml(cliente)}</div>
               <div class="summaryMetaItem"><span class="popupSummaryLabel">Data inicial</span> ${escapeHtml(dataInicial)}</div>
               <div class="summaryMetaItem"><span class="popupSummaryLabel">Prazo de resolu&ccedil;&atilde;o</span> ${escapeHtml(prazo)}</div>
+              ${author ? `<div class="summaryMetaItem"><span class="popupSummaryLabel">Autor</span> ${escapeHtml(author)}</div>` : ""}
             </div>
             <div class="summaryNote">${escapeHtml(texto)}</div>
           </div>
@@ -4426,11 +4727,11 @@
     async function openNuvemshopSupportPopup(storeName, taskId){
       const base = getNuvemshopSupportBaseUrl(storeName);
       if(!base){
-        showAlert("WhatsApp do suporte da Nuvemshop n\u00e3o informado.");
+        showAlert("WhatsApp do suporte da Nuvemshop n„o informado.");
         return;
       }
       popupShortcutContext = taskId ? buildPopupShortcutContext(taskId) : null;
-      const message = await openPopup({
+      const popupPromise = openPopup({
         title: "Suporte Nuvemshop",
         message: "Digite a mensagem:",
         okLabel: "Enviar",
@@ -4441,8 +4742,12 @@
         shortcutsHint: true,
         inputType: "text",
         inputValue: "",
-        inputPlaceholder: "Escreva sua mensagem"
+        inputPlaceholder: "Escreva sua mensagem",
       });
+      mountPopupInlineActions({ okLabel: "Enviar" });
+      if(popupOkBtn){ popupOkBtn.textContent = "Enviar"; popupOkBtn.style.display = "inline-flex"; }
+      if(popupCancelBtn) popupCancelBtn.style.display = "inline-flex";
+      const message = await popupPromise;
       if(message === null) return;
       const text = (message || "").toString().trim();
       if(!text){
@@ -4456,11 +4761,11 @@
     async function openCustomerWhatsappPopup(raw, taskId){
       const base = buildCustomerWhatsappUrl(raw || "");
       if(!base){
-        showAlert("Nenhum n\u00famero de WhatsApp informado.");
+        showAlert("Nenhum n˙mero de WhatsApp informado.");
         return;
       }
       popupShortcutContext = taskId ? buildPopupShortcutContext(taskId) : null;
-      const message = await openPopup({
+      const popupPromise = openPopup({
         title: "WhatsApp do cliente",
         message: "Digite a mensagem:",
         okLabel: "Enviar",
@@ -4471,8 +4776,12 @@
         shortcutsHint: true,
         inputType: "text",
         inputValue: "",
-        inputPlaceholder: "Escreva sua mensagem"
+        inputPlaceholder: "Escreva sua mensagem",
       });
+      mountPopupInlineActions({ okLabel: "Enviar" });
+      if(popupOkBtn){ popupOkBtn.textContent = "Enviar"; popupOkBtn.style.display = "inline-flex"; }
+      if(popupCancelBtn) popupCancelBtn.style.display = "inline-flex";
+      const message = await popupPromise;
       if(message === null) return;
       const text = (message || "").toString().trim();
       if(!text){
@@ -4485,6 +4794,7 @@
 
     function renderCalendarDayDetails(iso, options){
       if(!calDayTitle || !calDayDetails) return;
+      bindCalDayDetailsDelegation();
       calDayTitle.textContent = iso ? `Dia: ${iso}` : "";
       if(calAddSimpleBtn){
         calAddSimpleBtn.disabled = !iso;
@@ -4497,6 +4807,7 @@
         calAddTaskBtn.style.pointerEvents = iso ? "auto" : "none";
       }
       const shouldScroll = Boolean(options && options.scrollToFirst);
+      syncOverdueCalendarEntries();
 
       if(!iso){
         calDayDetails.innerHTML = "";
@@ -4507,9 +4818,12 @@
 
       const entries = getCalendarEntriesForDate(iso)
         .sort((a,b) => {
+          const overA = isCalendarEntryOverdue(a);
+          const overB = isCalendarEntryOverdue(b);
+          if(overA != overB) return overA ? -1 : 1;
           const ta = getDueTimestamp(a.date, a.startTime || a.prazoHora);
           const tb = getDueTimestamp(b.date, b.startTime || b.prazoHora);
-          if(ta !== tb) return ta - tb;
+          if(ta != tb) return ta - tb;
           return (a.assunto||"").localeCompare(b.assunto||"");
         });
 
@@ -4568,12 +4882,14 @@
           `;
         }
         const cls = e.open ? "open" : "closed";
+        const isOverdue = isCalendarEntryOverdue(e);
         const loja = (e.loja || "").trim();
         const pedido = (e.pedido || "").trim();
         const rastreio = (e.rastreio || "").trim();
         const cliente = (e.cliente || "").trim();
         const taskRef = (tasks || []).find(t => String(t.id || "") === String(e.id || "")) || (tasksDone || []).find(t => String(t.id || "") === String(e.id || ""));
         const customerWhatsappRaw = (e.whatsapp || (taskRef?.whatsapp || "")).toString().trim();
+        const customerPhone = normalizeWhatsappNumber(customerWhatsappRaw);
         const customerWhatsappUrl = buildCustomerWhatsappUrl(customerWhatsappRaw);
         const doneTask = (!e.open && Array.isArray(tasksDone))
           ? tasksDone.find(t => String(t.id || "") === String(e.id || ""))
@@ -4593,7 +4909,7 @@
 
         const rastreioHtml = rastreio
           ? (rastreioUrl
-            ? `<a href="${escapeHtml(rastreioUrl)}" target="_blank" rel="noopener">${escapeHtml(rastreio)}</a>`
+            ? `<a href="${escapeHtml(rastreioUrl)}" data-cal-rastreio="${escapeHtml(rastreio)}" data-cal-rastreio-url="${escapeHtml(rastreioUrl)}" target="_blank" rel="noopener">${escapeHtml(rastreio)}</a>`
             : `<span>${escapeHtml(rastreio)}</span>`)
           : "-";
 
@@ -4603,12 +4919,20 @@
         const clienteCopyBtn = cliente
           ? `<button class="btn small copyBtn" data-copy-text="${escapeHtml(cliente)}" title="Copiar cliente" aria-label="Copiar cliente" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
           : "";
+        const phoneCopyBtn = customerPhone
+          ? `<button class="btn small copyBtn" data-copy-text="${escapeHtml(customerPhone)}" title="Copiar telefone" aria-label="Copiar telefone" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
+          : "";
+        const customerWhatsappTarget = (customerWhatsappRaw || customerPhone || "").toString().trim();
+        const phoneAction = customerWhatsappTarget
+          ? `<button type="button" class="calPhoneLink" data-customer-whatsapp="${escapeHtml(customerWhatsappTarget)}" title="Enviar mensagem" aria-label="Enviar mensagem">${escapeHtml(customerPhone || customerWhatsappTarget)}</button>`
+          : `${escapeHtml(customerPhone || "-")}`;
         const rastreioCopyBtn = rastreio
           ? `<button class="btn small copyBtn" data-copy-text="${escapeHtml(rastreio)}" title="Copiar rastreio" aria-label="Copiar rastreio" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
           : "";
 
         const titleGreen = (t) => `<span style="color:#38d9a9; font-weight:800;">${t}</span>`;
-        const prazoResolucao = (e.date || "").toString().trim();
+        const prazoInfo = taskRef ? getLastPhasePrazoInfo(taskRef) : { date:"", time:"", has:false };
+        const prazoResolucao = (prazoInfo.date || e.date || "").toString().trim();
         const prazoHora = (e.prazoHora || getEffectivePhaseTime(taskRef) || "").toString().trim();
         const prazoResolucaoLabel = prazoResolucao
           ? `${formatDateBR(prazoResolucao)}${prazoHora ? ` ${prazoHora}` : ""}`
@@ -4644,6 +4968,7 @@
         const metaLines = [
           `${titleGreen("Loja:")} ${escapeHtml(loja || "-")}`,
           `${titleGreen("Cliente:")} ${escapeHtml(cliente || "-")} ${clienteCopyBtn}`,
+          `${titleGreen("Telefone:")} ${phoneAction} ${phoneCopyBtn}`,
           `${titleGreen("Pedido:")} ${pedidoHtml} ${pedidoCopyBtn}`,
           rastreio ? `${titleGreen("Rastreio:")} ${rastreioHtml} ${rastreioCopyBtn}` : "",
           `${titleGreen("Prazo de resolu\u00e7\u00e3o:")} ${escapeHtml(prazoResolucaoLabel)} ${prazoCopyBtn}`,
@@ -4651,8 +4976,8 @@
         ].filter(Boolean).map(line => `<div>${line}</div>`).join("");
 
         return `
-          <div class="calDetailRow" data-cal-item-id="${escapeHtml(String(e.id || ""))}">
-            <div class="dot ${cls}"></div>
+          <div class="calDetailRow ${isOverdue ? "calOverdue" : ""}" data-cal-item-id="${escapeHtml(String(e.id || ""))}">
+            <div class="dot ${cls} ${isOverdue ? "overdue" : ""}"></div>
             <div class="txt">
               <p class="title">${escapeHtml(e.assunto || "Sem assunto")}</p>
               <div class="meta">${metaLines}</div>
@@ -4713,6 +5038,11 @@
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
+              ${e.open ? `<button class="btn small iconBtn" data-cal-item-close="${escapeHtml(String(e.id || ""))}" title="Encerrar tarefa" aria-label="Encerrar tarefa">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <polyline points="5 13 9 17 19 7"></polyline>
+                </svg>
+              </button>` : ""}
               <button class="btn small danger iconBtn" data-cal-item-del="${escapeHtml(String(e.id || ""))}" title="Excluir" aria-label="Excluir">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M3 6h18"></path>
@@ -4742,7 +5072,17 @@
           navigator.clipboard.writeText(val).then(()=>{
             btn.style.opacity = "0.6";
             setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
-          }).catch(()=> showAlert("N√äo foi poss¬¶vel copiar."));
+          }).catch(()=> showAlert("N“o foi poss›vel copiar."));
+        });
+      });
+      calDayDetails.querySelectorAll("[data-cal-rastreio]").forEach(link=>{
+        link.addEventListener("click", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const code = (link.getAttribute("data-cal-rastreio") || "").trim();
+          const url = (link.getAttribute("data-cal-rastreio-url") || link.getAttribute("href") || "").trim();
+          if(code) copyTextToClipboard(code, link, "Copiado!");
+          if(url) window.open(url, "_blank");
         });
       });
 
@@ -4751,14 +5091,34 @@
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-del") || "").toString();
           if(!id) return;
-          const ok = await showConfirm("Excluir este chamado? (Ele ser‚ñÄ removido da lista de tarefas e tamb‚îåm do calend‚ñÄrio.)");
-          if(!ok) return;
+          const result = await openPopup({
+            title: "Remover tarefa",
+            message: "Voc\u00ea quer deletar esta tarefa ou apenas marc\u00e1-la como conclu\u00edda?",
+            okLabel: "Excluir tarefa",
+            cancelLabel: "Concluir tarefa",
+            showCancel: true,
+            centerMessage: true,
+          });
+          if(!result && popupActionSource !== "ok" && popupActionSource !== "cancel") return;
 
           // remove da lista
           const taskRef = (tasks || []).find(t => String(t.id || "") === String(id));
-          if(taskRef) addTaskToDone(taskRef, { isExtra: Boolean(taskRef.isExtra) });
-          tasks = (tasks || []).filter(t => String(t.id) !== String(id));
-          saveTasks(tasks);
+          if(popupActionSource === "cancel"){
+            if(taskRef && taskRef.isExtra){
+              await closeExtraTask(id);
+            }else{
+              closeTaskAsDone(id);
+            }
+          }else{
+            tasks = (tasks || []).filter(t => String(t.id) !== String(id));
+            saveTasks(tasks);
+            if(taskRef && taskRef.isExtra){
+              calendarHistory = (calendarHistory || []).filter(e => String(e.id) !== String(id));
+              saveCalendarHistory(calendarHistory);
+            }else{
+              markCalendarClosed(taskRef);
+            }
+          }
 
           // remove do calendario
           calendarHistory = (calendarHistory || []).filter(e => String(e.id) !== String(id));
@@ -4768,6 +5128,13 @@
           renderTasks();
           renderCalendar();
           renderCalendarDayDetails(calSelectedISO);
+        });
+      });
+      calDayDetails.querySelectorAll("[data-cal-item-close]").forEach(btn=>{
+        btn.addEventListener("click", (e)=>{ e.preventDefault();
+          const id = (btn.getAttribute("data-cal-item-close") || "").toString().trim();
+          if(!id) return;
+          openCloseTaskModal(id);
         });
       });
 
@@ -4788,7 +5155,7 @@
             saveCalendarHistory(calendarHistory);
             const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
             if(extraIdx >= 0){
-              addTaskToDone(tasks[extraIdx], { isExtra: true });
+              addTaskToDone(tasks[extraIdx], { closedById: (currentUser?.id || "").toString(), closedByName: (currentUser?.display_name || currentUser?.username || "").toString().trim(), isExtra: true });
               tasks.splice(extraIdx, 1);
               saveTasks(tasks);
             }
@@ -4810,7 +5177,7 @@
             saveCalendarHistory(calendarHistory);
             const extraIdx = (tasks || []).findIndex(t => String(t.id || "") === id);
             if(extraIdx >= 0){
-              addTaskToDone(tasks[extraIdx], { isExtra: true });
+              addTaskToDone(tasks[extraIdx], { closedById: (currentUser?.id || "").toString(), closedByName: (currentUser?.display_name || currentUser?.username || "").toString().trim(), isExtra: true });
               tasks.splice(extraIdx, 1);
               saveTasks(tasks);
             }
@@ -4934,7 +5301,7 @@
             if(!tasksList) return;
             const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
             if(!card){
-              showAlert("Tarefa n√äo encontrada na lista.");
+              showAlert("Tarefa n o encontrada na lista.");
               return;
             }
             card.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -4960,7 +5327,7 @@
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
           if(!ref){
-            showAlert("Tarefa n√äo encontrada.");
+            showAlert("Tarefa n o encontrada.");
             return;
           }
           openTaskSummaryPopup(ref);
@@ -4997,7 +5364,9 @@
           tasksDone = (tasksDone || []).filter(t => String(t.id || "") !== id);
           saveTasksDone(tasksDone);
           tasks = tasks || [];
-          tasks.unshift(fromDone);
+          const revived = { ...fromDone };
+          delete revived.closedAt;
+          tasks.unshift(revived);
           saveTasks(tasks);
           const reopenedDate = (getEffectivePhaseDate(fromDone) || (fromDone.proxEtapa || "")).toString().trim();
           if(reopenedDate){
@@ -5016,6 +5385,7 @@
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-add") || "").toString().trim();
           if(!id) return;
+          phaseEditOrigin = "calendar";
           const result = await openPopup({
             title: "Adicionar",
             message: "O que deseja criar?",
@@ -5030,6 +5400,8 @@
           }
           if(!result && popupActionSource === "cancel"){
             clearTasksForm();
+            taskModalFromCalendar = true;
+            if(taskOverlay) taskOverlay.classList.add("isCalendarContext");
             openTaskModal();
           }
         });
@@ -5041,7 +5413,7 @@
         clearBtn.addEventListener("click", async ()=>{
           const dayIso = (clearBtn.getAttribute("data-cal-clear-day") || "").trim();
           if(!dayIso) return;
-          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calend‚ñÄrio?\n\nIsso N+O remove as tarefas em aberto, apenas apaga os itens do calend‚ñÄrio deste dia.`);
+          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendØrio?\n\nIsso N+O remove as tarefas em aberto, apenas apaga os itens do calendØrio deste dia.`);
           if(!ok) return;
           const next = (calendarHistory || []).filter(e => e.date !== dayIso);
           saveCalendarHistory(next);
@@ -5136,6 +5508,9 @@
       if(Number.isNaN(d.getTime())) return "-";
       return d.toLocaleString("pt-BR");
     }
+    function formatTimeShort(){
+      return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
     function formatDuration(seconds){
       const total = Math.max(0, Number(seconds || 0));
       const h = Math.floor(total / 3600);
@@ -5178,6 +5553,9 @@
       document.addEventListener("visibilitychange", () => {
         if(!document.hidden){
           sendActivityPing(true);
+          if(currentView === "users"){
+            refreshUsersView();
+          }
         }
       });
     }
@@ -5187,7 +5565,7 @@
         clearInterval(usersAutoRefreshTimer);
       }
       usersAutoRefreshTimer = setInterval(() => {
-        if(currentView === "users"){
+        if(currentView === "users" && !document.hidden){
           refreshUsersView();
         }
       }, 60000);
@@ -5200,6 +5578,24 @@
       }
     }
 
+    function setUsersRefreshStatus(message, isError){
+      if(!usersRefreshStatus) return;
+      if(usersRefreshStatusTimer){
+        clearTimeout(usersRefreshStatusTimer);
+        usersRefreshStatusTimer = null;
+      }
+      usersRefreshStatus.textContent = message || "";
+      usersRefreshStatus.classList.toggle("isError", Boolean(isError));
+      const shouldShow = Boolean(message);
+      usersRefreshStatus.classList.toggle("isVisible", shouldShow);
+      if(shouldShow){
+        usersRefreshStatusTimer = setTimeout(()=>{
+          usersRefreshStatus.classList.remove("isVisible", "isError");
+          usersRefreshStatus.textContent = "";
+        }, 2200);
+      }
+    }
+
     function isAdminUser(){
       if(!currentUser) return false;
       if(typeof currentUser.is_admin !== "undefined") return Boolean(currentUser.is_admin);
@@ -5209,6 +5605,54 @@
 
     function normalizeUserRole(role){
       return String(role || "").toLowerCase() === "secundario" ? "secundario" : "principal";
+    }
+
+    function getCpfDigits(value){
+      return (value || "").toString().replace(/\D/g, "");
+    }
+
+    function isValidCpf(value){
+      const cpf = getCpfDigits(value);
+      if(cpf.length !== 11) return false;
+      if(/^(\d)\1{10}$/.test(cpf)) return false;
+      let sum = 0;
+      for(let i = 0; i < 9; i++) sum += Number(cpf[i]) * (10 - i);
+      let d1 = (sum * 10) % 11;
+      if(d1 === 10) d1 = 0;
+      if(d1 !== Number(cpf[9])) return false;
+      sum = 0;
+      for(let i = 0; i < 10; i++) sum += Number(cpf[i]) * (11 - i);
+      let d2 = (sum * 10) % 11;
+      if(d2 === 10) d2 = 0;
+      if(d2 !== Number(cpf[10])) return false;
+      return true;
+    }
+    function isValidCnpj(value){
+      const cnpj = getCpfDigits(value);
+      if(cnpj.length !== 14) return false;
+      if(/^(\d)\1{13}$/.test(cnpj)) return false;
+      let length = 12;
+      let numbers = cnpj.substring(0, length);
+      let digits = cnpj.substring(length);
+      let sum = 0;
+      let pos = length - 7;
+      for(let i = length; i >= 1; i--){
+        sum += Number(numbers[length - i]) * pos--;
+        if(pos < 2) pos = 9;
+      }
+      let result = (sum % 11) < 2 ? 0 : 11 - (sum % 11);
+      if(result !== Number(digits[0])) return false;
+      length = 13;
+      numbers = cnpj.substring(0, length);
+      sum = 0;
+      pos = length - 7;
+      for(let i = length; i >= 1; i--){
+        sum += Number(numbers[length - i]) * pos--;
+        if(pos < 2) pos = 9;
+      }
+      result = (sum % 11) < 2 ? 0 : 11 - (sum % 11);
+      if(result !== Number(digits[1])) return false;
+      return true;
     }
 
     function isSecondaryUser(){
@@ -5264,6 +5708,7 @@
       const prevView = currentView;
       const allowedViews = ["search", "tasks", "done", "users", "userActivity"];
       currentView = allowedViews.includes(view) ? view : "search";
+      storageSet(STORAGE_KEY_VIEW, currentView);
       const toTasks = currentView === "tasks";
       const toDone = currentView === "done";
       const toUsers = currentView === "users";
@@ -5756,6 +6201,8 @@ function fillAssuntoSelect(){
           link: (s.link || "").toString(),
           linkName: (s.linkName || "").toString(),
         })) : [],
+        created_by_user_id: (it.created_by_user_id || it.createdByUserId || it.created_by || it.createdBy || "").toString(),
+        created_by_username: (it.created_by_username || it.createdByUsername || it.created_by_name || it.createdByName || "").toString(),
       }));
     }
     function saveBase(next){ storageSet(STORAGE_KEY_BASE, JSON.stringify(next || [])); }
@@ -5960,6 +6407,9 @@ function fillAssuntoSelect(){
         created_by_username: (t?.created_by_username || t?.createdByUsername || t?.created_by_name || t?.createdByName || "").toString(),
         createdAt: (t?.createdAt || "").toString(),
         updatedAt: (t?.updatedAt || "").toString(),
+        closedAt: (t?.closedAt || "").toString(),
+        closed_by_user_id: (t?.closed_by_user_id || t?.closedByUserId || "").toString(),
+        closed_by_username: (t?.closed_by_username || t?.closedByUsername || "").toString(),
         });
       });
     }
@@ -7266,6 +7716,9 @@ function fillAssuntoSelect(){
         if(!taskModalFromCalendar) taskOverlay.classList.remove("isCalendarContext");
         taskOverlay.classList.add("show");
       }
+      if(tasksSaveBtn){
+        tasksSaveBtn.textContent = tasksEditId ? "Salvar" : "Pr\u00f3ximo";
+      }
       if(tData && !tData.value) tData.value = todayISO();
     }
 
@@ -7282,7 +7735,30 @@ function fillAssuntoSelect(){
       }
     }
 
-    /***********************
+    function bindCalDayDetailsDelegation(){
+      if(!calDayDetails || calDayDetailsBound) return;
+      calDayDetailsBound = true;
+      calDayDetails.addEventListener("click", (event)=>{
+        const editBtn = event.target.closest("[data-cal-item-editphase]");
+        if(!editBtn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const id = (editBtn.getAttribute("data-cal-item-editphase") || "").toString().trim();
+        const idxRaw = (editBtn.getAttribute("data-cal-phase-idx") || "").toString().trim();
+        const idx = Number.parseInt(idxRaw || "-1", 10);
+        if(!id) return;
+        const ref = (tasks || []).find(t => String(t.id || "") === id);
+        if(!ref){
+          showAlert("Tarefa n\u00e3o encontrada na lista de abertas. Reative a tarefa para editar.");
+          return;
+        }
+        phaseEditOrigin = "calendar";
+        if(calendarOverlay) calendarOverlay.classList.remove("show");
+        openPhaseEditor({ taskId:id, mode:"edit", index:idx });
+      });
+    }
+
+/***********************
      * STEPS (UI)
      ***********************/
     function addStepUI(stepData){
@@ -7404,7 +7880,7 @@ function fillAssuntoSelect(){
 
       	}catch(err){
 
-      		showAlert("N√äo foi poss¬¶vel enviar a imagem do passo.");
+      		showAlert("N o foi poss¶vel enviar a imagem do passo.");
 
       	}
 
@@ -7474,18 +7950,29 @@ function fillAssuntoSelect(){
 
       const steps = getStepsFromUI();
 
+      const fallbackUserId = String(currentUser?.id || "");
+      const fallbackUserName = (currentUser?.display_name || currentUser?.username || "").toString().trim();
+
       const payload = {
         store,
         q, r, links, tags,
         qImages: qImages.slice(),
         qLinks: qLinks.filter(l => (l.name||"").trim() || (l.url||"").trim()),
-        steps
+        steps,
+        created_by_user_id: fallbackUserId,
+        created_by_username: fallbackUserName
       };
 
       const next = items.slice();
 
-      if(editIndex === -1) next.push(payload);
-      else next[editIndex] = payload;
+      if(editIndex === -1){
+        next.push(payload);
+      }else{
+        const prev = next[editIndex] || {};
+        payload.created_by_user_id = (prev.created_by_user_id || "").toString() || payload.created_by_user_id;
+        payload.created_by_username = (prev.created_by_username || "").toString() || payload.created_by_username;
+        next[editIndex] = payload;
+      }
 
       items = next;
       saveBase(items);
@@ -7631,6 +8118,13 @@ function fillAssuntoSelect(){
           <div class="questionStoreLabel">Loja: ${escapeHtml(storeLabel)}</div>
         </div>
       `;
+      const fallbackAuthor = (currentUser?.display_name || currentUser?.username || "").toString().trim();
+      const questionAuthor = ((it.created_by_username || "").toString().trim() || fallbackAuthor || "N\u00e3o informado");
+      if(!it.created_by_username && fallbackAuthor){
+        it.created_by_user_id = (currentUser?.id || "").toString();
+        it.created_by_username = fallbackAuthor;
+      }
+      const authorHtml = `<div class="note" style="margin-top:6px;">Usu\u00e1rio: <b>${escapeHtml(questionAuthor)}</b></div>`;
 
       const imgs = Array.isArray(it.qImages) ? it.qImages : [];
       const imgsHtml = imgs.length
@@ -7700,6 +8194,7 @@ function fillAssuntoSelect(){
           </div>
 
           ${storeBlockHtml}
+          ${authorHtml}
 
           ${rText ? `
             <div class="linksBlock">
@@ -7773,6 +8268,18 @@ function fillAssuntoSelect(){
       if(currentView !== "search") return;
 
       const selectedStore = (searchStoreSelect ? (searchStoreSelect.value || "ALL").trim() : "ALL");
+      let backfilledAuthors = false;
+      const fallbackAuthor = (currentUser?.display_name || currentUser?.username || "").toString().trim();
+      if(fallbackAuthor){
+        items.forEach((it)=>{
+          if(it && !it.created_by_username){
+            it.created_by_user_id = (currentUser?.id || "").toString();
+            it.created_by_username = fallbackAuthor;
+            backfilledAuthors = true;
+          }
+        });
+        if(backfilledAuthors) saveBase(items);
+      }
       if(searchInput) searchInput.disabled = false;
       const term = (searchInput.value || "").trim();
       const filtered = items
@@ -8120,7 +8627,7 @@ function fillAssuntoSelect(){
       attentionInput.dataset.index = String(idx);
       attentionInput.checked = Boolean(d.attention || d.attentionNote);
       attentionLabel.appendChild(attentionInput);
-      attentionLabel.appendChild(document.createTextNode(" Aten‚ñ†√äo"));
+      attentionLabel.appendChild(document.createTextNode(" Aten¶ o"));
       attentionRow.appendChild(attentionLabel);
 
       const attentionWrap = document.createElement("div");
@@ -8128,12 +8635,12 @@ function fillAssuntoSelect(){
       attentionWrap.style.display = attentionInput.checked ? "block" : "none";
       const attentionLabelText = document.createElement("div");
       attentionLabelText.className = "label";
-      attentionLabelText.textContent = "Observa‚ñ†¬∫es";
+      attentionLabelText.textContent = "Observa¶∫es";
       const attentionNote = document.createElement("textarea");
       attentionNote.className = "obsAttentionNote";
       attentionNote.dataset.index = String(idx);
       attentionNote.rows = 3;
-      attentionNote.placeholder = "Digite as observa‚ñ†¬∫es...";
+      attentionNote.placeholder = "Digite as observa¶∫es...";
       attentionNote.value = (d.attentionNote || "");
       attentionWrap.appendChild(attentionLabelText);
       attentionWrap.appendChild(attentionNote);
@@ -8254,6 +8761,69 @@ function fillAssuntoSelect(){
       return "";
     }
 
+    function getLastPhasePrazoInfo(t){
+      const phases = Array.isArray(t?.obs) ? t.obs : [];
+      for(let i = phases.length - 1; i >= 0; i--){
+        const prazo = ((phases[i]?.prazo || "").toString()).trim();
+        if(prazo){
+          const time = ((phases[i]?.prazoHora || phases[i]?.hora || "").toString()).trim();
+          return { date: prazo, time, has: true };
+        }
+      }
+      return { date: "", time: "", has: false };
+    }
+
+    function isTaskOverdue(t, nowTs){
+      if(!t || t.isExtra) return false;
+      const info = getLastPhasePrazoInfo(t);
+      if(!info.has) return false;
+      const dueTs = getDueTimestamp(info.date, info.time);
+      if(!Number.isFinite(dueTs)) return false;
+      const now = Number.isFinite(nowTs) ? nowTs : Date.now();
+      return now > dueTs;
+    }
+
+    function getTaskDisplayDate(t){
+      const base = (getEffectivePhaseDate(t) || (t?.proxEtapa || "")).toString().trim();
+      if(!base) return "";
+      if(isTaskOverdue(t)) return addDaysISO(todayISO(), 1) || base;
+      return base;
+    }
+
+    function getTaskSortTimestamp(t){
+      if(!t) return Number.POSITIVE_INFINITY;
+      if(isTaskOverdue(t)){
+        const info = getLastPhasePrazoInfo(t);
+        return getDueTimestamp(info.date, info.time);
+      }
+      return getDueTimestamp(getTaskDisplayDate(t), getEffectivePhaseTime(t));
+    }
+
+    function syncOverdueCalendarEntries(){
+      const tomorrow = addDaysISO(todayISO(), 1);
+      if(!tomorrow) return;
+      let changed = false;
+      const next = (calendarHistory || []).map((entry) => {
+        if(!entry || entry.open === false) return entry;
+        const taskRef = (tasks || []).find(t => String(t?.id || "") === String(entry.id || ""));
+        if(!taskRef) return entry;
+        if(!isTaskOverdue(taskRef)) return entry;
+        if(entry.date == tomorrow) return entry;
+        changed = true;
+        return { ...entry, date: tomorrow, updatedAt: new Date().toISOString() };
+      });
+      if(changed){
+        calendarHistory = next;
+        saveCalendarHistory(next);
+      }
+    }
+
+    function isCalendarEntryOverdue(entry){
+      if(!entry || entry.open === false || entry.extra || entry.simple) return false;
+      const taskRef = (tasks || []).find(t => String(t?.id || "") === String(entry.id || ""));
+      return taskRef ? isTaskOverdue(taskRef) : false;
+    }
+
     function getDueTimestamp(dateStr, timeStr){
       const date = (dateStr || "").toString().trim();
       if(!date) return Number.POSITIVE_INFINITY;
@@ -8344,17 +8914,19 @@ function fillAssuntoSelect(){
       const c = (code || "").toString().trim();
       if(!c) return { carrier:"", action:"copy", url:"" };
 
-      // Loggi: normalmente termina com "LG"
-      if(/^[A-Z0-9]{8,}LG$/i.test(c)){
-        return { carrier:"loggi", action:"open", url:`https://app.loggi.com/rastreador/${encodeURIComponent(c)}` };
-      }
-      // Jadlog: somente n\u00fameros (ex.: 13119901238527)
-      if(/^\d{12,20}$/.test(c)){
+      // Jadlog: somente n\u00fameros (qualquer tamanho)
+      if(/^\d+$/.test(c)){
         return { carrier:"jadlog", action:"open", url:`https://www.jadlog.com.br/jadlog/captcha?cte=${encodeURIComponent(c)}` };
       }
-      // Correios: 2 letras + 9 d\u00e1gitos + 2 letras (ex.: AB851658646BR)
-      if(/^[A-Z]{2}\d{9}[A-Z]{2}$/i.test(c)){
+      const isAlphaNum = /^[A-Z0-9]+$/i.test(c);
+      const hasLetters = /[A-Z]/i.test(c);
+      const hasDigits = /\d/.test(c);
+      const hasMix = isAlphaNum && hasLetters && hasDigits;
+      if(hasMix && /BR$/i.test(c)){
         return { carrier:"correios", action:"copy+open", url:"https://rastreamento.correios.com.br/app/index.php" };
+      }
+      if(hasMix && !/BR$/i.test(c)){
+        return { carrier:"loggi", action:"open", url:`https://app.loggi.com/rastreador/${encodeURIComponent(c)}` };
       }
 
       return { carrier:"", action:"copy+open", url:"https://rastreamento.correios.com.br/app/index.php" };
@@ -8502,10 +9074,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
       pendingCloseTaskId = id;
       closeTaskOverlay.classList.add("show");
     }
-    function closeCloseTaskModal(){
+    function closeCloseTaskModal(options){
       if(!closeTaskOverlay) return;
       closeTaskOverlay.classList.remove("show");
       pendingCloseTaskId = "";
+      if(!(options && options.skipPending)){
+        abortPendingPhaseSave();
+      }
     }
 
     function closeTaskAsDone(taskId){
@@ -8514,8 +9089,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const idx = tasks.findIndex(t => t.id === id);
       if(idx < 0) return;
       const t = tasks[idx];
+      const closedAt = new Date().toISOString();
+      const closedById = (currentUser?.id || "").toString();
+      const closedByName = (currentUser?.display_name || currentUser?.username || "").toString().trim();
+      if(pendingPhaseSave && pendingPhaseSave.taskId === id){
+        applyPhaseToTaskData(t, { ...pendingPhaseSave.phase }, pendingPhaseSave.mode, pendingPhaseSave.index);
+        pendingPhaseSave = null;
+      }
       markCalendarClosed(t);
-      addTaskToDone(t, { isExtra: false });
+      addTaskToDone(t, { closedAt, closedById, closedByName, isExtra: false });
       tasks.splice(idx, 1);
       saveTasks(tasks);
       if(tasksEditId === id) clearTasksForm();
@@ -8526,10 +9108,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(!task) return;
       const closedAt = options?.closedAt || new Date().toISOString();
       const isExtra = options?.isExtra ?? Boolean(task.isExtra);
+      const closedById = (options?.closedById || "").toString();
+      const closedByName = (options?.closedByName || "").toString();
       const id = String(task.id || "");
       tasksDone = tasksDone || [];
       tasksDone = tasksDone.filter(t => String(t.id || "") !== id);
-      tasksDone.unshift({ ...task, closedAt, isExtra });
+      tasksDone.unshift({ ...task, closedAt, closed_by_user_id: closedById, closed_by_username: closedByName, isExtra });
       saveTasksDone(tasksDone);
     }
 
@@ -8545,17 +9129,42 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
     }
 
+    function togglePhaseSizeFields(){
+      const statusValue = (phaseEditStatus?.value || "").toString();
+      const show = /troca/i.test(statusValue);
+      if(phaseEditSizeWrap) phaseEditSizeWrap.style.display = show ? "block" : "none";
+      if(!show){
+        if(phaseEditSizeFrom) phaseEditSizeFrom.value = "";
+        if(phaseEditSizeTo) phaseEditSizeTo.value = "";
+      }
+    }
+
     function openPhaseEditor({ taskId, mode, index }){
       const id = (taskId || "").trim();
       if(!id) return;
-      const t = tasks.find(x => x.id === id);
-      if(!t) return;
+      const t = tasks.find(x => x.id === id)
+        || (pendingTaskDraft && String(pendingTaskDraft.id || "") === id ? pendingTaskDraft : null);
+      if(!t) return false;
 
       phaseEditTaskId = id;
       phaseEditMode = (mode === "edit") ? "edit" : "add";
       phaseEditIndex = Number.isFinite(index) ? index : -1;
 
       if(!phaseEditOverlay) return;
+      if(phaseEditOverlay){
+        const backContext = (phaseEditOrigin === "calendar" || phaseEditOrigin === "taskModal");
+        const inCalendar = phaseEditOrigin === "calendar";
+        const inTaskModal = phaseEditOrigin === "taskModal";
+        phaseEditOverlay.classList.toggle("isCalendarContext", inCalendar);
+        phaseEditOverlay.classList.toggle("isTaskContext", inTaskModal);
+        if(inTaskModal && taskOverlay){
+          taskOverlay.classList.remove("show");
+        }
+        if(closePhaseEditBtn){
+          closePhaseEditBtn.textContent = backContext ? "Voltar" : "Fechar";
+          closePhaseEditBtn.setAttribute("aria-label", backContext ? "Voltar" : "Fechar");
+        }
+      }
 
       const obs = Array.isArray(t.obs) ? t.obs : [];
       const hasIndex = phaseEditMode === "edit" && phaseEditIndex >= 0 && phaseEditIndex < obs.length;
@@ -8573,26 +9182,36 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(phaseEditText) fillPhaseStatusSelect();
       if(phaseEditText) phaseEditText.value = (current.text || "");
       const lastPhase = (obs && obs.length) ? (obs[obs.length - 1] || {}) : {};
+      const lastPedido = ((lastPhase.novoPedido || getEffectivePedidoFromTask(t) || t.pedido || "")).toString().trim();
+      const lastRastreio = ((lastPhase.rastreio || getEffectiveRastreioFromTask(t) || t.rastreio || "")).toString().trim();
+      const lastAttention = getEffectivePhaseAttention(t);
       const defaultPhaseDate = (phaseEditMode === "add")
         ? ((obs && obs.length)
             ? ((lastPhase.prazo || "").toString().trim() || (t.data || "").toString().trim())
             : ((t.data || "").toString().trim() || todayISO()))
         : "";
       if(phaseEditDate) phaseEditDate.value = (current.date || defaultPhaseDate);
-      if(phaseEditNovoPedido) phaseEditNovoPedido.value = (current.novoPedido || "");
-      if(phaseEditRastreio) phaseEditRastreio.value = (current.rastreio || "");
+      if(phaseEditNovoPedido) phaseEditNovoPedido.value = (current.novoPedido || (phaseEditMode === "add" ? lastPedido : ""));
+      if(phaseEditRastreio) phaseEditRastreio.value = (current.rastreio || (phaseEditMode === "add" ? lastRastreio : ""));
+      if(phaseEditSizeFrom) phaseEditSizeFrom.value = (current.sizeFrom || "");
+      if(phaseEditSizeTo) phaseEditSizeTo.value = (current.sizeTo || "");
       if(phaseEditChamado) phaseEditChamado.value = (current.chamado || "");
       if(phaseEditEtiqueta) phaseEditEtiqueta.value = (current.etiqueta || "");
       if(phaseEditPrazo) phaseEditPrazo.value = (current.prazo || "");
       if(phaseEditPrazoHora) phaseEditPrazoHora.value = (current.prazoHora || "");
-      const attentionValue = Boolean(current.attention || current.attentionNote);
+      const attentionValue = (phaseEditMode === "add")
+        ? Boolean(lastAttention.has)
+        : Boolean(current.attention || current.attentionNote);
       if(phaseEditAttention) phaseEditAttention.checked = attentionValue;
-      if(phaseEditAttentionNote) phaseEditAttentionNote.value = (current.attentionNote || "");
+      if(phaseEditAttentionNote) phaseEditAttentionNote.value = (phaseEditMode === "add")
+        ? (lastAttention.note || "")
+        : (current.attentionNote || "");
       togglePhaseEditAttention();
       const phaseStatusValue = (phaseEditMode === "add")
-        ? ""
+        ? ((lastPhase.status || getEffectivePhaseStatus(t) || "").toString())
         : (current.status || "");
       if(phaseEditStatus) phaseEditStatus.value = phaseStatusValue.toString();
+      togglePhaseSizeFields();
 
       // delete s\u00f3 no modo edit
       if(phaseEditDeleteBtn){
@@ -8606,16 +9225,66 @@ function getNuvemshopSupportBaseUrl(lojaText){
     function closePhaseEditor(){
       if(!phaseEditOverlay) return;
       phaseEditOverlay.classList.remove("show");
+      phaseEditOverlay.classList.remove("isCalendarContext");
+      phaseEditOverlay.classList.remove("isTaskContext");
+      if(closePhaseEditBtn){
+        closePhaseEditBtn.textContent = "Fechar";
+        closePhaseEditBtn.setAttribute("aria-label", "Fechar");
+      }
+      if(phaseEditOrigin === "calendar" && calendarOverlay){
+        calendarOverlay.classList.add("show");
+      }
+      if(phaseEditOrigin === "taskModal" && taskOverlay){
+        taskOverlay.classList.add("show");
+      }
       phaseEditTaskId = "";
       phaseEditIndex = -1;
       phaseEditMode = "add";
+      phaseEditOrigin = "";
+    }
+
+    function applyPhaseToTaskData(task, phase, mode, index){
+      if(!task) return;
+      if(!Array.isArray(task.obs)) task.obs = [];
+      if(mode === "edit"){
+        if(index < 0 || index >= task.obs.length){
+          showAlert("Fase inv\u00e1lida.");
+          return;
+        }
+        phase.state = (task.obs[index]?.state || "").toString();
+        task.obs[index] = phase;
+      } else {
+        const prevIdx = task.obs.length - 1;
+        if(prevIdx >= 0 && task.obs[prevIdx]){
+          task.obs[prevIdx].state = PHASE_STATE_DONE;
+        }
+        phase.state = PHASE_STATE_ACTIVE;
+        task.obs.push(phase);
+      }
+      task.proxEtapa = getEffectivePhaseDate(task) || "";
+    }
+
+    function abortPendingPhaseSave(){
+      if(!pendingPhaseSave) return;
+      const origin = pendingPhaseSave.origin;
+      const iso = pendingPhaseSave.calIso || calSelectedISO || "";
+      pendingPhaseSave = null;
+      if(origin === "calendar"){
+        if(calendarOverlay && !calendarOverlay.classList.contains("show")){
+          openCalendar();
+        }
+        if(iso) renderCalendarDayDetails(iso, { scrollToFirst:true });
+      }
+      showAlert("A fase n\u00e3o foi inserida porque o status foi marcado como conclu\u00edda, mas a tarefa n\u00e3o foi encerrada.");
     }
 
     function savePhaseEditor(){
       const id = (phaseEditTaskId || "").trim();
-      if(!id) return;
-      const t = tasks.find(x => x.id === id);
-      if(!t) return;
+      if(!id) return false;
+      const t = tasks.find(x => x.id === id)
+        || (pendingTaskDraft && String(pendingTaskDraft.id || "") === id ? pendingTaskDraft : null);
+      const usingDraft = Boolean(pendingTaskDraft && t === pendingTaskDraft);
+      if(!t) return false;
 
       const next = {
         text: ((phaseEditText?.value || "").toString()).trim(),
@@ -8626,6 +9295,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
         etiqueta: ((phaseEditEtiqueta?.value || "").toString()).trim(),
         novoPedido: ((phaseEditNovoPedido?.value || "").toString()).trim(),
         rastreio: ((phaseEditRastreio?.value || "").toString()).trim(),
+        sizeFrom: ((phaseEditSizeFrom?.value || "").toString()).trim(),
+        sizeTo: ((phaseEditSizeTo?.value || "").toString()).trim(),
         status: ((phaseEditStatus?.value || "").toString()).trim(),
         attention: Boolean(phaseEditAttention && phaseEditAttention.checked),
         attentionNote: Boolean(phaseEditAttention && phaseEditAttention.checked)
@@ -8633,41 +9304,156 @@ function getNuvemshopSupportBaseUrl(lojaText){
           : "",
       };
 
-      if(!next.status && !next.text && !next.date && !next.prazo && !next.prazoHora && !next.chamado && !next.etiqueta && !next.novoPedido && !next.rastreio && !next.attention){
-        showAlert("Preencha pelo menos um campo da fase.");
-        return;
+      const existingPhase = (phaseEditMode === "edit" && Array.isArray(t.obs))
+        ? (t.obs[phaseEditIndex] || {})
+        : {};
+      const phaseAuthorId = (existingPhase.created_by_user_id || currentUser?.id || "").toString();
+      const phaseAuthorName = (existingPhase.created_by_username || currentUser?.display_name || currentUser?.username || "").toString().trim();
+      if(phaseAuthorId) next.created_by_user_id = phaseAuthorId;
+      if(phaseAuthorName) next.created_by_username = phaseAuthorName;
+
+      clearFieldErrors([
+        phaseEditText,
+        phaseEditDate,
+        phaseEditPrazo,
+        phaseEditPrazoHora,
+        phaseEditStatus,
+        phaseEditNovoPedido,
+        phaseEditSizeFrom,
+        phaseEditSizeTo,
+        phaseEditRastreio
+      ]);
+
+      let isOk = true;
+
+      const minPhaseText = 5;
+      if(phaseEditMode === "add"){
+        if(!next.text){
+          setFieldError(phaseEditText, "Preencha a descricao.");
+          isOk = false;
+        }else if(next.text.length < minPhaseText){
+          setFieldError(phaseEditText, "Descricao muito curta.");
+          isOk = false;
+        }
+        if(!next.date){
+          setFieldError(phaseEditDate, "Preencha a data inicial.");
+          isOk = false;
+        }
+        if(!next.prazo){
+          setFieldError(phaseEditPrazo, "Preencha o prazo.");
+          isOk = false;
+        }
+        if(!next.status){
+          setFieldError(phaseEditStatus, "Selecione o status.");
+          isOk = false;
+        }
+        if(!next.novoPedido){
+          setFieldError(phaseEditNovoPedido, "Preencha o pedido.");
+          isOk = false;
+        }
+        if(!next.rastreio){
+          setFieldError(phaseEditRastreio, "Preencha o rastreio.");
+          isOk = false;
+        }
+        if(phaseEditSizeWrap && phaseEditSizeWrap.style.display !== "none"){
+          if(!next.sizeFrom){
+            setFieldError(phaseEditSizeFrom, "Selecione o tamanho original.");
+            isOk = false;
+          }
+          if(!next.sizeTo){
+            setFieldError(phaseEditSizeTo, "Selecione o tamanho da troca.");
+            isOk = false;
+          }
+        }
       }
+
+      if(next.date && !isValidDateInput(next.date)){
+        setFieldError(phaseEditDate, "Data invalida.");
+        isOk = false;
+      }
+      if(next.prazo && !isValidDateInput(next.prazo)){
+        setFieldError(phaseEditPrazo, "Data invalida.");
+        isOk = false;
+      }
+      if(next.date && next.prazo && isValidDateInput(next.date) && isValidDateInput(next.prazo)){
+        const dateRef = new Date(`${next.date}T00:00:00`);
+        const prazoRef = new Date(`${next.prazo}T00:00:00`);
+        if(prazoRef < dateRef){
+          setFieldError(phaseEditPrazo, "Prazo nao pode ser menor que a data inicial.");
+          isOk = false;
+        }
+      }
+      if(next.prazoHora && !isValidTimeInput(next.prazoHora)){
+        setFieldError(phaseEditPrazoHora, "Horario invalido.");
+        isOk = false;
+      }
+      if(phaseEditMode === "add" || next.novoPedido){
+        const pedidoCheck = validatePedido(next.novoPedido);
+        if(!pedidoCheck.ok){
+          setFieldError(phaseEditNovoPedido, pedidoCheck.message);
+          isOk = false;
+        }
+      }
+
+      if(phaseEditMode !== "add"){
+        if(next.text && next.text.length < minPhaseText){
+          setFieldError(phaseEditText, "Descricao muito curta.");
+          isOk = false;
+        }
+        const hasAny = Boolean(next.status || next.text || next.date || next.prazo || next.prazoHora || next.chamado || next.etiqueta || next.novoPedido || next.rastreio || next.attention);
+        if(!hasAny){
+          setFieldError(phaseEditText, "Preencha pelo menos um campo.");
+          isOk = false;
+        }
+      }
+
+      if(!isOk) return false;
 
       if(!Array.isArray(t.obs)) t.obs = [];
 
-      if(phaseEditMode === "edit"){
-        if(phaseEditIndex < 0 || phaseEditIndex >= t.obs.length){
-          showAlert("Fase invalida.");
-          return;
-        }
-        next.state = (t.obs[phaseEditIndex]?.state || "").toString();
-        t.obs[phaseEditIndex] = next;
-      } else {
-        const prevIdx = t.obs.length - 1;
-        if(prevIdx >= 0 && t.obs[prevIdx]){
-          t.obs[prevIdx].state = PHASE_STATE_DONE;
-        }
-        next.state = PHASE_STATE_ACTIVE;
-        t.obs.push(next);
+      if(next.status === PHASE_STATE_DONE){
+        pendingPhaseSave = {
+          taskId: id,
+          mode: phaseEditMode,
+          index: phaseEditIndex,
+          phase: { ...next },
+          origin: phaseEditOrigin,
+          calIso: calSelectedISO || ""
+        };
+        closePhaseEditor();
+        openCloseTaskModal(id);
+        return true;
       }
 
-      t.proxEtapa = getEffectivePhaseDate(t) || "";
+      applyPhaseToTaskData(t, next, phaseEditMode, phaseEditIndex);
+      t.assunto = getEffectivePhaseStatus(t) || "";
+      t.updatedAt = new Date().toISOString();
+
+      if(usingDraft){
+        tasks = tasks || [];
+        tasks.unshift(t);
+        saveTasks(tasks);
+        upsertCalendarFromTask(t);
+        renderTasks();
+        pendingTaskDraft = null;
+        clearTasksForm();
+        closePhaseEditor();
+        closeTaskModal();
+        return true;
+      }
+
       saveTasks(tasks);
       upsertCalendarFromTask(t);
       renderTasks();
       closePhaseEditor();
+      return true;
     }
 
     async function deletePhaseEditor(){
       const id = (phaseEditTaskId || "").trim();
       if(!id) return;
       const t = tasks.find(x => x.id === id);
-      if(!t) return;
+      if(!t) return false;
       if(!Array.isArray(t.obs) || !t.obs.length){
         showAlert("N\u00e3o h\u00e1 fases para excluir.");
         return;
@@ -8700,6 +9486,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
             etiqueta: (o?.etiqueta || "").toString().trim(),
             novoPedido: (o?.novoPedido || "").toString().trim(),
             rastreio: (o?.rastreio || "").toString().trim(),
+            sizeFrom: (o?.sizeFrom || "").toString().trim(),
+            sizeTo: (o?.sizeTo || "").toString().trim(),
             status: (o?.status || "").toString().trim(),
             attention: Boolean(o?.attention),
             attentionNote: (o?.attentionNote || "").toString().trim(),
@@ -8707,7 +9495,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           }))
         : [];
 
-      const cleaned = phases.filter(o => o.text || o.date || o.prazo || o.prazoHora || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.status || o.attention || o.attentionNote || o.state);
+      const cleaned = phases.filter(o => o.text || o.date || o.prazo || o.prazoHora || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.sizeFrom || o.sizeTo || o.status || o.attention || o.attentionNote || o.state);
       if(!cleaned.length) return "";
 
       const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
@@ -8736,6 +9524,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
             `Novo pedido: ${pedidoLink} ` +
             `<button type="button" class="btn small copyBtn" data-copy-novopedido="${escapeHtml(o.novoPedido)}" title="Copiar novo pedido" aria-label="Copiar novo pedido" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIcon}</button>`
           );
+        }
+
+        if(o.sizeFrom || o.sizeTo){
+          const from = o.sizeFrom || "-";
+          const to = o.sizeTo || "-";
+          parts.push(`Tamanhos da troca: <b>${escapeHtml(from)}</b> -> <b>${escapeHtml(to)}</b>`);
         }
 
         if(o.rastreio){
@@ -8804,7 +9598,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
              </button>`
           : "";
         const calendarBtn = (o._idx === lastIdx)
-          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calend‚ñÄrio" aria-label="Calend‚ñÄrio">
+          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="CalendØrio" aria-label="CalendØrio">
                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                  <rect x="3" y="4" width="18" height="17" rx="2"></rect>
                  <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -8836,6 +9630,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             </div>
             ${metaHtml}
             ${textHtml}
+            ${isActive && textHtml ? `<div class="phaseActionDivider"></div>` : ""}
             <div class="phaseBtnsRow">
               ${attentionBtn}
               ${summaryBtn}
@@ -8852,7 +9647,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const currentHtml = renderPhaseItem(currentPhase);
       const allHtml = cleaned.map(renderPhaseItem).join("");
       return `
-        <div class="linksBlock" data-task-phases="${escapeHtml(String(taskId || ""))}">
+        <div class="linksBlock phaseBlock" data-task-phases="${escapeHtml(String(taskId || ""))}">
           <div class="phaseList phaseListCurrent">
             ${currentHtml}
           </div>
@@ -8866,6 +9661,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
 
     function clearTasksForm(){
       tasksEditId = null;
+      pendingTaskDraft = null;
       setTasksModeLabel();
 
       tData.value = "";
@@ -8874,9 +9670,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
       updateWhatsappPreview();
       if(tLoja) tLoja.value = "Todas as Lojas";
       tPedido.value = "";
-      tAssunto.value = "";
+      if(tAssunto) tAssunto.value = "";
       if(tRastreio) tRastreio.value = "";
       setDescPhasesToUI([]);
+      clearFieldErrors([tData, tCliente, tWhatsapp, tLoja, tPedido]);
 
       if(tFonte && FONTE_OPTIONS.length) tFonte.value = FONTE_OPTIONS[0];
       if(tStatus && STATUS_OPTIONS.length) tStatus.value = STATUS_OPTIONS[0].value;
@@ -8885,56 +9682,67 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
 
     function validateTasksForm(){
-      // campos obrigat\u00f3rios
+      clearFieldErrors([tData, tCliente, tWhatsapp, tLoja, tPedido]);
+      let ok = true;
+
       const data = (tData ? (tData.value||"") : "").trim();
       if(!data){
-        showAlert("Preencha a Data inicial.");
-        return false;
+        setFieldError(tData, "Preencha a data inicial.");
+        ok = false;
+      }else if(!isValidDateInput(data)){
+        setFieldError(tData, "Data invalida.");
+        ok = false;
       }
       const c = (tCliente.value||"").trim();
       if(!c){
-        showAlert("Preencha o Cliente.");
-        return false;
+        setFieldError(tCliente, "Preencha o cliente.");
+        ok = false;
+      }else if(c.length < 3){
+        setFieldError(tCliente, "Informe pelo menos 3 caracteres.");
+        ok = false;
+      }else if(/^[0-9]+$/.test(c) || !/[A-Za-z?-?]/.test(c)){
+        setFieldError(tCliente, "Informe um nome valido.");
+        ok = false;
       }
       const w = (tWhatsapp ? (tWhatsapp.value||"") : "").trim();
       if(!w){
-        showAlert("Preencha o N\u00famero do WhatsApp.");
-        return false;
+        setFieldError(tWhatsapp, "Preencha o WhatsApp.");
+        ok = false;
+      }else{
+        const phoneCheck = validateBrazilWhatsapp(w);
+        if(!phoneCheck.ok){
+          setFieldError(tWhatsapp, phoneCheck.message);
+          ok = false;
+        }
       }
       const loja = (tLoja ? (tLoja.value||"") : "").trim();
       if(!loja || loja === "Todas as Lojas"){
-        showAlert("Selecione a Loja.");
-        return false;
+        setFieldError(tLoja, "Selecione a loja.");
+        ok = false;
       }
-      const p = (tPedido.value||"").trim();
-      if(!p){
-        showAlert("Preencha o Pedido.");
-        return false;
+      const p = (tPedido.value||"") .trim();
+      const pedidoCheck = validatePedido(p);
+      if(!pedidoCheck.ok){
+        setFieldError(tPedido, pedidoCheck.message);
+        ok = false;
       }
-      const a = (tAssunto.value||"").trim();
-      if(!a){
-        showAlert("Preencha o Assunto.");
-        return false;
-      }
-      return true;
+      return ok;
     }
 
-    function saveTask(){
-      if(!validateTasksForm()) return;
-
-      const obs = getDescPhasesFromUI();
+    function buildTaskPayloadFromForm(options){
+      const obs = Array.isArray(options?.obs) ? options.obs : getDescPhasesFromUI();
       const fallbackUserId = String(currentUser?.id || "");
       const fallbackUserName = (currentUser?.display_name || currentUser?.username || "").toString().trim();
-
-      const payload = {
-        id: tasksEditId || uid(),
+      const assuntoFromPhase = getEffectivePhaseStatus({ obs }) || "";
+      return {
+        id: (options?.id || tasksEditId || uid()),
         data: (tData.value || "").trim(),
         cliente: (tCliente.value || "").trim(),
         whatsapp: normalizeWhatsappNumber(tWhatsapp ? tWhatsapp.value : ""),
         loja: (tLoja ? (tLoja.value || "").trim() : ""),
         pedido: (tPedido.value || "").trim(),
         rastreio: (tRastreio ? (tRastreio.value || "").trim() : ""),
-        assunto: (tAssunto.value || "").trim(),
+        assunto: assuntoFromPhase,
         fonte: (tFonte ? (tFonte.value || "") : "").trim(),
         status: (tStatus ? (tStatus.value || "") : "").trim(),
         proxEtapa: (tProxEtapa ? (tProxEtapa.value || "") : "").trim(),
@@ -8944,7 +9752,28 @@ function getNuvemshopSupportBaseUrl(lojaText){
         createdAt: "",
         updatedAt: new Date().toISOString(),
       };
+    }
 
+    function startTaskPhaseFlow(){
+      if(!validateTasksForm()) return;
+      if(tasksEditId){
+        saveTask();
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      const payload = buildTaskPayloadFromForm({ id: uid(), obs: [] });
+      payload.createdAt = nowIso;
+      payload.updatedAt = nowIso;
+      pendingTaskDraft = payload;
+      phaseEditOrigin = "taskModal";
+      if(taskOverlay) taskOverlay.classList.remove("show");
+      openPhaseEditor({ taskId: payload.id, mode:"add", index:-1 });
+    }
+
+    function saveTask(){
+      if(!validateTasksForm()) return;
+
+      const payload = buildTaskPayloadFromForm({});
       const next = tasks.slice();
 
       if(!tasksEditId){
@@ -8974,7 +9803,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
 
     function editTask(id){
       const t = tasks.find(x => x.id === id);
-      if(!t) return;
+      if(!t) return false;
 
       tasksEditId = id;
       setTasksModeLabel();
@@ -8985,7 +9814,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       updateWhatsappPreview();
       if(tLoja) tLoja.value = t.loja || "Di\u00e1rio Nerdify";
       tPedido.value = t.pedido || "";
-      tAssunto.value = t.assunto || "";
+      if(tAssunto) tAssunto.value = t.assunto || "";
       if(tFonte) tFonte.value = t.fonte || (FONTE_OPTIONS[0] || "");
       if(tStatus) tStatus.value = t.status || (STATUS_OPTIONS[0]?.value || "");
       if(tProxEtapa) tProxEtapa.value = t.proxEtapa || "";
@@ -8998,23 +9827,38 @@ function getNuvemshopSupportBaseUrl(lojaText){
 
     async function removeTask(id){
       const t = tasks.find(x => x.id === id);
-      if(!t) return;
+      if(!t) return false;
 
-      const ok = await showConfirm(`Remover esta tarefa?\n\nCliente: ${t.cliente || "-"}\nPedido: ${t.pedido || "-"}\nAssunto: ${t.assunto || "-"}\n\nConfirmar?`);
-      if(!ok) return;
+      const result = await openPopup({
+        title: "Remover tarefa",
+            message: "Voc\u00ea quer deletar esta tarefa ou apenas marc\u00e1-la como conclu\u00edda?",
+        okLabel: "Excluir tarefa",
+        cancelLabel: "Concluir tarefa",
+        showCancel: true,
+        centerMessage: true,
+      });
+      if(!result && popupActionSource !== "ok" && popupActionSource !== "cancel") return;
 
-      addTaskToDone(t, { isExtra: Boolean(t.isExtra) });
+      if(popupActionSource === "cancel"){
+        if(t.isExtra){
+          await closeExtraTask(id);
+        }else{
+          closeTaskAsDone(id);
+        }
+        renderCalendar();
+        renderCalendarDayDetails(calSelectedISO);
+        return;
+      }
+
       if(t.isExtra){
         calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== String(id));
         saveCalendarHistory(calendarHistory);
       }else{
-        // marca o assunto como removido no calend\u00e1rio (vermelho)
         markCalendarClosed(t);
       }
 
       const next = tasks.filter(x => x.id !== id);
       saveTasks(next);
-
       if(tasksEditId === id) clearTasksForm();
     }
 
@@ -9116,7 +9960,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!st || st !== statusFilter) return false;
         }
         if(periodFilter && periodFilter !== "ALL"){
-          const effDate = (getEffectivePhaseDate(t) || "").toString().trim();
+          const effDate = (getTaskDisplayDate(t) || "").toString().trim();
           if(!matchesPeriod(effDate, periodFilter)) return false;
         }
         if(!q) return true;
@@ -9126,11 +9970,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const assunto = (t.assunto || "").toString().toLowerCase();
         return cliente.includes(q) || pedidoBase.includes(q) || pedidoEfetivo.includes(q) || assunto.includes(q);
       }).sort((a,b) => {
-        const da = (getEffectivePhaseDate(a) || "").trim();
-        const db = (getEffectivePhaseDate(b) || "").trim();
-        const ta = getDueTimestamp(da, getEffectivePhaseTime(a));
-        const tb = getDueTimestamp(db, getEffectivePhaseTime(b));
-        if(ta !== tb) return ta - tb;
+        const overA = isTaskOverdue(a);
+        const overB = isTaskOverdue(b);
+        if(overA != overB) return overA ? -1 : 1;
+        const ta = getTaskSortTimestamp(a);
+        const tb = getTaskSortTimestamp(b);
+        if(ta != tb) return ta - tb;
         const aa = (a.assunto || "").toString();
         const bb = (b.assunto || "").toString();
         return aa.localeCompare(bb);
@@ -9156,6 +10001,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(currentView !== "tasks") return;
 
       updateTaskCountBadges();
+      syncOverdueCalendarEntries();
       const filtered = getFilteredTasks();
 
       tasksCount.textContent = `${filtered.length} item(ns)`;
@@ -9197,7 +10043,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const hasDailyRepeat = isDailyRepeatTask(t);
         const hasExtraRepeat = isExtra && repeatLabel && !isNoRepeatLabel(repeatLabel);
         const showRepeatIcon = isExtra;
-        const effDate = getEffectivePhaseDate(t) || (t.proxEtapa || "").trim();
+        const effDate = getTaskDisplayDate(t) || (t.proxEtapa || "").trim();
+        const isOverdue = isTaskOverdue(t);
         const dueToday = (effDate && effDate === today);
         const colors = statusColors(t.status);
 
@@ -9220,7 +10067,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
         const assuntoRaw = (t.assunto || "").trim();
 
-        const title = isExtra ? (assuntoRaw || "Tarefa extra") : (assuntoRaw || "Caso");
+        const statusTitle = getEffectivePhaseStatus(t) || assuntoRaw;
+        const title = isExtra ? (assuntoRaw || "Tarefa extra") : (statusTitle || "Caso");
         const pedidoUrl = getNuvemshopOrderUrl(lojaText, pedidoEfetivo);
 
         const pedidoNumHtml = pedidoEfetivo
@@ -9260,12 +10108,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const rastEfetivo = (getEffectiveRastreioFromTask(t) || "").trim();
         const repeatTitle = repeatLabel ? `Repeti\u00e7\u00e3o: ${repeatLabel}` : "Definir repeti\u00e7\u00e3o";
         const authorLabel = (t.created_by_username || "").toString().trim();
-        const showAuthor = isPrincipalUser()
-          && authorLabel
-          && String(t.created_by_user_id || "") !== String(currentUser?.id || "");
+        const closedByLabel = (t.closed_by_username || "").toString().trim();
+        const showAuthor = Boolean(authorLabel);
+        const showClosedBy = Boolean(closedByLabel);
 
         return `
-          <div class="taskCard ${dueToday ? "taskDueToday" : ""} ${isExtra ? "taskExtra" : ""}" data-task-id="${escapeHtml(t.id)}">
+          <div class="taskCard ${dueToday ? "taskDueToday" : ""} ${isOverdue ? "taskOverdue" : ""} ${isExtra ? "taskExtra" : ""}" data-task-id="${escapeHtml(t.id)}">
             <div class="taskTopRow">
               <div class="taskMainInfo">
                 <div class="taskTitleRow">
@@ -9451,7 +10299,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             setTimeout(()=>{ el.style.opacity = "1"; }, 450);
             openUrl();
           }).catch(()=>{
-            showAlert("N√äo foi poss¬¶vel copiar.");
+            showAlert("N o foi poss¶vel copiar.");
             openUrl();
           });
         });
@@ -9460,6 +10308,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       tasksList.querySelectorAll("[data-task-phase-add]").forEach(btn=>{
         btn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation();
           const id = (btn.getAttribute("data-task-phase-add") || "").trim();
+          phaseEditOrigin = "tasks";
           addPhaseFromCard(id);
         });
       });
@@ -9498,12 +10347,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa n√Éoo encontrada.");
+            showAlert("Tarefa n√oo encontrada.");
             return;
           }
           const date = getPhaseDateByIndex(ref, phaseIdx) || getEffectivePhaseDate(ref);
           if(!date){
-            showAlert("Esta fase n√Éoo possui data.");
+            showAlert("Esta fase n√oo possui data.");
             return;
           }
           const parts = date.split("-");
@@ -9588,6 +10437,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const idx = parseInt((btn.getAttribute("data-phase-idx") || "-1"), 10);
           if(!id) return;
           if(!Number.isFinite(idx) || idx < 0) return;
+          phaseEditOrigin = "tasks";
           openPhaseEditor({ taskId:id, mode:"edit", index:idx });
         });
       });
@@ -9598,7 +10448,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           if(!Number.isFinite(idx) || idx < 0) return;
           const t = tasks.find(x => x.id === id);
-          if(!t) return;
+      if(!t) return false;
           if(!Array.isArray(t.obs) || !t.obs.length){
             showAlert("N\u00e3o h\u00e1 fases para excluir.");
             return;
@@ -9614,21 +10464,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           saveTasks(tasks);
           upsertCalendarFromTask(t);
           renderTasks();
-        });
-      });
-      calDayDetails.querySelectorAll("[data-cal-item-editphase]").forEach(btn=>{
-        btn.addEventListener("click", ()=>{
-          const id = (btn.getAttribute("data-cal-item-editphase") || "").toString().trim();
-          const idxRaw = (btn.getAttribute("data-cal-phase-idx") || "0").toString();
-          const phaseIdx = Number.parseInt(idxRaw, 10);
-          if(!id) return;
-          const ref = (tasks || []).find(t => String(t.id || "") === id);
-          if(!ref){
-            showAlert("Tarefa n√äo encontrada na lista.");
-            return;
-          }
-          closeCalendar();
-          openPhaseEditor({ taskId:id, mode:"edit", index: Number.isFinite(phaseIdx) ? phaseIdx : 0 });
         });
       });
       tasksList.querySelectorAll("[data-task-repeat]").forEach(btn=>{
@@ -9725,9 +10560,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const data = formatDateBR(t.data || "");
         const closedAt = formatDateTimeBR(t.closedAt || t.updatedAt || t.createdAt || "");
         const authorLabel = (t.created_by_username || "").toString().trim();
-        const showAuthor = isPrincipalUser()
-          && authorLabel
-          && String(t.created_by_user_id || "") !== String(currentUser?.id || "");
+        const closedByLabel = (t.closed_by_username || "").toString().trim();
+        const showAuthor = Boolean(authorLabel);
+        const showClosedBy = Boolean(closedByLabel);
 
         const extraText = (t.extraText || "").toString().trim();
         const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
@@ -9747,6 +10582,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
                </svg>
              </button>`
           : "";
+        const reactivateBtn = `<button type="button" class="btn small iconBtn" data-done-reactivate="${escapeHtml(String(t.id || ""))}" title="Reativar tarefa" aria-label="Reativar tarefa" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">
+               <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                 <path d="M3 12a9 9 0 0 1 9-9"></path>
+                 <polyline points="3 4 3 12 11 12"></polyline>
+                 <path d="M21 12a9 9 0 0 1-9 9"></path>
+                 <polyline points="21 20 21 12 13 12"></polyline>
+               </svg>
+             </button>`;
 
         const detailItems = [];
         if(isExtra && extraText) detailItems.push(escapeHtml(extraText));
@@ -9764,15 +10607,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
               <div class="doneTaskTitle" style="margin-bottom:16px;">${escapeHtml(title)}</div>
               <div class="doneTaskActions" style="display:inline-flex;align-items:center;gap:8px;">
                 ${summaryBtn}
+                ${reactivateBtn}
                 <button type="button" class="btn small danger iconBtn" data-done-del="${escapeHtml(String(t.id || ""))}" title="Excluir tarefa" aria-label="Excluir tarefa" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${trashIcon}</button>
               </div>
             </div>
             <div class="doneMetaRow" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:16px;">
-              ${lojaText ? `<span class="pillMini donePill">Loja: ${escapeHtml(lojaText)}</span>` : ""}
-              <span class="pillMini donePill">${isExtra ? "Hor\u00e1rio" : "Pr\u00f3xima Etapa"}: <b>${escapeHtml(prox)}</b></span>
-              <span class="pillMini donePill">Data inicial: <b>${escapeHtml(data)}</b></span>
+              ${lojaText ? `<span class="pillMini donePill">Loja: ${escapeHtml(lojaText)}</span>` : ""}              <span class="pillMini donePill">Data inicial: <b>${escapeHtml(data)}</b></span>
               <span class="pillMini donePill">Encerrada em: <b>${escapeHtml(closedAt)}</b></span>
-              ${showAuthor ? `<span class="pillMini donePill">Usu\u00e1rio: <b>${escapeHtml(authorLabel)}</b></span>` : ""}
+              ${showAuthor ? `<span class="pillMini donePill">Autor da tarefa: <b>${escapeHtml(authorLabel)}</b></span>` : ""}
+              ${showClosedBy ? `<span class="pillMini donePill">Encerrada por: <b>${escapeHtml(closedByLabel)}</b></span>` : ""}
             </div>
             ${detailsHtml}
             </div>
@@ -9813,6 +10656,39 @@ function getNuvemshopSupportBaseUrl(lojaText){
             return;
           }
           openTaskSummaryPopup(ref);
+        });
+      });
+      doneTasksList.querySelectorAll("[data-done-reactivate]").forEach(btn=>{
+        btn.addEventListener("click", async (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          const id = (btn.getAttribute("data-done-reactivate") || "").toString().trim();
+          if(!id) return;
+          const ref = (tasksDone || []).find(t => String(t.id || "") === id);
+          if(!ref){
+            showAlert("Tarefa n„o encontrada.");
+            return;
+          }
+          const ok = await showConfirm("Reativar esta tarefa?");
+          if(!ok) return;
+          tasksDone = (tasksDone || []).filter(t => String(t.id || "") !== id);
+          saveTasksDone(tasksDone);
+          tasks = tasks || [];
+          const revived = { ...ref };
+          delete revived.closedAt;
+          tasks.unshift(revived);
+          saveTasks(tasks);
+          const reopenedDate = (getEffectivePhaseDate(ref) || (ref.proxEtapa || "")).toString().trim();
+          if(reopenedDate){
+            upsertCalendarFromTask(ref);
+          }else{
+            calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
+            saveCalendarHistory(calendarHistory);
+          }
+          renderDoneTasks();
+          renderTasks();
+          renderCalendar();
+          renderCalendarDayDetails(calSelectedISO);
         });
       });
 
@@ -9908,13 +10784,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(currentView !== "users") return;
       if(!usersCards || !usersCount) return;
 
+      const formatUsersCount = (count) => `${count} ${count === 1 ? "Usu\u00e1rio" : "Usu\u00e1rios"}`;
+
       if(!canAccessUsersView()){
-        usersCount.textContent = "0 item(ns)";
+        usersCount.textContent = formatUsersCount(0);
         usersCards.innerHTML = `<div class="muted">Acesso restrito.</div>`;
         return;
       }
       if(usersError){
-        usersCount.textContent = "0 item(ns)";
+        usersCount.textContent = formatUsersCount(0);
         usersCards.innerHTML = `<div class="muted">${escapeHtml(usersError)}</div>`;
         return;
       }
@@ -9939,7 +10817,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         return true;
       });
 
-      usersCount.textContent = `${filtered.length} item(ns)`;
+      usersCount.textContent = formatUsersCount(filtered.length);
       if(!filtered.length){
         usersCards.innerHTML = `<div class="muted">Nenhum usu&aacute;rio encontrado.</div>`;
         return;
@@ -10054,7 +10932,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!userId) return;
           const action = isBlocked ? "unblock" : "block";
           const ok = await showConfirm(
-            `${isBlocked ? "Desbloquear" : "Bloquear"} o acesso do usu√°rio ${userName || ""}?`,
+            `${isBlocked ? "Desbloquear" : "Bloquear"} o acesso do usu·rio ${userName || ""}?`,
             isBlocked ? "Desbloquear acesso" : "Bloquear acesso"
           );
           if(!ok) return;
@@ -10198,17 +11076,20 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(userActivityOverlay) userActivityOverlay.classList.remove("show");
     }
     async function refreshUsersView(){
-      if(!viewUsers) return;
+      if(!viewUsers) return false;
       usersError = "";
       try{
         const result = await apiAdminUsers();
         usersCache = Array.isArray(result?.users) ? result.users : [];
+        renderUsersView();
+        return true;
       }catch(err){
         usersCache = [];
         const msg = (err && err.message) ? String(err.message) : "";
         usersError = msg === "forbidden" ? "Acesso restrito." : "Nao foi possivel carregar os usuarios.";
+        renderUsersView();
+        return false;
       }
-      renderUsersView();
     }
 
     /***********************
@@ -10381,7 +11262,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     		setQuestionImagesUI(qImages.concat(uploaded));
     	}
     	if(hadError){
-    		showAlert("N√äo foi poss¬¶vel enviar uma das imagens.");
+    		showAlert("N o foi poss¶vel enviar uma das imagens.");
     	}
     });
     qClearImgsBtn.addEventListener("click", ()=>{
@@ -10670,8 +11551,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
     const mobileHeaderProxyBtns = document.querySelectorAll("[data-header-proxy]");
     const headerPopupTargets = new Set([
       "orderLookupBtn",
-      "sakChatBtn",
-      "storeLinksBtn",
       "metaInboxBtn",
       "emailMenuBtn",
       "backupMenuBtn",
@@ -10960,29 +11839,33 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(copyProductTableBtn){
       copyProductTableBtn.addEventListener("click", async ()=>{
         if(!currentProductTableUrl){
-          showAlert("Tabela n√äo dispon¬¶vel para este produto.");
+          showAlert("Tabela n o dispon¶vel para este produto.");
           return;
         }
         await copyImageToClipboard(currentProductTableUrl, copyProductTableBtn, "Copiar imagem");
       });
     }
 
+    if(productVideoWhatsapp){
+      productVideoWhatsapp.addEventListener("input", ()=>{ clearFieldError(productVideoWhatsapp); });
+    }
+
     if(productVideoSendBtn){
       productVideoSendBtn.addEventListener("click", ()=>{
         if(!productVideoWhatsapp){
-          showAlert("Informe o WhatsApp do cliente.");
           return;
         }
+        clearFieldError(productVideoWhatsapp);
         const raw = (productVideoWhatsapp.value || "").trim();
-        const digits = raw.replace(/\D/g, "");
-        if(!digits){
-          showAlert("Informe o WhatsApp do cliente.");
+        const phoneCheck = validateBrazilWhatsapp(raw);
+        if(!phoneCheck.ok){
+          setFieldError(productVideoWhatsapp, phoneCheck.message);
           productVideoWhatsapp.focus();
           return;
         }
-        const phone = digits.startsWith("55") ? digits : `55${digits}`;
+        const phone = `55${phoneCheck.digits}`;
         if(!currentProductVideoUrl || !currentProductVideoText){
-          showAlert("V¬¶deo n√äo dispon¬¶vel para este produto.");
+          showAlert("V¶deo n o dispon¶vel para este produto.");
           return;
         }
         const message = `${currentProductVideoText}\n\n${currentProductVideoUrl}`;
@@ -11026,8 +11909,23 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(closePhaseEditBtn) closePhaseEditBtn.addEventListener("click", closePhaseEditor);
     if(phaseEditCancelBtn) phaseEditCancelBtn.addEventListener("click", closePhaseEditor);
     if(phaseEditSaveBtn) phaseEditSaveBtn.addEventListener("click", savePhaseEditor);
+    if(phaseEditCloseTaskBtn) phaseEditCloseTaskBtn.addEventListener("click", ()=>{
+      const id = (phaseEditTaskId || "").trim();
+      if(!id) return;
+      const saved = savePhaseEditor();
+      if(!saved) return;
+      if(closeTaskOverlay && closeTaskOverlay.classList.contains("show")) return;
+      openCloseTaskModal(id);
+    });
     if(phaseEditDeleteBtn) phaseEditDeleteBtn.addEventListener("click", deletePhaseEditor);
     if(phaseEditAttention) phaseEditAttention.addEventListener("change", togglePhaseEditAttention);
+    if(phaseEditStatus) phaseEditStatus.addEventListener("change", togglePhaseSizeFields);
+    const phaseEditFields = [phaseEditText, phaseEditDate, phaseEditPrazo, phaseEditPrazoHora, phaseEditStatus, phaseEditNovoPedido, phaseEditSizeFrom, phaseEditSizeTo, phaseEditRastreio];
+    phaseEditFields.forEach(field=>{
+      if(!field) return;
+      const evt = (field.tagName === 'SELECT' || field.type === 'date' || field.type === 'time') ? 'change' : 'input';
+      field.addEventListener(evt, ()=>{ clearFieldError(field); });
+    });
     if(phaseEditOverlay){
       phaseEditOverlay.addEventListener("click", (e)=>{ if(e.target === phaseEditOverlay) closePhaseEditor(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && phaseEditOverlay.classList.contains("show")) closePhaseEditor(); });
@@ -11050,7 +11948,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       window.close();
       setTimeout(() => {
         if(!window.closed){
-          showAlert("N√äo foi poss¬¶vel fechar a aba automaticamente. Feche manualmente.");
+          showAlert("N o foi poss¶vel fechar a aba automaticamente. Feche manualmente.");
         }
         allowAppClose = false;
       }, 200);
@@ -11077,14 +11975,17 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(closeTaskNewPhaseBtn){
       closeTaskNewPhaseBtn.addEventListener("click", () => {
         const id = pendingCloseTaskId;
+        const hasPending = pendingPhaseSave && pendingPhaseSave.taskId === id;
         closeCloseTaskModal();
-        addPhaseFromCard(id);
+        if(!hasPending){
+          addPhaseFromCard(id);
+        }
       });
     }
     if(closeTaskDoneBtn){
       closeTaskDoneBtn.addEventListener("click", () => {
         const id = pendingCloseTaskId;
-        closeCloseTaskModal();
+        closeCloseTaskModal({ skipPending:true });
         closeTaskAsDone(id);
       });
     }
@@ -11187,20 +12088,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       storesConfigSaveBtn.addEventListener("click", async (e)=>{
         e.preventDefault();
         const next = collectStoresFromForm();
-        if(!next.length || !next[0].name || !next[0].logoUrl){
-          showAlert("Informe pelo menos uma loja com nome e logo.");
-          return;
-        }
-        const invalid = next.find(s => (!s.name || !s.logoUrl));
-        if(invalid){
-          showAlert("Preencha nome e logo em todas as lojas.");
-          return;
-        }
-        const missingWhatsapp = next.find(s => !s.whatsappUrl);
-        if(missingWhatsapp){
-          showAlert("Informe o link de atendimento do WhatsApp para todas as lojas.");
-          return;
-        }
+        if(!validateStoresConfigForm()) return;
+        if(!next.length) return;
         const prevNames = getStoreNames();
         const nextNames = next.map(s => (s.name || "").toString()).filter(Boolean);
         const removedNames = prevNames.filter(name => !nextNames.includes(name));
@@ -11313,6 +12202,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
         storesDraft = storesDraft.filter((_, i) => i !== idx);
         renderStoresConfig();
       });
+      storesConfigHost.addEventListener("input", (e)=>{
+        const input = e.target;
+        if(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement){
+          clearFieldError(input);
+        }
+      });
       storesConfigHost.addEventListener("change", (e)=>{
         const input = e.target;
         if(!(input instanceof HTMLInputElement)) return;
@@ -11412,9 +12307,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     if(orderLookupBtn){
       orderLookupBtn.addEventListener("click", openHeaderNuvemshopSupport);
-    }
-    if(sakChatBtn){
-      sakChatBtn.addEventListener("click", openHeaderNuvemshopSupport);
     }
     if(nuvemLinksCloseBtn){
       nuvemLinksCloseBtn.addEventListener("click", (e)=>{
@@ -11534,13 +12426,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(nuvemEditOverlay){
       nuvemEditOverlay.addEventListener("click", (e)=>{ if(e.target === nuvemEditOverlay) closeNuvemEditModal(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && nuvemEditOverlay.classList.contains("show")) closeNuvemEditModal(); });
-    }
-    if(storeLinksBtn){
-      storeLinksBtn.addEventListener("click", ()=>{
-        if(!storeLinksOverlay) return;
-        markOverlayForDrawerReturn(storeLinksOverlay, [storeLinksCloseBtn]);
-        storeLinksOverlay.classList.add("show");
-      });
     }
     if(storeLinksCloseBtn){
       storeLinksCloseBtn.addEventListener("click", ()=>{
@@ -12034,7 +12919,13 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(goToSearchBtn){
       goToSearchBtn.addEventListener("click", ()=>{
-        setView("search");
+        const savedView = (storageGet(STORAGE_KEY_VIEW) || "").toString().trim();
+      const allowedViews = ["search", "tasks", "done", "users", "userActivity"];
+      let initialView = allowedViews.includes(savedView) ? savedView : "search";
+      if((initialView === "users" || initialView === "userActivity") && !canAccessUsersView()){
+        initialView = "search";
+      }
+      setView(initialView);
       });
     }
     if(goToTasksBtn){
@@ -12062,12 +12953,16 @@ navAtalhosBtn.addEventListener("click", ()=>{
 
 
     // tasks events (sem senha)
-    tasksSaveBtn.addEventListener("click", saveTask);
+    tasksSaveBtn.addEventListener("click", startTaskPhaseFlow);
     tasksClearBtn.addEventListener("click", clearTasksForm);
+    if(tData) tData.addEventListener("change", ()=>{ clearFieldError(tData); });
+    if(tCliente) tCliente.addEventListener("input", ()=>{ clearFieldError(tCliente); });
+    if(tLoja) tLoja.addEventListener("change", ()=>{ clearFieldError(tLoja); });
+    if(tPedido) tPedido.addEventListener("input", ()=>{ clearFieldError(tPedido); });
 
     // WhatsApp Cliente
     if(tWhatsapp){
-      tWhatsapp.addEventListener("input", updateWhatsappPreview);
+      tWhatsapp.addEventListener("input", ()=>{ clearFieldError(tWhatsapp); updateWhatsappPreview(); });
       updateWhatsappPreview();
     }
     if(tWhatsappBtn){
@@ -12206,11 +13101,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
       });
     }
     if(tasksSearchStatus){
-      const opts = ['<option value=\"\" selected>Status: todos</option>'];
+      const opts = ['<option value="" selected>Status: todos</option>'];
       PHASE_STATUS_OPTIONS.forEach(g => {
-        opts.push(`<optgroup label=\"${escapeHtml(g.group)}\">`);
+        opts.push(`<optgroup label="${escapeHtml(g.group)}">`);
         (g.options || []).forEach(txt => {
-          opts.push(`<option value=\"${escapeHtml(txt)}\">${escapeHtml(txt)}</option>`);
+          opts.push(`<option value="${escapeHtml(txt)}">${escapeHtml(txt)}</option>`);
         });
         opts.push(`</optgroup>`);
       });
@@ -12224,11 +13119,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
       });
     }
     if(doneSearchStatus){
-      const opts = ['<option value=\"\" selected>Status: todos</option>'];
+      const opts = ['<option value="" selected>Status: todos</option>'];
       PHASE_STATUS_OPTIONS.forEach(g => {
-        opts.push(`<optgroup label=\"${escapeHtml(g.group)}\">`);
+        opts.push(`<optgroup label="${escapeHtml(g.group)}">`);
         (g.options || []).forEach(txt => {
-          opts.push(`<option value=\"${escapeHtml(txt)}\">${escapeHtml(txt)}</option>`);
+          opts.push(`<option value="${escapeHtml(txt)}">${escapeHtml(txt)}</option>`);
         });
         opts.push(`</optgroup>`);
       });
@@ -12390,6 +13285,23 @@ navAtalhosBtn.addEventListener("click", ()=>{
         showAuthOverlay("register", "Crie um usu\u00e1rio secund\u00e1rio.");
       });
     }
+    if(usersRefreshBtn){
+      usersRefreshBtn.addEventListener("click", async ()=>{
+        if(!canAccessUsersView()) return;
+        usersRefreshBtn.classList.remove("isSuccess", "isError");
+        usersRefreshBtn.classList.add("isLoading");
+        usersRefreshBtn.disabled = true;
+        const ok = await refreshUsersView();
+        usersRefreshBtn.disabled = false;
+        usersRefreshBtn.classList.remove("isLoading");
+        usersRefreshBtn.classList.add(ok ? "isSuccess" : "isError");
+        setUsersRefreshStatus(
+          ok ? `Atualizado \u00e0s ${formatTimeShort()}` : "Falha ao atualizar",
+          !ok
+        );
+        setTimeout(()=> usersRefreshBtn.classList.remove("isSuccess", "isError"), 700);
+      });
+    }
     if(resendVerificationBtn){
       resendVerificationBtn.addEventListener("click", async ()=>{
         const username = (loginUsername?.value || "").trim();
@@ -12515,8 +13427,9 @@ navAtalhosBtn.addEventListener("click", ()=>{
           userProfileAvatarPending = filename;
           const name = (userProfileName?.value || "").trim();
           setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, name, filename);
+          clearFieldError(userProfileAvatarFile);
         }catch(err){
-          setUserProfileError("Nao foi possivel enviar a imagem.");
+          setFieldError(userProfileAvatarFile, "Nao foi possivel enviar a imagem.");
         }
       });
     }
@@ -12530,9 +13443,19 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(userProfileName){
       userProfileName.addEventListener("input", ()=>{
+        clearFieldError(userProfileName);
         const name = (userProfileName.value || "").trim();
         setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, name, userProfileAvatarPending);
       });
+    }
+    if(userProfileDoc){
+      userProfileDoc.addEventListener("input", ()=>{ clearFieldError(userProfileDoc); });
+    }
+    if(userProfileWhatsapp){
+      userProfileWhatsapp.addEventListener("input", ()=>{ clearFieldError(userProfileWhatsapp); });
+    }
+    if(userProfileEmail){
+      userProfileEmail.addEventListener("input", ()=>{ clearFieldError(userProfileEmail); });
     }
     if(userProfileSaveBtn){
       userProfileSaveBtn.addEventListener("click", (e)=>{
@@ -12616,6 +13539,22 @@ navAtalhosBtn.addEventListener("click", ()=>{
               : (authMode === "reset_password" ? "Crie uma nova senha para acessar." : "")));
         authHint.textContent = hint || defaultHint;
       }
+      if(authRegisterFromApp){
+        if(authHint){
+          authHint.textContent = "";
+          authHint.style.display = "none";
+        }
+        if(authOr) authOr.style.display = "none";
+        if(authGoogleBtn) authGoogleBtn.style.display = "none";
+        if(authPartner) authPartner.style.display = "none";
+        if(authCoupon) authCoupon.style.display = "none";
+      }else{
+        if(authHint) authHint.style.display = authHint.textContent ? "block" : "";
+        if(authOr) authOr.style.display = "";
+        if(authGoogleBtn) authGoogleBtn.style.display = "";
+        if(authPartner) authPartner.style.display = "";
+        if(authCoupon) authCoupon.style.display = "";
+      }
       if(userRoleLabel){
         if(authMode === "setup"){
           userRoleLabel.textContent = "Usu\u00e1rio principal";
@@ -12659,16 +13598,86 @@ navAtalhosBtn.addEventListener("click", ()=>{
       return;
     }
 
-    function setUserProfileError(message){
-      if(!userProfileError) return;
+    function getFieldErrorEl(field){
+      if(!field) return null;
+      const fieldId = field.getAttribute("id");
+      if(!fieldId) return null;
+      const scope = field.closest(".formGrid") || field.closest(".productDetailsSection") || field.closest(".mb") || document;
+      return scope.querySelector(`.fieldError[data-error-for="${fieldId}"]`);
+    }
+
+    function setFieldError(field, message){
+      const el = getFieldErrorEl(field);
+      if(!el) return;
       if(message){
-        userProfileError.textContent = message;
-        userProfileError.style.display = "block";
+        el.textContent = message;
+        el.style.display = "block";
       }else{
-        userProfileError.textContent = "";
-        userProfileError.style.display = "none";
+        el.textContent = "";
+        el.style.display = "none";
       }
     }
+
+    function clearFieldError(field){
+      setFieldError(field, "");
+    }
+
+    function clearFieldErrors(fields){
+      if(!Array.isArray(fields)) return;
+      fields.forEach(clearFieldError);
+    }
+
+    function validateBrazilWhatsapp(raw){
+      let digits = (raw || "").toString().trim().replace(/\D+/g, "");
+      if(!digits) return { ok:false, message:"Informe o WhatsApp com DDD." };
+      if(digits.startsWith("55") && digits.length > 11) digits = digits.slice(2);
+      if(digits.length !== 11) return { ok:false, message:"Informe DDD + 9 digitos (11 numeros)." };
+      if(/^(\d)\1+$/.test(digits)) return { ok:false, message:"Numero invalido." };
+      const ddd = digits.slice(0, 2);
+      if(ddd === "00" || Number(ddd) < 11) return { ok:false, message:"DDD invalido." };
+      if(digits[2] !== "9") return { ok:false, message:"Celular deve ter 9 digitos." };
+      return { ok:true, digits };
+    }
+    function isValidEmail(value){
+      const email = (value || "").toString().trim();
+      if(!email) return false;
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function isValidUrl(value, options){
+      const raw = (value || "").toString().trim();
+      if(!raw) return false;
+      if(options && options.allowData && raw.startsWith("data:")) return true;
+      try{
+        const url = new URL(raw);
+        return url.protocol === "http:" || url.protocol === "https:";
+      }catch(err){
+        return false;
+      }
+    }
+
+    function isValidDateInput(value){
+      const v = (value || "").toString().trim();
+      if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v)) return false;
+      const dt = new Date(`${v}T00:00:00`);
+      return !Number.isNaN(dt.getTime());
+    }
+
+    function isValidTimeInput(value){
+      const v = (value || "").toString().trim();
+      if(!v) return true;
+      return /^[0-9]{2}:[0-9]{2}$/.test(v);
+    }
+
+    function validatePedido(value){
+      const raw = (value || "").toString().trim();
+      if(!raw) return { ok:false, message:"Preencha o pedido." };
+      const digits = raw.replace(/\D+/g, "");
+      if(digits.length !== raw.length) return { ok:false, message:"Use apenas numeros." };
+      if(digits.length < 3) return { ok:false, message:"Pedido muito curto." };
+      return { ok:true };
+    }
+
 
     function fillUserProfileForm(data){
       if(userProfileName) userProfileName.value = data.name || "";
@@ -12680,12 +13689,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
       setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, data.name, data.avatar);
     }
 
-    function openUserProfileOverlay(options){
+        function openUserProfileOverlay(options){
       if(!userProfileOverlay) return;
       userProfileRequired = Boolean(options?.required);
       const data = normalizeUserProfile(userProfile);
       fillUserProfileForm(data);
-      setUserProfileError("");
+      clearFieldErrors([userProfileName, userProfileDoc, userProfileWhatsapp, userProfileEmail, userProfileAvatarFile]);
       if(userProfileCloseBtn){
         userProfileCloseBtn.style.display = userProfileRequired ? "none" : "inline-flex";
       }
@@ -12706,10 +13715,53 @@ navAtalhosBtn.addEventListener("click", ()=>{
       const doc = (userProfileDoc?.value || "").trim();
       const whatsapp = (userProfileWhatsapp?.value || "").trim();
       const email = (userProfileEmail?.value || "").trim();
-      if(!name || !doc || !whatsapp || !email){
-        setUserProfileError("Preencha nome, CPF/CNPJ, WhatsApp e e-mail.");
-        return;
+
+      clearFieldErrors([userProfileName, userProfileDoc, userProfileWhatsapp, userProfileEmail]);
+
+      let ok = true;
+      if(!name){
+        setFieldError(userProfileName, "Preencha o nome.");
+        ok = false;
       }
+      if(!doc){
+        setFieldError(userProfileDoc, "Preencha o CPF/CNPJ.");
+        ok = false;
+      }else{
+        const docDigits = getCpfDigits(doc);
+        if(docDigits.length === 11){
+          if(!isValidCpf(docDigits)){
+            setFieldError(userProfileDoc, "CPF invalido.");
+            ok = false;
+          }
+        }else if(docDigits.length === 14){
+          if(!isValidCnpj(docDigits)){
+            setFieldError(userProfileDoc, "CNPJ invalido.");
+            ok = false;
+          }
+        }else{
+          setFieldError(userProfileDoc, "Informe CPF ou CNPJ com 11 ou 14 numeros.");
+          ok = false;
+        }
+      }
+      if(!whatsapp){
+        setFieldError(userProfileWhatsapp, "Preencha o WhatsApp.");
+        ok = false;
+      }else{
+        const phoneCheck = validateBrazilWhatsapp(whatsapp);
+        if(!phoneCheck.ok){
+          setFieldError(userProfileWhatsapp, phoneCheck.message);
+          ok = false;
+        }
+      }
+      if(!email){
+        setFieldError(userProfileEmail, "Preencha o e-mail.");
+        ok = false;
+      }else if(!isValidEmail(email)){
+        setFieldError(userProfileEmail, "E-mail invalido.");
+        ok = false;
+      }
+      if(!ok) return;
+
       const avatar = (userProfileAvatarPending || "").trim();
       if(userProfileAvatarPrev && userProfileAvatarPrev !== avatar){
         void apiDeleteImage(userProfileAvatarPrev);
@@ -12755,23 +13807,23 @@ navAtalhosBtn.addEventListener("click", ()=>{
           authResolver();
           authResolver = null;
         }
-        }catch(err){
-          const msg = (err && err.message) ? String(err.message) : "";
-          if(msg === "db_error" || msg === "db_schema_error" || msg === "server_error" || msg === "request_failed"){
-            setAuthError("Erro no servidor. Tente novamente.");
+      }catch(err){
+        const msg = (err && err.message) ? String(err.message) : "";
+        if(msg === "db_error" || msg === "db_schema_error" || msg === "server_error" || msg === "request_failed"){
+          setAuthError("Erro no servidor. Tente novamente.");
         }else if(msg === "access_pending"){
-          setAuthError("Aguardando a libera\u00e7\u00e3o do administrador.");
+          setAuthError("Aguardando a liberacao do administrador.");
         }else if(msg === "access_blocked"){
-          setAuthError("Usu\u00e1rio bloqueado.");
-          }else if(msg === "email_unverified"){
-            setAuthError("Confirme seu e-mail antes de entrar.");
-            if(resendVerificationBtn) resendVerificationBtn.style.display = "inline-flex";
-          }else{
-            setAuthError("Usuario ou senha invalidos.");
-            if(resendVerificationBtn) resendVerificationBtn.style.display = "inline-flex";
-          }
+          setAuthError("Usuario bloqueado.");
+        }else if(msg === "email_unverified"){
+          setAuthError("Confirme seu e-mail antes de entrar.");
+          if(resendVerificationBtn) resendVerificationBtn.style.display = "inline-flex";
+        }else{
+          setAuthError("Usuario ou senha invalidos.");
+          if(resendVerificationBtn) resendVerificationBtn.style.display = "inline-flex";
         }
       }
+    }
 
     async function handleSetupSubmit(e){
       e.preventDefault();
@@ -12979,7 +14031,13 @@ navAtalhosBtn.addEventListener("click", ()=>{
       updateAdminAccessUI();
       updateTaskCountBadges();
       initTasksUI();
-      setView("search");
+      const savedView = (storageGet(STORAGE_KEY_VIEW) || "").toString().trim();
+      const allowedViews = ["search", "tasks", "done", "users", "userActivity"];
+      let initialView = allowedViews.includes(savedView) ? savedView : "search";
+      if((initialView === "users" || initialView === "userActivity") && !canAccessUsersView()){
+        initialView = "search";
+      }
+      setView(initialView);
       ensureMiniCalendarNavPlacement();
       startActivityTracking();
       startUsersAutoRefresh();
@@ -12995,7 +14053,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }
 
     bootstrapApp();
-
 
 
 
