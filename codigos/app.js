@@ -124,13 +124,31 @@
       return (first + last).toUpperCase() || "U";
     }
 
+    function buildImagePath(filename, defaultFolder){
+      const raw = (filename || "").toString().trim();
+      if(!raw) return "";
+      const clean = raw.replace(/\\/g, "/");
+      const parts = clean.split("/").filter(Boolean);
+      let folder = defaultFolder || "";
+      let name = raw;
+      if(parts.length >= 2){
+        folder = parts[0];
+        name = parts.slice(1).join("/");
+      }else{
+        name = parts[0] || raw;
+      }
+      const folderSafe = folder ? `${encodeURIComponent(folder)}/` : "";
+      const nameSafe = name.split("/").map(p => encodeURIComponent(p)).join("/");
+      return `../imagens/${folderSafe}${nameSafe}`;
+    }
+
     function setAvatarElements(imgEl, fallbackEl, name, avatar){
       if(!imgEl || !fallbackEl) return;
       const initials = getInitials(name);
       fallbackEl.textContent = initials;
       const avatarFile = (avatar || "").toString().trim();
       if(avatarFile){
-        imgEl.src = `imagens/${encodeURIComponent(avatarFile)}`;
+        imgEl.src = buildImagePath(avatarFile, "app");
         imgEl.style.display = "block";
         fallbackEl.style.display = "none";
       }else{
@@ -220,9 +238,12 @@
       return apiRequest(`${API_BASE}/storage.php`, { action: "setMany", items });
     }
 
-    async function apiUploadImage(file){
+    async function apiUploadImage(file, folder){
       const formData = new FormData();
       formData.append("file", file);
+      if(folder){
+        formData.append("folder", folder);
+      }
       const response = await fetch(`${API_BASE}/upload_image.php`, {
         method: "POST",
         credentials: "include",
@@ -2696,6 +2717,7 @@ function renderPopupImages(){
     const loginForm = document.getElementById("loginForm");
     const loginUsername = document.getElementById("loginUsername");
     const loginPassword = document.getElementById("loginPassword");
+    const loginPasswordToggle = document.getElementById("loginPasswordToggle");
     const setupForm = document.getElementById("setupForm");
     const resetRequestForm = document.getElementById("resetRequestForm");
     const resetPasswordForm = document.getElementById("resetPasswordForm");
@@ -7687,7 +7709,7 @@ function fillAssuntoSelect(){
       qImgsPreviewGrid.innerHTML = qImages.map((fn, i) => `
         <div class="qImgBox">
           <button type="button" class="qImgDelBtn" title="Remover imagem" data-qimg-remove="${i}">&times;</button>
-          <img alt="Pr\u00e9via" src="imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
+          <img alt="Pr\u00e9via" src="${buildImagePath(fn, "respostas")}" onerror="this.style.display='none'">
           <div class="qImgName">${escapeHtml(fn)}</div>
         </div>
       `).join("");
@@ -7870,7 +7892,7 @@ function fillAssuntoSelect(){
 
       	try{
 
-      		const filename = await apiUploadImage(f);
+      		const filename = await apiUploadImage(f, "respostas");
 
       		if(filename){
 
@@ -8133,7 +8155,7 @@ function fillAssuntoSelect(){
             <div class="label">Imagens da Pergunta <span class="count">${imgs.length} arquivo(s)</span></div>
             <div class="qImgsShowGrid">
               ${imgs.map(fn => `
-                <img alt="Imagem da pergunta" src="imagens/${encodeURIComponent(fn)}" onerror="this.style.display='none'">
+                <img alt="Imagem da pergunta" src="${buildImagePath(fn, "respostas")}" onerror="this.style.display='none'">
               `).join("")}
             </div>
           </div>
@@ -8385,7 +8407,7 @@ function fillAssuntoSelect(){
         : ``;
 
       const imgHtml = s.imageFilename
-        ? `<img alt="Imagem do passo" src="imagens/${encodeURIComponent(s.imageFilename)}" onerror="this.style.display='none'">`
+        ? `<img alt="Imagem do passo" src="${buildImagePath(s.imageFilename, "respostas")}" onerror="this.style.display='none'">`
         : ``;
 
       modalBody.innerHTML = `
@@ -10721,28 +10743,34 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const isBlocked = String(u?.access_blocked || "") === "1";
       const isPending = String(u?.access_pending || "") === "1";
       const lastActive = Number(u?.last_active_at || 0);
+      const lastLogout = Number(u?.last_logout_at || 0);
+      const isLoggedIn = lastActive > 0 && (!lastLogout || lastActive > lastLogout);
       let presenceClass = "presenceLoggedOut";
       let presenceLabel = "Deslogado";
       let presenceKey = "deslogado";
       if(isBlocked && isPending){
         presenceClass = "presencePending";
-        presenceLabel = "Aguardando libera\u00e7\u00e3o";
+        presenceLabel = "Aguardando liberação";
         presenceKey = "aguardando";
       }else if(isBlocked){
         presenceClass = "presenceBlocked";
         presenceLabel = "Bloqueado";
         presenceKey = "bloqueado";
-      }else if(lastActive > 0){
+      }else if(lastActive > 0 && isLoggedIn){
         const diffMs = Date.now() - (lastActive * 1000);
         if(diffMs <= 5 * 60 * 1000){
           presenceClass = "presenceActive";
           presenceLabel = "Ativo";
           presenceKey = "ativo";
-        }else if(diffMs <= 60 * 60 * 1000 && diffMs >= 30 * 60 * 1000){
+        }else if(diffMs < 30 * 60 * 1000){
           presenceClass = "presenceIdle";
           presenceLabel = "Inativo";
           presenceKey = "inativo";
-        }else if(diffMs >= 30 * 60 * 1000){
+        }else if(diffMs < 60 * 60 * 1000){
+          presenceClass = "presenceStopped";
+          presenceLabel = "Parado";
+          presenceKey = "parado";
+        }else{
           presenceClass = "presenceStopped";
           presenceLabel = "Parado";
           presenceKey = "parado";
@@ -11252,7 +11280,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     	let hadError = false;
     	for(const f of files){
     		try{
-    			const filename = await apiUploadImage(f);
+    			const filename = await apiUploadImage(f, "respostas");
     			if(filename) uploaded.push(filename);
     		}catch(err){
     			hadError = true;
@@ -12919,13 +12947,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(goToSearchBtn){
       goToSearchBtn.addEventListener("click", ()=>{
-        const savedView = (storageGet(STORAGE_KEY_VIEW) || "").toString().trim();
-      const allowedViews = ["search", "tasks", "done", "users", "userActivity"];
-      let initialView = allowedViews.includes(savedView) ? savedView : "search";
-      if((initialView === "users" || initialView === "userActivity") && !canAccessUsersView()){
-        initialView = "search";
-      }
-      setView(initialView);
+        setView("search");
       });
     }
     if(goToTasksBtn){
@@ -13257,6 +13279,15 @@ navAtalhosBtn.addEventListener("click", ()=>{
     if(loginForm){
       loginForm.addEventListener("submit", handleLoginSubmit);
     }
+    if(loginPasswordToggle && loginPassword){
+      loginPasswordToggle.addEventListener("click", ()=>{
+        const isHidden = loginPassword.type === "password";
+        loginPassword.type = isHidden ? "text" : "password";
+        const label = isHidden ? "Ocultar senha" : "Mostrar senha";
+        loginPasswordToggle.setAttribute("aria-label", label);
+        loginPasswordToggle.setAttribute("title", label);
+      });
+    }
     if(setupForm){
       setupForm.addEventListener("submit", handleSetupSubmit);
     }
@@ -13423,7 +13454,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         const file = userProfileAvatarFile.files && userProfileAvatarFile.files[0];
         if(!file) return;
         try{
-          const filename = await apiUploadImage(file);
+          const filename = await apiUploadImage(file, "app");
           userProfileAvatarPending = filename;
           const name = (userProfileName?.value || "").trim();
           setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, name, filename);
@@ -13695,13 +13726,14 @@ navAtalhosBtn.addEventListener("click", ()=>{
       const data = normalizeUserProfile(userProfile);
       fillUserProfileForm(data);
       clearFieldErrors([userProfileName, userProfileDoc, userProfileWhatsapp, userProfileEmail, userProfileAvatarFile]);
+      const secondaryRequired = userProfileRequired && isSecondaryUser();
       if(userProfileCloseBtn){
         userProfileCloseBtn.style.display = userProfileRequired ? "none" : "inline-flex";
       }
       if(userProfileStoresBtn) userProfileStoresBtn.style.display = userProfileRequired ? "none" : "inline-flex";
       if(userProfileLogoutBtn) userProfileLogoutBtn.style.display = userProfileRequired ? "none" : "inline-flex";
-      if(userProfileSaveBtn) userProfileSaveBtn.style.display = userProfileRequired ? "none" : "inline-flex";
-      if(userProfileNextBtn) userProfileNextBtn.style.display = userProfileRequired ? "inline-flex" : "none";
+      if(userProfileSaveBtn) userProfileSaveBtn.style.display = secondaryRequired ? "inline-flex" : (userProfileRequired ? "none" : "inline-flex");
+      if(userProfileNextBtn) userProfileNextBtn.style.display = secondaryRequired ? "none" : (userProfileRequired ? "inline-flex" : "none");
       userProfileOverlay.classList.add("show");
     }
 
@@ -13771,7 +13803,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
       userProfileRequired = false;
       if(userProfileOverlay) userProfileOverlay.classList.remove("show");
       if(wasRequired){
-        openStoresConfig({ required:true });
+        if(isSecondaryUser()){
+          stores = loadStores();
+          updateStoresUI();
+        }else{
+          openStoresConfig({ required:true });
+        }
       }
     }
 
@@ -13783,6 +13820,9 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }
       currentUser = null;
       stopActivityTracking();
+      stopUsersAutoRefresh();
+      storageCache = {};
+      storageReady = false;
       updateAdminAccessUI();
       if(userProfileOverlay) userProfileOverlay.classList.remove("show");
       showAuthOverlay("login");
@@ -13802,7 +13842,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         updateAdminAccessUI();
         if(loginPassword) loginPassword.value = "";
         hideAuthOverlay();
-        startActivityTracking();
+        await refreshAppDataForUser();
         if(authResolver){
           authResolver();
           authResolver = null;
@@ -13994,8 +14034,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(!tData.value) tData.value = today;
     }
 
-    async function bootstrapApp(){
-      await ensureAuthenticated();
+    async function refreshAppDataForUser(){
       await bootstrapStorage();
 
       items = loadBase();
@@ -14015,7 +14054,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
 
       initTheme();
       initSideMenu();
-      // mant\u00e9m o calend\u00e1rio consistente na inicializa\u00e7\u00e3o
+      // mantem o calendario consistente na inicializacao
       syncCalendarOpenFlags();
       updateModeLabel();
       updateQCount();
@@ -14042,18 +14081,22 @@ navAtalhosBtn.addEventListener("click", ()=>{
       startActivityTracking();
       startUsersAutoRefresh();
 
-        if(!isUserProfileComplete(userProfile)){
-          openUserProfileOverlay({ required:true });
-          return;
-        }
-        if(!storageGet(STORAGE_KEY_STORES)){
-          openStoresConfig({ required:true });
-          return;
-        }
+      if(!isUserProfileComplete(userProfile)){
+        openUserProfileOverlay({ required:true });
+        return;
       }
+      if(!storageGet(STORAGE_KEY_STORES)){
+        openStoresConfig({ required:true });
+        return;
+      }
+    }
+
+async function bootstrapApp(){
+      await ensureAuthenticated();
+      await refreshAppDataForUser();
+    }
 
     bootstrapApp();
-
 
 
 

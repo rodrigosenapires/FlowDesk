@@ -55,6 +55,12 @@ $filename = $base . "-" . $stamp . "-" . $rand . "." . $ext;
 
 $dir = defined("APP_IMAGES_DIR") ? APP_IMAGES_DIR : (__DIR__ . "/../../imagens");
 $dir = rtrim($dir, "/\\");
+$folder = trim((string)($_POST["folder"] ?? ""));
+$allowed_folders = ["app", "respostas"];
+if (!in_array($folder, $allowed_folders, true)) {
+  $folder = "respostas";
+}
+$dir = $dir . DIRECTORY_SEPARATOR . $folder;
 if (!is_dir($dir)) {
   if (!mkdir($dir, 0755, true)) {
     respond(["ok" => false, "error" => "mkdir_failed"], 500);
@@ -66,4 +72,5 @@ if (!move_uploaded_file($tmp, $dest)) {
   respond(["ok" => false, "error" => "move_failed"], 500);
 }
 
-respond(["ok" => true, "filename" => $filename]);
+$publicName = $folder . "/" . $filename;
+respond(["ok" => true, "filename" => $publicName]);

@@ -25,7 +25,7 @@
   <div class="authOverlay" id="authOverlay" aria-hidden="true">
       <div class="authShell authShellFull">
         <div class="authHero">
-          <img class="authHeroImg" src="imagens/inicio.jfif" alt="FlowDesk">
+          <img class="authHeroImg" src="../imagens/app/inicio.jfif" alt="FlowDesk">
         </div>
         <div class="authPanel">
           <div class="authPanelInner">
@@ -41,7 +41,15 @@
               <label class="authLabel" for="loginUsername">Nome do usu&aacute;rio</label>
               <input class="authInput" id="loginUsername" type="text" autocomplete="username" placeholder="Digite seu usu&aacute;rio" />
               <label class="authLabel" for="loginPassword">Senha</label>
-              <input class="authInput" id="loginPassword" type="password" autocomplete="current-password" placeholder="Digite sua senha" />
+              <div class="authInputWrap">
+                <input class="authInput" id="loginPassword" type="password" autocomplete="current-password" placeholder="Digite sua senha" />
+                <button class="authToggleBtn" type="button" id="loginPasswordToggle" aria-label="Mostrar senha" title="Mostrar senha">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
               <a class="authLink" id="forgotPasswordLink" href="javascript:void(0)" style="color:#6ecbff !important; text-decoration: underline !important;">Esqueci minha senha</a>
               <div class="authLoginRow">
                 <button class="btn small primary authSubmit" type="submit">Entrar</button>
@@ -55,7 +63,7 @@
 
             <div class="authOr" id="authOr"><span>ou</span></div>
             <button class="authGoogleBtn" id="authGoogleBtn" type="button">
-              <img src="imagens/google.png" alt="Google">
+              <img src="../imagens/app/google.png" alt="Google">
               <span>Acessar com Google</span>
             </button>
 

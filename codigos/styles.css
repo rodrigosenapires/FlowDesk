@@ -230,6 +230,25 @@
       border-radius:14px;
       outline:none;
     }
+    .authInputWrap{position:relative}
+    .authInputWrap .authInput{padding-right:44px}
+    .authToggleBtn{
+      position:absolute;
+      right:12px;
+      top:50%;
+      transform:translateY(-50%);
+      border:0;
+      background:transparent;
+      color:#1c2a4a;
+      padding:4px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      z-index:2;
+    }
+    .authToggleBtn:hover{color:#0b1a3a}
+    .authToggleBtn svg{width:18px;height:18px; display:block}
     .authInput:focus{
       border-color: color-mix(in srgb, var(--brand) 70%, var(--line));
       box-shadow:0 0 0 2px color-mix(in srgb, var(--brand) 35%, transparent);
