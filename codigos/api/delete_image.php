@@ -15,13 +15,12 @@ if ($raw === "" || $raw === "." || $raw === "..") {
   respond(["ok" => false, "error" => "invalid_filename"], 400);
 }
 
-$allowed_folders = ["app", "respostas"];
+$allowed_folders = ["app", "app/geral", "respostas"];
 $candidates = [];
 if (strpos($raw, "/") !== false) {
   $parts = array_values(array_filter(explode("/", $raw), "strlen"));
-  $folder = $parts[0] ?? "";
-  $name = $parts[1] ?? "";
-  $name = basename($name);
+  $name = basename($parts[count($parts) - 1] ?? "");
+  $folder = implode("/", array_slice($parts, 0, -1));
   if ($folder === "" || $name === "" || !in_array($folder, $allowed_folders, true)) {
     respond(["ok" => false, "error" => "invalid_filename"], 400);
   }

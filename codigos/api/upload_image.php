@@ -56,7 +56,7 @@ $filename = $base . "-" . $stamp . "-" . $rand . "." . $ext;
 $dir = defined("APP_IMAGES_DIR") ? APP_IMAGES_DIR : (__DIR__ . "/../../imagens");
 $dir = rtrim($dir, "/\\");
 $folder = trim((string)($_POST["folder"] ?? ""));
-$allowed_folders = ["app", "respostas"];
+$allowed_folders = ["app", "app/geral", "respostas"];
 if (!in_array($folder, $allowed_folders, true)) {
   $folder = "respostas";
 }

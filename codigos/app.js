@@ -129,16 +129,19 @@
       if(!raw) return "";
       const clean = raw.replace(/\\/g, "/");
       const parts = clean.split("/").filter(Boolean);
-      let folder = defaultFolder || "";
-      let name = raw;
+      let folderParts = [];
+      let nameParts = [];
       if(parts.length >= 2){
-        folder = parts[0];
-        name = parts.slice(1).join("/");
+        folderParts = parts.slice(0, -1);
+        nameParts = [parts[parts.length - 1]];
       }else{
-        name = parts[0] || raw;
+        nameParts = [parts[0] || raw];
+        if(defaultFolder){
+          folderParts = defaultFolder.split("/").filter(Boolean);
+        }
       }
-      const folderSafe = folder ? `${encodeURIComponent(folder)}/` : "";
-      const nameSafe = name.split("/").map(p => encodeURIComponent(p)).join("/");
+      const folderSafe = folderParts.length ? folderParts.map(p => encodeURIComponent(p)).join("/") + "/" : "";
+      const nameSafe = nameParts.map(p => encodeURIComponent(p)).join("/");
       return `../imagens/${folderSafe}${nameSafe}`;
     }
 
@@ -148,7 +151,7 @@
       fallbackEl.textContent = initials;
       const avatarFile = (avatar || "").toString().trim();
       if(avatarFile){
-        imgEl.src = buildImagePath(avatarFile, "app");
+        imgEl.src = buildImagePath(avatarFile, "app/geral");
         imgEl.style.display = "block";
         fallbackEl.style.display = "none";
       }else{
@@ -2868,8 +2871,8 @@ function renderPopupImages(){
     const PHASE_STATE_ACTIVE = "Ativa";
     const PHASE_STATE_DONE = "Conclu\u00edda";
     const PHASE_STATUS_OPTIONS = [
-      { group: "Andamento", options: [
-        PHASE_STATE_ACTIVE,
+      { group: "Extras", options: [
+        "Personalizacao",
         PHASE_STATE_DONE
       ]},
       { group: "Trocas e Devolu\u00e7\u00f5es", options: [
@@ -2903,7 +2906,7 @@ function renderPopupImages(){
       { name:"Regatas", file:"regatas.png" },
     ];
 
-    const PRODUCT_TABLE_BASE = "../Extras/tabelas de medida/";
+    const PRODUCT_TABLE_BASE = "../imagens/app/tabelas de medida/";
     const PRODUCT_SPECS_INFO = [
       "Tamanhos do P ao XGG",
       "Veja o melhor tamanho para voc\u00ea no nosso provador virtual",
@@ -5877,8 +5880,8 @@ function renderPopupImages(){
 
         navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
-        if(viewTitleText) viewTitleText.textContent = "Tarefas Di\u00e1rias";
-        if(goToSearchBtn){
+        if(viewTitleText) viewTitleText.textContent = (tasksTypeFilter === "extra" ? "Tarefas extras" : "Tarefas Diarias");
+if(goToSearchBtn){
           goToSearchBtn.classList.remove("isSearchView");
           goToSearchBtn.setAttribute("title", "Ir para o buscador");
           goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
@@ -13454,7 +13457,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         const file = userProfileAvatarFile.files && userProfileAvatarFile.files[0];
         if(!file) return;
         try{
-          const filename = await apiUploadImage(file, "app");
+          const filename = await apiUploadImage(file, "app/geral");
           userProfileAvatarPending = filename;
           const name = (userProfileName?.value || "").trim();
           setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, name, filename);
