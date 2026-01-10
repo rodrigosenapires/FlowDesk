@@ -103,6 +103,7 @@
     #goToSearchBtn.isSearchView,
     #goToTasksBtn.isTasksView,
     #goToTasksExtraBtn.isTasksView,
+    #goToPersonalizationsBtn.isPersonalizationsView,
     #goToDoneTasksBtn.isDoneView,
     #goToUsersBtn.isUsersView{
       background: color-mix(in srgb, var(--brand) 16%, transparent);
@@ -430,6 +431,8 @@
       max-width:1100px;
       margin:0 auto;
       display:flex;
+      gap:10px;
+      align-items:center;
       justify-content:flex-end;
     }
     .userAvatar,
@@ -990,6 +993,9 @@
     }
 
     .formGrid{display:flex;flex-direction:column;gap:10px}
+    #phaseEditOverlay .formGrid{gap:0}
+    #phaseEditOverlay .formGrid > div + div{margin-top:16px}
+    #phaseEditOverlay .formGrid .label{margin-bottom:8px}
     .specsAddRow{
       display:flex;
       gap:8px;
@@ -2590,9 +2596,42 @@
     .userActivitySummary{
       display:grid;
       gap:8px;
-      margin-bottom:14px;
+      margin-bottom:18px;
       color:#cfe1ff;
       font-size:13px;
+    }
+    .userActivityHeaderRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      width:100%;
+    }
+    .activitySummaryGrid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap:12px;
+    }
+    .activitySummaryItem{
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(10,18,32,.65);
+      padding:10px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .activitySummaryLabel{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      color:#95a8c2;
+      font-weight:700;
+    }
+    .activitySummaryValue{
+      font-size:13px;
+      font-weight:700;
+      color:#e6f1ff;
     }
     .userActivityList{
       display:flex;
@@ -2619,13 +2658,41 @@
     .activityItem{
       display:flex;
       flex-direction:column;
-      gap:8px;
-      padding:10px 0;
-      border-top:1px solid rgba(255,255,255,.06);
+      gap:10px;
+      padding:12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(8,16,30,.6);
     }
-    .activityItem:first-child{
-      border-top:0;
-      padding-top:0;
+    .activityItemHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .activityDuration{
+      font-size:12px;
+      font-weight:700;
+      color:#cfe1ff;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(255,255,255,.05);
+      white-space:nowrap;
+    }
+    .activityMetaGrid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap:8px 14px;
+    }
+    .activityMetaItem{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+      font-size:13px;
+      color:#dbe7ff;
     }
     .activityRow{
       display:flex;
@@ -2658,7 +2725,7 @@
       height:30px;
       border-radius:8px;
       border:0;
-      background: color-mix(in srgb, var(--bg) 70%, transparent);
+      background:none;
       display:grid;
       place-items:center;
       cursor:pointer;
@@ -2666,7 +2733,12 @@
       padding:0;
     }
     .copyIconBtn:hover{
-      background: color-mix(in srgb, var(--brand) 16%, transparent);
+      background:none;
+      color:var(--brand);
+    }
+    .copyIconBtn:disabled{
+      opacity:0.45;
+      cursor:not-allowed;
     }
     .copyIconBtn svg{
       width:16px;
@@ -3451,6 +3523,16 @@
       border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
       color:var(--text);
     }
+    .donePillExtra{
+      background: color-mix(in srgb, #ff922b 25%, transparent);
+      border-color: color-mix(in srgb, #ff922b 60%, transparent);
+      color:#ffd8a8;
+    }
+    .donePillNormal{
+      background: color-mix(in srgb, #0f8f5f 22%, transparent);
+      border-color: color-mix(in srgb, #0f8f5f 60%, transparent);
+      color:#d3f9d8;
+    }
     .doneTaskMeta{
       margin-top:4px;
       font-size:12px;
@@ -3922,6 +4004,10 @@
       color:#ff922b;
       border-color: color-mix(in srgb, #ff922b 35%, var(--line));
     }
+    .calItem.extra.closed{
+      color:#e03131;
+      border-color: color-mix(in srgb, #e03131 35%, var(--line));
+    }
 
     .calSide{
       border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
@@ -3958,6 +4044,9 @@
       background: color-mix(in srgb, var(--card) 85%, transparent);
       border-radius:14px;
       padding:10px;
+    }
+    .calDetailRow.calSimpleRow{
+      align-items:flex-start;
     }
     .calDetailRow.calOverdue{
       border-color: color-mix(in srgb, var(--danger) 70%, var(--line));
@@ -4419,8 +4508,26 @@
     .calDetailRow .dot.open{ background:#0f8f5f; }
     .calDetailRow .dot.closed{ background:#e03131; }
     .calDetailRow .dot.extra{ background:#ff922b; }
+    .calDetailRow.isClosed .dot.extra{ background:#e03131; }
+    .calDetailRow.isClosed .extraMeta,
+    .calDetailRow.isClosed .extraMeta .extraValue{
+      color:#e03131;
+    }
     .calDetailRow .dot.overdue{ background:#e03131; }
+    .calDetailRow.calSimpleRow .calSimpleActions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      align-items:flex-start;
+    }
     .calDetailRow .txt{ flex:1; min-width:220px; }
+    .calDetailRow.calSimpleRow .txt{
+      min-width:0;
+    }
+    .calDetailRow.calSimpleRow .txt .title{
+      margin-top:0;
+    }
     .calDetailRow .txt .title{ font-weight:950; margin-top:8px; font-size:13px; }
     .calDetailRow .txt .extraMeta{ color:#ff922b; }
     .calDetailRow .txt .extraMeta .extraValue{
@@ -4435,6 +4542,9 @@
       display:flex;
       flex-direction:column;
       gap:8px;
+    }
+    .calDetailRow.calSimpleRow .txt .meta{
+      margin:8px 0 0 0;
     }
     .calDetailRow .txt .meta > div{font-weight:600}
     .calDetailRow .txt .meta > div > span{font-weight:800}
@@ -4457,6 +4567,224 @@ input[type="date"]::-webkit-calendar-picker-indicator{
   filter: invert(1);
   opacity: 0.9;
   cursor: pointer;
+}
+
+/* Fase - tamanho personalizado */
+#phaseEditSizeFromCustom,
+#phaseEditSizeToCustom{
+  margin-top:8px;
+  width:100%;
+}
+#phaseEditSizeWrap .label{
+  margin:16px 0 8px;
+}
+
+/* Personalizacoes */
+.userNotifyBtn{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:38px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--text);
+  cursor:pointer;
+}
+.userNotifyBtn .iconStroke{
+  width:18px;
+  height:18px;
+}
+.notifyBadge{
+  position:absolute;
+  top:-6px;
+  right:-6px;
+  min-width:18px;
+  height:18px;
+  padding:0 4px;
+  border-radius:999px;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:#ff5c7a;
+  color:#0b1220;
+  font-size:11px;
+  font-weight:700;
+}
+
+.personalizationsList{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
+.personalizationsGrid{
+  justify-items:start;
+}
+.personalizationsGrid{
+  margin-top:32px;
+}
+.personalizationsCard{
+  width:100%;
+}
+.personalizationCard{
+  border:1px solid var(--border);
+  background:var(--card);
+  border-radius:16px;
+  padding:14px 16px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.personalizationDivider{
+  height:1px;
+  background:color-mix(in srgb, var(--line) 60%, transparent);
+  margin:8px 0;
+}
+.personalizationCard.isNew{
+  box-shadow:none;
+}
+.personalizationHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.personalizationTitle{
+  font-weight:700;
+  font-size:15px;
+}
+.personalizationBadge{
+  background:#7c8cff;
+  color:#0b1220;
+  border-radius:999px;
+  padding:2px 8px;
+  font-size:11px;
+  font-weight:700;
+}
+.personalizationMeta{
+  color:var(--muted);
+  font-size:13px;
+}
+.personalizationActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.personalizationModal .mb{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  max-height:calc(90vh - 120px);
+  overflow:auto;
+}
+.personalizationLayout{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) minmax(0, 320px);
+  gap:16px;
+  align-items:start;
+}
+.personalizationInfo{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.personalizationPreview{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px 12px 0;
+  background:#dfe4ec;
+  display:flex;
+  justify-content:center;
+  align-items:flex-end;
+  min-height:220px;
+}
+.personalizationPreview img{
+  max-width:100%;
+  height:auto;
+  border-radius:10px;
+  max-height:320px;
+  display:block;
+}
+.personalizationDetails{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.personalizationDetailRow{
+  display:grid;
+  grid-template-columns:90px minmax(0, 1fr) auto;
+  gap:8px;
+  align-items:center;
+  font-size:13px;
+  padding:6px 0;
+  border-bottom:1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+.personalizationDetailRow:last-child{
+  border-bottom:0;
+}
+.personalizationDetailRow .detailLabel{
+  color:var(--muted);
+}
+.personalizationDetailRow .detailValue{
+  word-break:break-word;
+}
+.personalizationDetailRow .copyIconBtn{
+  width:28px;
+  height:28px;
+}
+.personalizationPhone{
+  background:none;
+  border:none;
+  color:#6ecbff;
+  text-decoration:underline;
+  cursor:pointer;
+  padding:0;
+}
+.personalizationDownloads{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-start;
+}
+.personalizationActionsRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:center;
+}
+.personalizationActionsDivider{
+  height:1px;
+  background:color-mix(in srgb, var(--line) 65%, transparent);
+  opacity:0.6;
+}
+.btn.iconOnly{
+  padding:6px 8px;
+  width:34px;
+  height:34px;
+}
+.btn.iconOnly .iconStroke{
+  width:16px;
+  height:16px;
+}
+.btn.iconOnly.iconBare{
+  background:none;
+  border:0;
+  box-shadow:none;
+}
+.btn.iconOnly.iconBare:hover{
+  background:none;
+  color:var(--brand);
+}
+@media (max-width: 860px){
+  .personalizationLayout{
+    grid-template-columns:1fr;
+  }
+  .personalizationPreview img{
+    max-height:260px;
+  }
 }
 body.light input[type="date"]::-webkit-calendar-picker-indicator{
   filter: invert(0);

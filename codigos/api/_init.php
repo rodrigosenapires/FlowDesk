@@ -566,6 +566,110 @@ function send_password_reset_email(string $email, string $token): bool {
   return $ok;
 }
 
+function send_personalizacao_notification(string $email, array $payload): bool {
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    return false;
+  }
+  $storeName = (string)($payload["store_name"] ?? "");
+  $customerName = (string)($payload["customer_name"] ?? "");
+  $sentAt = (string)($payload["sent_at"] ?? "");
+  $link = (string)($payload["link"] ?? "");
+
+  $hostRaw = $_SERVER["HTTP_HOST"] ?? "localhost";
+  $host = preg_replace("/:\\d+$/", "", $hostRaw);
+  $from = defined("APP_MAIL_FROM") && APP_MAIL_FROM ? APP_MAIL_FROM : ("no-reply@" . $host);
+  $fromName = defined("APP_MAIL_FROM_NAME") && APP_MAIL_FROM_NAME ? APP_MAIL_FROM_NAME : "FlowDesk";
+  $subjectRaw = "Nova personalizacao recebida";
+  if ($storeName !== "") {
+    $subjectRaw .= " - " . $storeName;
+  }
+  $subject = encode_mail_header($subjectRaw);
+
+  $plain = "Ola!\n\nChegou uma nova personalizacao no FlowDesk.\n";
+  if ($storeName !== "") $plain .= "Loja: " . $storeName . "\n";
+  if ($customerName !== "") $plain .= "Cliente: " . $customerName . "\n";
+  if ($sentAt !== "") $plain .= "Enviado em: " . $sentAt . "\n";
+  if ($link !== "") $plain .= "\nAbrir personalizacoes: " . $link . "\n";
+  $plain .= "\nEquipe FlowDesk";
+
+  $html = '<!doctype html><html lang="pt-br"><head><meta charset="utf-8" />'
+    . '<meta name="viewport" content="width=device-width, initial-scale=1" />'
+    . '<title>Nova personalizacao</title></head>'
+    . '<body style="margin:0;padding:0;background:#0b1220;color:#e9eef7;font-family:Arial,sans-serif;">'
+    . '<div style="max-width:560px;margin:0 auto;padding:32px 20px;">'
+    . '<div style="background:#0f1b2e;border:1px solid #20324f;border-radius:16px;padding:28px 24px;">'
+    . '<h2 style="margin:0 0 10px;font-size:20px;">Nova personalizacao recebida</h2>'
+    . '<p style="margin:0 0 16px;line-height:1.5;color:#c5d2e8;">Chegou uma nova personalizacao no FlowDesk.</p>';
+  if ($storeName !== "") {
+    $html .= '<p style="margin:0 0 8px;line-height:1.5;color:#c5d2e8;"><b>Loja:</b> ' . htmlspecialchars($storeName, ENT_QUOTES, "UTF-8") . '</p>';
+  }
+  if ($customerName !== "") {
+    $html .= '<p style="margin:0 0 8px;line-height:1.5;color:#c5d2e8;"><b>Cliente:</b> ' . htmlspecialchars($customerName, ENT_QUOTES, "UTF-8") . '</p>';
+  }
+  if ($sentAt !== "") {
+    $html .= '<p style="margin:0 0 12px;line-height:1.5;color:#c5d2e8;"><b>Enviado em:</b> ' . htmlspecialchars($sentAt, ENT_QUOTES, "UTF-8") . '</p>';
+  }
+  if ($link !== "") {
+    $html .= '<div style="text-align:center;margin:22px 0;">'
+      . '<a href="' . htmlspecialchars($link, ENT_QUOTES, "UTF-8") . '" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#7c8cff;color:#0b1220;text-decoration:none;font-weight:bold;">Abrir personalizacoes</a>'
+      . '</div>';
+  }
+  $html .= '</div>'
+    . '<div style="text-align:center;color:#7b8aa6;font-size:12px;margin-top:12px;">Equipe FlowDesk</div>'
+    . '</div></body></html>';
+
+  $boundary = "flowdesk_" . bin2hex(random_bytes(12));
+  $messageId = "<" . bin2hex(random_bytes(16)) . "@" . $host . ">";
+  $explicitFrom = (defined("APP_MAIL_FROM") && APP_MAIL_FROM);
+  $headers = [
+    "From: " . encode_mail_header($fromName) . " <" . $from . ">",
+    "Reply-To: " . $from,
+    "MIME-Version: 1.0",
+    "Date: " . gmdate("D, d M Y H:i:s") . " +0000",
+    "Message-ID: " . $messageId,
+    "X-Mailer: PHP/" . PHP_VERSION,
+    "Content-Type: multipart/alternative; boundary=\"" . $boundary . "\"",
+  ];
+  $body = "--" . $boundary . "\r\n"
+    . "Content-Type: text/plain; charset=UTF-8\r\n"
+    . "Content-Transfer-Encoding: 8bit\r\n\r\n"
+    . $plain . "\r\n\r\n"
+    . "--" . $boundary . "\r\n"
+    . "Content-Type: text/html; charset=UTF-8\r\n"
+    . "Content-Transfer-Encoding: 8bit\r\n\r\n"
+    . $html . "\r\n\r\n"
+    . "--" . $boundary . "--";
+
+  $params = "";
+  if ($explicitFrom && $from && str_contains($from, "@")) {
+    $params = "-f" . $from;
+  }
+  $headersStr = implode("\r\n", $headers);
+  $smtpData = "To: " . $email . "\r\n"
+    . "Subject: " . $subject . "\r\n"
+    . $headersStr . "\r\n\r\n"
+    . $body;
+  if (defined("APP_SMTP_HOST") && APP_SMTP_HOST !== "" && str_contains($from, "@")) {
+    return send_via_smtp($from, $email, $smtpData);
+  }
+  $ok = $params
+    ? mail($email, $subject, $body, $headersStr, $params)
+    : mail($email, $subject, $body, $headersStr);
+  if (!$ok && $plain) {
+    $fallbackHeaders = [
+      "From: " . encode_mail_header($fromName) . " <" . $from . ">",
+      "Reply-To: " . $from,
+      "Message-ID: " . $messageId,
+      "X-Mailer: PHP/" . PHP_VERSION,
+      "Content-Type: text/plain; charset=UTF-8",
+    ];
+    return $params
+      ? mail($email, $subject, $plain, implode("\r\n", $fallbackHeaders), $params)
+      : mail($email, $subject, $plain, implode("\r\n", $fallbackHeaders));
+  }
+  return $ok;
+}
+
 function current_user_id(): ?int {
   if (!isset($_SESSION["user_id"])) {
     return null;

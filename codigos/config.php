@@ -33,5 +33,5 @@ define("APP_SMTP_PASS", "lcmbpulmmtbiegfk");
 define("APP_SMTP_SECURE", "tls"); // tls, ssl, or none
 
 // Upload settings.
-define("APP_PUBLIC_ROOT", realpath(__DIR__) ?: __DIR__);
+define("APP_PUBLIC_ROOT", realpath(__DIR__ . "/..") ?: (__DIR__ . "/.."));
 define("APP_IMAGES_DIR", APP_PUBLIC_ROOT . "/imagens");

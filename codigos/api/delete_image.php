@@ -15,7 +15,7 @@ if ($raw === "" || $raw === "." || $raw === "..") {
   respond(["ok" => false, "error" => "invalid_filename"], 400);
 }
 
-$allowed_folders = ["app", "app/geral", "respostas"];
+$allowed_folders = ["app", "app/geral", "app/personalizacoes", "respostas"];
 $candidates = [];
 if (strpos($raw, "/") !== false) {
   $parts = array_values(array_filter(explode("/", $raw), "strlen"));

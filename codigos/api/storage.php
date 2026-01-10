@@ -24,6 +24,7 @@ $shared_keys = [
   "size_tables_custom_v1",
   "size_tables_overrides_v1",
   "products_custom_v1",
+  "personalizacoes_v1",
   "quick_links_transportadoras_seeded",
   "tarefasDiarias_v1",
   "tarefasDiarias_concluidas_v1",

@@ -16,11 +16,10 @@
     const MONTHLY_ORDINAL_PREFIX = "Mensal nos(as) ";
     const WEEKDAYS_REPEAT_LABEL = "Todos os dias da semana (segunda a sexta-feira)";
     const ANNUAL_REPEAT_PREFIX = "Anual em ";
-
     // >>> TAREFAS
     const STORAGE_KEY_TASKS = "tarefasDiarias_v1";
     const STORAGE_KEY_TASKS_DONE = "tarefasDiarias_concluidas_v1";
-
+    const STORAGE_KEY_PERSONALIZACOES = "personalizacoes_v1";
     // >>> CALEND\u00c1RIO (hist\u00f3rico dos assuntos por Pr\u00f3xima Etapa)
     // Mant\u00e9m registros mesmo ap\u00f3s remover chamados (para aparecer vermelho no calend\u00e1rio)
     const STORAGE_KEY_CALENDAR = "calendarHistory_v1";
@@ -28,11 +27,9 @@
     const STORAGE_KEY_USER_PROFILE = "user_profile_v1";
     const STORAGE_KEY_VIEW = "view_state_v1";
     const ADMIN_USERNAME = "Rodrigosp";
-
     const PASSWORD = "123"; // usado para editar/excluir PERGUNTAS e importar
     const FILE_NAME_PREFIX = "base-atendimento";
     const BACKUP_VERSION = 10;
-
     const API_BASE = (() => {
       const url = new URL(window.location.href);
       let path = url.pathname || "/";
@@ -65,17 +62,15 @@
     let usersAutoRefreshTimer = null;
     let usersRefreshStatusTimer = null;
     let lastActivityPing = 0;
-
+    let personalizationsRefreshTimer = null;
     function storageGet(key){
       return Object.prototype.hasOwnProperty.call(storageCache, key) ? storageCache[key] : null;
     }
-
     function storageSet(key, value){
       const nextValue = (value ?? "").toString();
       storageCache[key] = nextValue;
       void apiStorageSet(key, nextValue);
     }
-
     function storageSetMany(items){
       const payload = {};
       Object.keys(items || {}).forEach((key) => {
@@ -87,7 +82,6 @@
         void apiStorageSetMany(payload);
       }
     }
-
     function normalizeUserProfile(profile){
       const data = profile && typeof profile === "object" ? profile : {};
       return {
@@ -98,24 +92,20 @@
         avatar: (data.avatar || "").toString().trim()
       };
     }
-
     function loadUserProfile(){
       const raw = storageGet(STORAGE_KEY_USER_PROFILE);
       const parsed = safeJsonParse(raw);
       return normalizeUserProfile(parsed);
     }
-
     function saveUserProfile(profile){
       userProfile = normalizeUserProfile(profile);
       storageSet(STORAGE_KEY_USER_PROFILE, JSON.stringify(userProfile));
       updateUserProfileUI();
     }
-
     function isUserProfileComplete(profile){
       const data = normalizeUserProfile(profile);
       return Boolean(data.name) && Boolean(data.doc) && Boolean(data.whatsapp) && Boolean(data.email);
     }
-
     function getInitials(name){
       const parts = (name || "").trim().split(/\s+/).filter(Boolean);
       if(!parts.length) return "U";
@@ -123,7 +113,6 @@
       const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : "";
       return (first + last).toUpperCase() || "U";
     }
-
     function buildImagePath(filename, defaultFolder){
       const raw = (filename || "").toString().trim();
       if(!raw) return "";
@@ -144,7 +133,19 @@
       const nameSafe = nameParts.map(p => encodeURIComponent(p)).join("/");
       return `../imagens/${folderSafe}${nameSafe}`;
     }
-
+    function getAppBasePath(){
+      const path = window.location.pathname || "";
+      const idx = path.indexOf("/codigos/");
+      if(idx >= 0) return path.slice(0, idx);
+      return "";
+    }
+    function buildPersonalizacaoLink(personalizacaoId){
+      const id = (personalizacaoId || "").toString().trim();
+      if(!id) return "";
+      const base = getAppBasePath();
+      const root = `${window.location.origin}${base}`;
+      return `${root}/personalizacao/?loja=${encodeURIComponent(id)}`;
+    }
     function setAvatarElements(imgEl, fallbackEl, name, avatar){
       if(!imgEl || !fallbackEl) return;
       const initials = getInitials(name);
@@ -160,14 +161,12 @@
         fallbackEl.style.display = "block";
       }
     }
-
     function updateUserProfileUI(){
       const data = normalizeUserProfile(userProfile);
       if(userNameLabel) userNameLabel.textContent = data.name || "Minha conta";
       setAvatarElements(userAvatarImg, userAvatarFallback, data.name, data.avatar);
       setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, data.name, data.avatar);
     }
-
     function updateAdminAccessUI(){
       const canUsers = canAccessUsersView();
       if(goToUsersBtn) goToUsersBtn.style.display = canUsers ? "" : "none";
@@ -175,7 +174,6 @@
       if(addUserBtn) addUserBtn.style.display = (isAdminUser() || isPrincipalUser()) ? "" : "none";
       if(openRegisterBtn) openRegisterBtn.style.display = "none";
     }
-
     async function apiRequest(path, body, options){
       const response = await fetch(path, {
         method: "POST",
@@ -191,13 +189,11 @@
       }
       return data;
     }
-
     async function apiSession(){
       const response = await fetch(`${API_BASE}/session.php`, { credentials: "include" });
       const data = await response.json().catch(() => ({}));
       return data || {};
     }
-
     async function apiAdminUsers(){
       const response = await fetch(`${API_BASE}/admin_users.php`, { credentials: "include" });
       const data = await response.json().catch(() => ({}));
@@ -207,7 +203,6 @@
       }
       return data;
     }
-
     async function apiUserActivity(userId){
       const id = String(userId || "").trim();
       const response = await fetch(`${API_BASE}/user_activity.php?user_id=${encodeURIComponent(id)}`, { credentials: "include" });
@@ -218,29 +213,23 @@
       }
       return data;
     }
-
     async function apiAdminUserAction(action, userId){
       return apiRequest(`${API_BASE}/admin_user_action.php`, { action, user_id: userId });
     }
-
     async function apiSetupStatus(){
       const response = await fetch(`${API_BASE}/setup.php`, { credentials: "include" });
       const data = await response.json().catch(() => ({}));
       return data || {};
     }
-
     async function apiStorageGetAll(){
       return apiRequest(`${API_BASE}/storage.php`, { action: "getAll" });
     }
-
     async function apiStorageSet(key, value){
       return apiRequest(`${API_BASE}/storage.php`, { action: "set", key, value });
     }
-
     async function apiStorageSetMany(items){
       return apiRequest(`${API_BASE}/storage.php`, { action: "setMany", items });
     }
-
     async function apiUploadImage(file, folder){
       const formData = new FormData();
       formData.append("file", file);
@@ -271,13 +260,11 @@
       }
       return data;
     }
-
     const DEFAULT_DIARIO_LOGO = "https://acdn-us.mitiendanube.com/stores/003/800/267/themes/common/logo-1017420669-1696607286-3604afa78036bc99d42c4a45a62c9aac1696607286-480-0.webp";
     const DEFAULT_SHOP80_LOGO = "https://acdn-us.mitiendanube.com/stores/006/053/724/themes/common/logo-881782978-1743865292-d422bc1fcaed5234816adb11a5e1931b1743865292-480-0.webp";
-
     const DRAWER_PAGE_SIZE = 3;
-
     const STATUS_OPTIONS = [
+      { value:"Personaliza\u00e7\u00e3o", colorA:"#7c8cff", colorB:"#38d9a9" },
       { value:"Tr\u00e2nsito - F\u00e1brica para o Cliente", colorA:"#7c8cff", colorB:"#38d9a9" },
       { value:"Tr\u00e2nsito - Cliente para a F\u00e1brica", colorA:"#ff9f43", colorB:"#ffd43b" },
       { value:"Tr\u00e2nsito - Cliente para a Rio das Ostras", colorA:"#ff5c7a", colorB:"#ffd43b" },
@@ -285,14 +272,12 @@
       { value:"Aguardando a F\u00e1brica", colorA:"#12b886", colorB:"#38d9a9" },
       { value:"Aguardando prazo do Chamado e Reenvio - Defeito de fabrica\u00e7\u00e3o.", colorA:"#845ef7", colorB:"#ff5c7a" },
     ];
-
     const FONTE_OPTIONS = [
       "F\u00e1brica King - Di\u00e1rio Nerdify",
       "F\u00e1brica King - Shop 80",
       "Nuvemshop - Di\u00e1rio Nerdify",
       "Nuvemshop - Shop 80",
     ];
-
     const QUICK_LINK_KEYS = ["sakChat", "metaInbox", "emailMenu", "storeLinks", "productsExtra", "transportadorasExtra"];
     const DEFAULT_SEARCH_TAGS = [
       "envio",
@@ -326,14 +311,15 @@
         { id:"novo", label:"Novo Pedido", url:"", fixed:true }
       ]
     };
-
     const DEFAULT_STORES = [
       {
         name: "Di\u00e1rio Nerdify",
+          personalizacaoId: "diario-nerdify",
         logoUrl: DEFAULT_DIARIO_LOGO,
         siteUrl: "https://diarionerdify.com.br/",
         stampsUrl: "https://drive.google.com/drive/folders/10EKdHW5QXZwCgOWdbXCwkQH0llZnhObg",
         supportWhatsapp: "https://api.whatsapp.com/send?phone=551150395895",
+        whatsappPhone: "",
         instagramUrl: "",
         facebookUrl: "",
         tiktokUrl: "",
@@ -349,10 +335,12 @@
       },
       {
         name: "Shop 80",
+          personalizacaoId: "shop-80",
         logoUrl: DEFAULT_SHOP80_LOGO,
         siteUrl: "https://shop80.com.br/",
         stampsUrl: "https://drive.google.com/drive/folders/1e5GAl5tYRRL6xKmp4SHSPxGwmUuf9N_x",
         supportWhatsapp: "https://api.whatsapp.com/send?phone=551140207216",
+        whatsappPhone: "",
         instagramUrl: "",
         facebookUrl: "",
         tiktokUrl: "",
@@ -367,7 +355,6 @@
         emailOpenUrl2: "https://mail.zoho.com/zm/#mail/folder/inbox"
       }
     ];
-
     function normalizeQuickLinks(obj){
       const out = {};
       for(const key of QUICK_LINK_KEYS){
@@ -389,20 +376,17 @@
       }
       return out;
     }
-
     function loadQuickLinks(){
       const raw = storageGet(STORAGE_KEY_QUICK_LINKS);
       const parsed = safeJsonParse(raw);
       if(parsed && typeof parsed === "object") return normalizeQuickLinks(parsed);
       return normalizeQuickLinks({});
     }
-
     function saveQuickLinks(next){
       quickLinks = normalizeQuickLinks(next);
       storageSet(STORAGE_KEY_QUICK_LINKS, JSON.stringify(quickLinks));
       renderExtraMenuLinks();
     }
-
     function normalizeSearchTags(list){
       const raw = Array.isArray(list) ? list : [];
       const out = [];
@@ -415,7 +399,6 @@
       }
       return out;
     }
-
     const DEFAULT_TRANSPORTADORAS_LINKS = [
       { title:"Rastreio Loggi", url:"https://app.loggi.com/rastreador/completo" },
       { title:"Rastreio Jadlog", url:"https://www.jadlog.com.br/jadlog/captcha" },
@@ -452,20 +435,17 @@
       storageSet(STORAGE_KEY_QUICK_LINKS, JSON.stringify(quickLinks));
       storageSet(STORAGE_KEY_TRANSPORTADORAS_SEEDED, "1");
     }
-
     function loadSearchTags(){
       const raw = storageGet(STORAGE_KEY_SEARCH_TAGS);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeSearchTags(parsed);
       return normalizeSearchTags(DEFAULT_SEARCH_TAGS);
     }
-
     function saveSearchTags(next){
       searchTags = normalizeSearchTags(next);
       storageSet(STORAGE_KEY_SEARCH_TAGS, JSON.stringify(searchTags));
       renderSearchTags();
     }
-
     function normalizeSizeTables(list){
       const raw = Array.isArray(list) ? list : [];
       return raw
@@ -475,33 +455,28 @@
         }))
         .filter(t => t.name && t.dataUrl);
     }
-
     function loadSizeTablesCustom(){
       const raw = storageGet(STORAGE_KEY_SIZE_TABLES);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeSizeTables(parsed);
       return [];
     }
-
     function saveSizeTablesCustom(next){
       sizeTablesCustom = normalizeSizeTables(next);
       storageSet(STORAGE_KEY_SIZE_TABLES, JSON.stringify(sizeTablesCustom));
       buildSizeTablesGrid();
     }
-
     function loadSizeTablesOverrides(){
       const raw = storageGet(STORAGE_KEY_SIZE_TABLES_OVERRIDES);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeSizeTables(parsed);
       return [];
     }
-
     function saveSizeTablesOverrides(next){
       sizeTablesOverrides = normalizeSizeTables(next);
       storageSet(STORAGE_KEY_SIZE_TABLES_OVERRIDES, JSON.stringify(sizeTablesOverrides));
       buildSizeTablesGrid();
     }
-
     const DEFAULT_PRODUCTS_MINIMAL = [
       {
         store: "Di\u00e1rio Nerdify",
@@ -514,7 +489,6 @@
         price: "R$74,90"
       }
     ];
-
     const LEGACY_PRODUCTS = [
       { store: "Di\u00e1rio Nerdify", name: "Camisetas", price: "R$82,90" },
       { store: "Di\u00e1rio Nerdify", name: "Regatas", price: "R$82,90" },
@@ -528,7 +502,6 @@
       { store: "Shop 80", name: "Plus size", price: "R$99,90" },
       { store: "Shop 80", name: "Bon\u00e9s", price: "R$69,90" }
     ];
-
     function productKeyFromName(name){
       const raw = (name || "").toString().trim().toLowerCase();
       const clean = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -540,7 +513,6 @@
       if(clean.includes("camis")) return "camiseta";
       return clean.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     }
-
     function normalizeProductSpecs(value){
       if(Array.isArray(value)){
         return value.map(v => (v || "").toString().trim()).filter(Boolean);
@@ -553,7 +525,6 @@
       }
       return [];
     }
-
     function normalizeHex(value){
       const raw = (value || "").toString().trim();
       if(!raw) return "";
@@ -561,7 +532,6 @@
       if(!match) return "";
       return `#${match[1].toUpperCase()}`;
     }
-
     function parseProductColorLine(line){
       const raw = (line || "").toString().trim();
       if(!raw) return null;
@@ -583,7 +553,6 @@
       if(!hex) return null;
       return { name: name || hex, hex };
     }
-
     function normalizeProductColors(value){
       if(Array.isArray(value)){
         return value.map(c => {
@@ -601,18 +570,15 @@
       }
       return [];
     }
-
     function formatProductSpecsText(specs){
       return (specs || []).map(v => (v || "").toString()).filter(Boolean).join("\n");
     }
-
     function formatProductColorsText(colors){
       return (colors || [])
         .map(c => `${(c?.name || "").toString().trim()} | ${(c?.hex || "").toString().trim()}`.trim())
         .filter(Boolean)
         .join("\n");
     }
-
     function buildProductColorOptions(){
       const normalizeName = (value)=> (value || "")
         .toString()
@@ -645,7 +611,6 @@
       });
       return [...base, ...extras];
     }
-
     function renderProductManageSpecs(){
       if(!productManageSpecsList) return;
       if(!productManageSpecsItems.length){
@@ -694,12 +659,10 @@
         });
       });
     }
-
     function setProductManageSpecs(list){
       productManageSpecsItems = normalizeProductSpecs(list);
       renderProductManageSpecs();
     }
-
     function addProductManageSpec(){
       if(!productManageSpecsInput) return;
       const value = (productManageSpecsInput.value || "").toString().trim();
@@ -709,7 +672,6 @@
       renderProductManageSpecs();
       productManageSpecsInput.focus();
     }
-
     function renderProductManageColors(){
       if(!productManageColorsList) return;
       const options = buildProductColorOptions();
@@ -745,12 +707,10 @@
         });
       });
     }
-
     function setProductManageColors(list){
       productManageSelectedColors = normalizeProductColors(list);
       renderProductManageColors();
     }
-
     function normalizeProducts(list){
       const raw = Array.isArray(list) ? list : [];
       return raw.map(p => {
@@ -773,7 +733,6 @@
         return { id, store, name, price, key, stampsUrl, specs, colors, tableUrl, detailsCustom };
       }).filter(p => p.name && p.store);
     }
-
     function loadProducts(){
       const raw = storageGet(STORAGE_KEY_PRODUCTS);
       const parsed = safeJsonParse(raw);
@@ -782,13 +741,11 @@
       const seed = hasBase ? LEGACY_PRODUCTS : DEFAULT_PRODUCTS_MINIMAL;
       return normalizeProducts(seed);
     }
-
     function saveProducts(next){
       productsCustom = normalizeProducts(next);
       storageSet(STORAGE_KEY_PRODUCTS, JSON.stringify(productsCustom));
       buildProductsGrid();
     }
-
     function normalizeStoreKey(value){
       return (value || "")
         .toString()
@@ -798,7 +755,37 @@
         .replace(/[^a-z0-9]+/g, " ")
         .trim();
     }
-
+    function slugifyPersonalizacaoId(value){
+      const normalized = normalizeStoreKey(value);
+      const slug = normalized.replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+      return slug || "loja";
+    }
+    function ensureUniquePersonalizacaoId(baseId, used){
+      let next = baseId || "loja";
+      if(!used.has(next)){
+        used.add(next);
+        return next;
+      }
+      let i = 2;
+      while(used.has(`${next}-${i}`)){
+        i += 1;
+      }
+      next = `${next}-${i}`;
+      used.add(next);
+      return next;
+    }
+    function ensureStoresPersonalizacaoIds(list){
+      const used = new Set();
+      let changed = false;
+      const next = (list || []).map(store => {
+        const rawId = (store?.personalizacaoId || "").toString().trim();
+        const baseId = rawId ? slugifyPersonalizacaoId(rawId) : slugifyPersonalizacaoId(store?.name || "");
+        const finalId = ensureUniquePersonalizacaoId(baseId, used);
+        if(finalId !== rawId) changed = true;
+        return { ...store, personalizacaoId: finalId };
+      });
+      return { list: next, changed };
+    }
     function findDefaultStoreMatch(store, defaultsByName){
       if(store?.name && defaultsByName.has(store.name)) return defaultsByName.get(store.name);
       const nameKey = normalizeStoreKey(store?.name || "");
@@ -823,12 +810,22 @@
       }
       return null;
     }
-
+    function normalizeStoreWhatsappPhone(raw){
+      let s = (raw || "").toString().trim();
+      if(!s) return "";
+      s = s.replace(/\D+/g, "");
+      if(!s) return "";
+      if(s.startsWith("55") && s.length > 11){
+        s = s.slice(2);
+      }
+      return s;
+    }
     function normalizeStores(list){
       const raw = Array.isArray(list) ? list : [];
       const defaultsByName = new Map(DEFAULT_STORES.map(s => [s.name, s]));
       const out = raw.map(s => ({
         name: (s?.name || "").toString().trim(),
+          personalizacaoId: (s?.personalizacaoId || "").toString().trim(),
         logoUrl: (s?.logoUrl || "").toString().trim(),
         siteUrl: (s?.siteUrl || "").toString().trim(),
         stampsUrl: (s?.stampsUrl || "").toString().trim(),
@@ -839,6 +836,7 @@
         youtubeUrl: (s?.youtubeUrl || "").toString().trim(),
         pinterestUrl: (s?.pinterestUrl || "").toString().trim(),
         whatsappUrl: (s?.whatsappUrl || "").toString().trim(),
+        whatsappPhone: normalizeStoreWhatsappPhone(s?.whatsappPhone || ""),
         socialExtras: Array.isArray(s?.socialExtras)
           ? s.socialExtras.map(item => ({
               name: (item?.name || "").toString().trim(),
@@ -871,6 +869,9 @@
             s.stampsUrl = (def?.stampsUrl || "").toString().trim();
           }
         }
+        if(!s.whatsappPhone){
+          s.whatsappPhone = normalizeStoreWhatsappPhone(s.whatsappUrl) || normalizeStoreWhatsappPhone(s.supportWhatsapp);
+        }
         return s;
       }).map(s => {
         if(!s.socialExtras || !s.socialExtras.length){
@@ -897,11 +898,9 @@
           if(legacy.length) s.emailList = legacy;
         }
         return s;
-      }).filter(s => s.name || s.logoUrl || s.siteUrl || s.stampsUrl || s.supportWhatsapp || s.instagramUrl || s.facebookUrl || s.tiktokUrl || s.youtubeUrl || s.pinterestUrl || s.whatsappUrl || s.socialExtras.length || s.metaInboxUrl || (s.emailList && s.emailList.length) || s.emailAdmin || s.emailAtendimento || s.emailOpenUrl1 || s.emailOpenUrl2);
-
+      }).filter(s => s.name || s.personalizacaoId || s.logoUrl || s.siteUrl || s.stampsUrl || s.supportWhatsapp || s.instagramUrl || s.facebookUrl || s.tiktokUrl || s.youtubeUrl || s.pinterestUrl || s.whatsappUrl || s.whatsappPhone || s.socialExtras.length || s.metaInboxUrl || (s.emailList && s.emailList.length) || s.emailAdmin || s.emailAtendimento || s.emailOpenUrl1 || s.emailOpenUrl2);
       return out.slice(0, MAX_STORES);
     }
-
     function loadStores(){
       const raw = storageGet(STORAGE_KEY_STORES);
       const parsed = safeJsonParse(raw);
@@ -923,20 +922,23 @@
       if(changed){
         storageSet(STORAGE_KEY_STORES, JSON.stringify(backfilled));
       }
-      return backfilled;
+      const ensured = ensureStoresPersonalizacaoIds(backfilled);
+      if(ensured.changed){
+        storageSet(STORAGE_KEY_STORES, JSON.stringify(ensured.list));
+      }
+      return ensured.list;
     }
-
     function saveStores(next){
-      stores = normalizeStores(next);
+      const normalized = normalizeStores(next);
+      const ensured = ensureStoresPersonalizacaoIds(normalized);
+      stores = ensured.list;
       storageSet(STORAGE_KEY_STORES, JSON.stringify(stores));
       updateStoresUI();
     }
-
     function cleanupStoreData(removedNames, remainingNames){
       const removed = new Set((removedNames || []).map(n => (n || "").toString()));
       if(!removed.size) return;
       const shouldReassign = false;
-
       let itemsChanged = false;
       let nextItems = items.filter(it => {
         const store = (it?.store || "").toString();
@@ -949,7 +951,6 @@
         saveBase(items);
         render();
       }
-
       let tasksChanged = false;
       const nextTasks = (tasks || []).filter(t => {
         const loja = (t?.loja || "").toString();
@@ -958,7 +959,6 @@
         return false;
       });
       if(tasksChanged) saveTasks(nextTasks);
-
       let tasksDoneChanged = false;
       const nextTasksDone = (tasksDone || []).filter(t => {
         const loja = (t?.loja || "").toString();
@@ -967,7 +967,6 @@
         return false;
       });
       if(tasksDoneChanged) saveTasksDone(nextTasksDone);
-
       const nextProducts = (productsCustom || []).filter(p => {
         const store = (p?.store || "").toString();
         if(!removed.has(store)) return true;
@@ -976,7 +975,6 @@
       if(nextProducts.length !== (productsCustom || []).length){
         saveProducts(nextProducts);
       }
-
       if(Array.isArray(calendarHistory) && calendarHistory.length){
         const nextCalendar = calendarHistory.filter(entry => {
           const loja = (entry?.loja || "").toString();
@@ -985,23 +983,19 @@
         });
         saveCalendarHistory(nextCalendar);
       }
-
       if(nuvemLinks && typeof nuvemLinks === "object"){
         const nextNuvem = { ...nuvemLinks };
         removed.forEach(name => { delete nextNuvem[name]; });
         saveNuvemLinks(nextNuvem);
       }
     }
-
     function getStoreNames(){
       return (stores || []).map(s => s.name).filter(Boolean);
     }
-
     function getStoreByName(name){
       const target = (name || "").toString();
       return (stores || []).find(s => (s.name || "") === target) || null;
     }
-
     function normalizeNuvemLinks(obj){
       const out = {};
       const storeNames = getStoreNames();
@@ -1014,7 +1008,6 @@
           url: (item?.url || "").toString(),
           fixed: Boolean(item?.fixed)
         })).filter(item => item.id && item.label);
-
         if(!normalizedRaw.length){
           out[store] = defaults.map(def => ({
             id: def.id,
@@ -1024,11 +1017,9 @@
           }));
           continue;
         }
-
         const defaultsMap = new Map();
         defaults.forEach(def => defaultsMap.set(def.id, def));
         const seenDefaults = new Set();
-
         const ordered = normalizedRaw.map(item => {
           const def = defaultsMap.get(item.id);
           if(def){
@@ -1047,7 +1038,6 @@
             fixed: Boolean(item.fixed)
           };
         });
-
         const missingDefaults = defaults
           .filter(def => !seenDefaults.has(def.id))
           .map(def => ({
@@ -1056,25 +1046,21 @@
             url: def.url || "",
             fixed: true
           }));
-
         out[store] = [...ordered, ...missingDefaults];
       }
       return out;
     }
-
     function loadNuvemLinks(){
       const raw = storageGet(STORAGE_KEY_NUVEM_LINKS);
       const parsed = safeJsonParse(raw);
       if(parsed && typeof parsed === "object") return normalizeNuvemLinks(parsed);
       return normalizeNuvemLinks({});
     }
-
     function saveNuvemLinks(next){
       nuvemLinks = normalizeNuvemLinks(next);
       storageSet(STORAGE_KEY_NUVEM_LINKS, JSON.stringify(nuvemLinks));
       renderNuvemLinks();
     }
-
     function renderSearchTags(){
       if(!searchTagList) return;
       const tags = Array.isArray(searchTags) ? searchTags : [];
@@ -1091,22 +1077,18 @@
         inp.checked = searchTagsFilter.includes(v);
       });
     }
-
     function normalizeQuickLinkUrl(value){
       const v = (value || "").toString().trim();
       if(!v) return "";
       if(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)) return v;
       return `https://${v}`;
     }
-
     function getNuvemList(store){
       return Array.isArray(nuvemLinks[store]) ? nuvemLinks[store] : [];
     }
-
     function findNuvemItem(store, id){
       return getNuvemList(store).find(item => item.id === id);
     }
-
     function addQuickLink(key, title, url){
       const current = Array.isArray(quickLinks[key]) ? quickLinks[key] : [];
       const nextList = [...current, { title: (title || "").toString(), url: (url || "").toString() }];
@@ -1127,7 +1109,6 @@
       const nextList = current.filter((_, idx) => idx !== index);
       saveQuickLinks({ ...quickLinks, [key]: nextList });
     }
-
     function openQuickLinkModal(key, label){
       pendingQuickLinkKey = (key || "").toString();
       pendingQuickLinkLabel = (label || "").toString();
@@ -1154,7 +1135,6 @@
       }
       if(quickLinkTitleInput) quickLinkTitleInput.focus();
     }
-
     function openQuickLinkEditModal(key, label, index){
       const list = Array.isArray(quickLinks[key]) ? quickLinks[key] : [];
       const item = list[index];
@@ -1184,14 +1164,12 @@
       }
       if(quickLinkTitleInput) quickLinkTitleInput.focus();
     }
-
     function closeQuickLinkModal(){
       if(quickLinkOverlay) quickLinkOverlay.classList.remove("show");
       pendingQuickLinkKey = "";
       pendingQuickLinkLabel = "";
       currentQuickLinkEditIndex = -1;
     }
-
     function saveQuickLinkModal(){
       if(!pendingQuickLinkKey) return;
       const key = pendingQuickLinkKey;
@@ -1208,7 +1186,6 @@
       clearDrawerReturnState(quickLinkOverlay, [quickLinkCancelBtn]);
       openQuickLinksListModal(key, label, currentQuickLinksListMode);
     }
-
     function openQuickLinksListModal(key, label, mode){
       currentQuickLinksListKey = (key || "").toString();
       currentQuickLinksListLabel = (label || "").toString();
@@ -1224,14 +1201,12 @@
         quickLinksListOverlay.classList.add("show");
       }
     }
-
     function closeQuickLinksListModal(){
       if(quickLinksListOverlay) quickLinksListOverlay.classList.remove("show");
       currentQuickLinksListKey = "";
       currentQuickLinksListLabel = "";
       currentQuickLinksListMode = "list";
     }
-
     function renderQuickLinksList(){
       if(!quickLinksListHost) return;
       const list = Array.isArray(quickLinks[currentQuickLinksListKey]) ? quickLinks[currentQuickLinksListKey] : [];
@@ -1280,7 +1255,6 @@
       });
       quickLinksListHost.innerHTML = rows.join("");
     }
-
     function renderExtraMenuLinks(){
       const renderLinks = (host, key) => {
         if(!host) return;
@@ -1296,7 +1270,6 @@
       renderLinks(productsExtraLinks, "productsExtra");
       renderLinks(transportadorasExtraLinks, "transportadorasExtra");
     }
-
     function renderNuvemLinks(){
       if(!nuvemLinksHost) return;
       const blocks = getStoreNames().map(store => {
@@ -1309,7 +1282,6 @@
         nuvemPageByStore[store] = currentPage;
         const start = (currentPage - 1) * pageSize;
         const pageItems = list.slice(start, start + pageSize);
-
         const rows = pageItems.map((item, idx) => {
           const absoluteIndex = start + idx;
           const canUp = absoluteIndex > 0;
@@ -1374,7 +1346,6 @@
       });
       nuvemLinksHost.innerHTML = blocks.join("");
     }
-
     function openNuvemLinksModal(){
       renderNuvemLinks();
       if(nuvemLinksOverlay){
@@ -1382,11 +1353,9 @@
         nuvemLinksOverlay.classList.add("show");
       }
     }
-
     function closeNuvemLinksModal(){
       if(nuvemLinksOverlay) nuvemLinksOverlay.classList.remove("show");
     }
-
     function openHeaderNuvemshopSupport(){
       const list = (stores && stores.length) ? stores : DEFAULT_STORES;
       const options = (list || [])
@@ -1419,7 +1388,6 @@
         });
       });
     }
-
     function openNuvemEditModal(store, id, isNew){
       nuvemEditStore = (store || "").toString();
       nuvemEditId = (id || "").toString();
@@ -1441,14 +1409,12 @@
       if(nuvemEditOverlay) nuvemEditOverlay.classList.add("show");
       if(nuvemEditUrlInput) nuvemEditUrlInput.focus();
     }
-
     function closeNuvemEditModal(){
       if(nuvemEditOverlay) nuvemEditOverlay.classList.remove("show");
       nuvemEditStore = "";
       nuvemEditId = "";
       nuvemEditIsNew = false;
     }
-
     function saveNuvemEditModal(){
       if(!nuvemEditStore) return;
       const label = (nuvemEditLabelInput ? nuvemEditLabelInput.value : "").toString().trim();
@@ -1470,7 +1436,6 @@
         closeNuvemEditModal();
         return;
       }
-
       const next = list.map(item => {
         if(item.id !== nuvemEditId) return item;
         return { ...item, url, label: item.fixed ? item.label : (label || item.label) };
@@ -1478,7 +1443,6 @@
       saveNuvemLinks({ ...nuvemLinks, [nuvemEditStore]: next });
       closeNuvemEditModal();
     }
-
     function deleteNuvemEditModal(){
       if(!nuvemEditStore || !nuvemEditId) return;
       const list = getNuvemList(nuvemEditStore);
@@ -1486,7 +1450,6 @@
       saveNuvemLinks({ ...nuvemLinks, [nuvemEditStore]: next });
       closeNuvemEditModal();
     }
-
     function cloneStoresList(list){
       return (list || []).map(s => {
         const emailList = Array.isArray(s?.emailList) ? s.emailList.map(item => ({
@@ -1501,9 +1464,11 @@
         }
         return {
           name: (s?.name || "").toString(),
+          personalizacaoId: (s?.personalizacaoId || "").toString(),
           logoUrl: (s?.logoUrl || "").toString(),
           siteUrl: (s?.siteUrl || "").toString(),
           stampsUrl: (s?.stampsUrl || "").toString(),
+          whatsappPhone: (s?.whatsappPhone || "").toString(),
           supportWhatsapp: (s?.supportWhatsapp || "").toString(),
           instagramUrl: (s?.instagramUrl || "").toString(),
           facebookUrl: (s?.facebookUrl || "").toString(),
@@ -1524,7 +1489,19 @@
         };
       });
     }
-
+    function updatePersonalizacaoLinkForCard(card){
+      if(!card) return;
+      const nameInput = card.querySelector('[data-store-field="name"]');
+      const idInput = card.querySelector('[data-store-field="personalizacaoId"]');
+      const linkInput = card.querySelector("[data-store-personal-link]");
+      if(!linkInput) return;
+      const rawId = idInput ? idInput.value : "";
+      const name = nameInput ? nameInput.value : "";
+      const id = rawId && rawId.trim()
+        ? slugifyPersonalizacaoId(rawId)
+        : slugifyPersonalizacaoId(name || "");
+      linkInput.value = buildPersonalizacaoLink(id);
+    }
     function renderStoresConfig(){
       if(!storesConfigHost) return;
       const list = storesDraft.length ? storesDraft : [];
@@ -1580,6 +1557,21 @@
               <div class="label">Nome da loja</div>
               <input id="${fieldId("name")}" type="text" data-store-field="name" placeholder="Nome da loja" value="${escapeHtml(store.name || "")}">
               <div class="fieldError" data-error-for="${fieldId("name")}"></div>
+              <div class="label">Identificador t&eacute;cnico (personaliza&ccedil;&atilde;o)</div>
+              <input id="${fieldId("personalizacaoId")}" type="text" data-store-field="personalizacaoId" placeholder="Ex: diario-nerdify" value="${escapeHtml(store.personalizacaoId || "")}">
+              <div class="fieldError" data-error-for="${fieldId("personalizacaoId")}"></div>
+              <div class="label">Link da personaliza&ccedil;&atilde;o</div>
+              <div class="copyRow">
+                <div>
+                  <input id="${fieldId("personalizacaoLink")}" type="text" data-store-personal-link readonly value="${escapeHtml(buildPersonalizacaoLink((store.personalizacaoId || "").toString().trim() || slugifyPersonalizacaoId(store.name || "")))}">
+                </div>
+                <button class="btn small iconBtn copyBtn" type="button" data-personal-link-copy="${idx}" title="Copiar link" aria-label="Copiar link">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                    <rect x="5" y="5" width="10" height="10" rx="2"></rect>
+                  </svg>
+                </button>
+              </div>
               <div class="label">Link da logo</div>
               <div class="note">Informe o link da logo ou envie o arquivo abaixo.</div>
               <input id="${fieldId("logoUrl")}" type="text" data-store-field="logoUrl" placeholder="Link da logo" value="${escapeHtml(store.logoUrl || "")}">
@@ -1592,6 +1584,10 @@
               <div class="label">Link das estampas</div>
               <input id="${fieldId("stampsUrl")}" type="text" data-store-field="stampsUrl" placeholder="Link das estampas" value="${escapeHtml(store.stampsUrl || "")}">
               <div class="fieldError" data-error-for="${fieldId("stampsUrl")}"></div>
+              <div class="label">Telefone da loja</div>
+              <div class="note">Informe DDD + n&uacute;mero (apenas d&iacute;gitos).</div>
+              <input id="${fieldId("whatsappPhone")}" type="text" data-store-field="whatsappPhone" placeholder="Ex: 11999999999" value="${escapeHtml(store.whatsappPhone || "")}">
+              <div class="fieldError" data-error-for="${fieldId("whatsappPhone")}"></div>
               <div class="label">WhatsApp (atendimento)</div>
               <input id="${fieldId("whatsappUrl")}" type="text" data-store-field="whatsappUrl" placeholder="Link de atendimento do WhatsApp" value="${escapeHtml(store.whatsappUrl || "")}">
               <div class="fieldError" data-error-for="${fieldId("whatsappUrl")}"></div>
@@ -1621,10 +1617,9 @@
       });
       storesConfigHost.innerHTML = cards.join("");
     }
-
     function openStoresConfig(options){
       storesRequired = Boolean(options?.required);
-      const emptyStore = { name:"", logoUrl:"", siteUrl:"", stampsUrl:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailList: [] };
+      const emptyStore = { name:"", personalizacaoId:"", logoUrl:"", siteUrl:"", stampsUrl:"", whatsappPhone:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailList: [] };
       const base = stores.length ? stores : [emptyStore];
       storesDraft = cloneStoresList(base);
       renderStoresConfig();
@@ -1633,12 +1628,10 @@
       }
       if(storesConfigOverlay) storesConfigOverlay.classList.add("show");
     }
-
     function closeStoresConfig(){
       if(storesRequired) return;
       if(storesConfigOverlay) storesConfigOverlay.classList.remove("show");
     }
-
     function collectStoresFromForm(){
       if(!storesConfigHost) return [];
       const cards = Array.from(storesConfigHost.querySelectorAll("[data-store-index]"));
@@ -1649,9 +1642,11 @@
         };
         return {
           name: read("name"),
+            personalizacaoId: read("personalizacaoId"),
           logoUrl: read("logoUrl"),
           siteUrl: read("siteUrl"),
           stampsUrl: read("stampsUrl"),
+          whatsappPhone: read("whatsappPhone"),
           supportWhatsapp: read("supportWhatsapp"),
           instagramUrl: read("instagramUrl"),
           facebookUrl: read("facebookUrl"),
@@ -1679,37 +1674,33 @@
       });
       return normalizeStores(next);
     }
-
     function validateStoresConfigForm(){
       if(!storesConfigHost) return false;
       const cards = Array.from(storesConfigHost.querySelectorAll("[data-store-index]"));
       if(!cards.length) return false;
       let ok = true;
-
       cards.forEach(card => {
         const inputs = Array.from(card.querySelectorAll("input, textarea, select"));
         inputs.forEach(clearFieldError);
-
         const read = (field) => {
           const el = card.querySelector(`[data-store-field="${field}"]`);
           return el ? (el.value || "").toString().trim() : "";
         };
         const get = (field) => card.querySelector(`[data-store-field="${field}"]`);
-
         const nameInput = get("name");
         const logoInput = get("logoUrl");
         const siteInput = get("siteUrl");
         const stampsInput = get("stampsUrl");
         const whatsappInput = get("whatsappUrl");
+        const phoneInput = get("whatsappPhone");
         const supportInput = get("supportWhatsapp");
-
         const nameVal = read("name");
         const logoVal = read("logoUrl");
         const siteVal = read("siteUrl");
         const stampsVal = read("stampsUrl");
         const whatsappVal = read("whatsappUrl");
+        const phoneVal = read("whatsappPhone");
         const supportVal = read("supportWhatsapp");
-
         if(!nameVal){
           setFieldError(nameInput, "Preencha o nome da loja.");
           ok = false;
@@ -1729,10 +1720,14 @@
           setFieldError(stampsInput, "Link das estampas invalido.");
           ok = false;
         }
-        if(!whatsappVal){
-          setFieldError(whatsappInput, "Informe o link do WhatsApp.");
-          ok = false;
-        }else if(!isValidUrl(whatsappVal)){
+        if(phoneVal){
+          const digits = phoneVal.replace(/\D+/g, "");
+          if(!/^\d{10,11}$/.test(digits)){
+            setFieldError(phoneInput, "Telefone invalido. Use DDD + numero.");
+            ok = false;
+          }
+        }
+        if(whatsappVal && !isValidUrl(whatsappVal)){
           setFieldError(whatsappInput, "Link do WhatsApp invalido.");
           ok = false;
         }
@@ -1740,7 +1735,6 @@
           setFieldError(supportInput, "Link de suporte invalido.");
           ok = false;
         }
-
         card.querySelectorAll("[data-social-extra-row]").forEach(row => {
           const nameInput = row.querySelector('[data-social-extra-field="name"]');
           const urlInput = row.querySelector('[data-social-extra-field="url"]');
@@ -1760,7 +1754,6 @@
             }
           }
         });
-
         card.querySelectorAll("[data-email-row]").forEach(row => {
           const emailInput = row.querySelector('[data-email-field="email"]');
           const openInput = row.querySelector('[data-email-field="openUrl"]');
@@ -1784,12 +1777,10 @@
           }
         });
       });
-
       return ok;
     }    function updateStoresUI(){
       const list = stores || [];
       const names = getStoreNames();
-
       if(storeLinksGrid){
         storeLinksGrid.dataset.count = String(list.length || 0);
         storeLinksGrid.innerHTML = list.map(store => {
@@ -1816,7 +1807,6 @@
           </${tag}>`;
         }).join("");
       }
-
       if(metaInboxGrid){
         metaInboxGrid.dataset.count = String(list.length || 0);
         metaInboxGrid.innerHTML = list.map(store => {
@@ -1854,7 +1844,6 @@
           `;
         }).join("");
       }
-
       if(stampsLinksRow){
         const stamped = list.filter(store => (store.stampsUrl || "").trim());
         stampsLinksRow.innerHTML = stamped.map(store => {
@@ -1862,7 +1851,6 @@
           return `<a class="btn small" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Estampas ${escapeHtml(store.name)}</a>`;
         }).join("");
       }
-
       if(emailMenuHost){
         const cards = list.map(store => {
           const emailList = Array.isArray(store.emailList) ? store.emailList : [];
@@ -1921,7 +1909,6 @@
         });
         emailMenuHost.innerHTML = cards.join("");
       }
-
       if(qStoreSelect){
         const options = ['<option value="ALL" selected>Todas as lojas</option>']
           .concat(names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
@@ -1957,7 +1944,6 @@
           .concat(names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
         orderLookupStore.innerHTML = options.join("");
       }
-
       if(orderLookupLogoDn && list[0]){
         orderLookupLogoDn.src = list[0].logoUrl || "";
         orderLookupLogoDn.alt = list[0].name || "";
@@ -1971,15 +1957,12 @@
         if(titles[0] && list[0]) titles[0].textContent = list[0].name || "";
         if(titles[1] && list[1]) titles[1].textContent = list[1].name || "";
       }
-
       updateCalendarStoreFilterOptions();
       buildProductsGrid();
-
       nuvemLinks = normalizeNuvemLinks(nuvemLinks);
       storageSet(STORAGE_KEY_NUVEM_LINKS, JSON.stringify(nuvemLinks));
       renderNuvemLinks();
     }
-
     function updateCalendarStoreFilterOptions(){
       if(!calStoreFilter) return;
       const names = getStoreNames();
@@ -1997,19 +1980,16 @@
       }
       updateFilterButtonsState();
     }
-
     function matchesCalendarStoreFilter(entry){
       const filter = (calStoreFilterValue || "").trim();
       if(!filter) return true;
       const loja = (entry?.loja || "").toString().trim();
       return loja === filter;
     }
-
     function shouldIncludeDailyRepeatOnDate(entry, iso){
       if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       return true;
     }
-
     function getCalendarEntriesForDate(iso, options){
       if(!iso) return [];
       const applyStoreFilter = options?.applyStoreFilter !== false;
@@ -2048,17 +2028,14 @@
       if(applyStoreFilter) entries = entries.filter(matchesCalendarStoreFilter);
       return entries;
     }
-
     function setCalendarFilterPanelOpen(open){
       if(!calFilterPanel) return;
       calFilterPanel.style.display = open ? "block" : "none";
     }
-
     function truncateHalfWithEllipsis(text){
       const raw = (text || "").toString();
       return raw;
     }
-
     function updateFilterButtonsState(){
       const searchStore = (searchStoreSelect ? (searchStoreSelect.value || "").trim() : "");
       const searchActive = Boolean(searchTagsFilter.length) || (searchStore && searchStore !== "ALL");
@@ -2087,26 +2064,26 @@
         calFilterBtn.classList.toggle("isActive", Boolean((calStoreFilterValue || "").trim()));
       }
     }
-
     /***********************
      * ELEMENTS
      ***********************/
     const searchRow   = document.getElementById("searchRow");
     const searchHint  = document.getElementById("searchHint");
-
     const viewSearch  = document.getElementById("viewSearch");
     const viewTasks   = document.getElementById("viewTasks");
     const viewDone    = document.getElementById("viewDone");
+    const viewPersonalizations = document.getElementById("viewPersonalizations");
     const viewUsers   = document.getElementById("viewUsers");
     const viewUserActivity = document.getElementById("viewUserActivity");
     const viewStack   = document.getElementById("viewStack");
     const sideMenu    = document.getElementById("sideMenu");
     const sideMenuToggle = document.getElementById("sideMenuToggle");
     const openUserProfileBtn = document.getElementById("openUserProfileBtn");
+    const personalizationsNotifyBtn = document.getElementById("personalizationsNotifyBtn");
+    const personalizationsNotifyBadge = document.getElementById("personalizationsNotifyBadge");
     const userAvatarImg = document.getElementById("userAvatarImg");
     const userAvatarFallback = document.getElementById("userAvatarFallback");
     const userNameLabel = document.getElementById("userName");
-
     const searchInput = document.getElementById("search");
     const searchStoreSelect = document.getElementById("searchStore");
     const searchClearBtn = document.getElementById("searchClearBtn");
@@ -2121,16 +2098,13 @@
     let searchTagInputs = [];
     const resultsEl  = document.getElementById("results");
     const countEl    = document.getElementById("count");
-
     const qInput     = document.getElementById("q");
     const qStoreSelect = document.getElementById("qStore");
     const rInput     = document.getElementById("r");
     const linksInput = document.getElementById("links");
     const tagsInput  = document.getElementById("tags");
-
     const qCountEl   = document.getElementById("qCount");
     const modeLabel  = document.getElementById("modeLabel");
-
     const saveBtn    = document.getElementById("saveBtn");
     const exportBtn  = document.getElementById("exportBtn");
     const importBtn  = document.getElementById("importBtn");
@@ -2143,29 +2117,23 @@
     const openExtraTaskModalBtn = document.getElementById("openExtraTaskModalBtn");
     const taskOverlay = document.getElementById("taskOverlay");
     const taskCloseBtn = document.getElementById("taskCloseBtn");
-
     const addStepBtn = document.getElementById("addStepBtn");
     const stepsHost  = document.getElementById("stepsHost");
-
     const overlay    = document.getElementById("overlay");
     const modalBody  = document.getElementById("modalBody");
     const closeModalBtn = document.getElementById("closeModalBtn");
     const okModalBtn    = document.getElementById("okModalBtn");
     const nextStepBtn   = document.getElementById("nextStepBtn");
     const prevStepBtn   = document.getElementById("prevStepBtn");
-
     const qPickImgsBtn = document.getElementById("qPickImgsBtn");
     const qClearImgsBtn = document.getElementById("qClearImgsBtn");
     const qImgsFile = document.getElementById("qImgsFile");
     const qImgsCount = document.getElementById("qImgsCount");
     const qImgsPreviewGrid = document.getElementById("qImgsPreviewGrid");
-
     const addQuestionLinkBtn = document.getElementById("addQuestionLinkBtn");
     const questionLinksHost = document.getElementById("questionLinksHost");
-
     const cardsNav = document.getElementById("cardsNav");
     const viewTitleText = document.getElementById("viewTitleText");
-
     const drawer = document.getElementById("drawer");
     const drawerBackdrop = document.getElementById("drawerBackdrop");
     const openDrawerBtn = document.getElementById("openDrawerBtn");
@@ -2237,13 +2205,11 @@
     const productVideoWhatsapp = document.getElementById("productVideoWhatsapp");
     const productVideoSendBtn = document.getElementById("productVideoSendBtn");
     const productDetailsStampsBtn = document.getElementById("productDetailsStampsBtn");
-
     const newMenuBtnName = document.getElementById("newMenuBtnName");
     const newMenuBtnIcon = document.getElementById("newMenuBtnIcon");
     const newMenuBtnIconFile = document.getElementById("newMenuBtnIconFile");
     const newMenuBtnLink = document.getElementById("newMenuBtnLink");
     const addMenuBtn = document.getElementById("addMenuBtn");
-
     const themeToggleBtn = document.getElementById("themeToggleBtn");
     const themeIcon = document.getElementById("themeIcon");
     const themeIconMobile = document.getElementById("themeIconMobile");
@@ -2255,6 +2221,7 @@
     const settingsBtn = document.getElementById("settingsBtn");
     const settingsOverlay = document.getElementById("settingsOverlay");
     const settingsCloseBtn = document.getElementById("settingsCloseBtn");
+    const openUserProfileSettingsBtn = document.getElementById("openUserProfileSettingsBtn");
     const openStoresConfigBtn = document.getElementById("openStoresConfigBtn");
     const quickLinkOverlay = document.getElementById("quickLinkOverlay");
     const quickLinkLabel = document.getElementById("quickLinkLabel");
@@ -2303,7 +2270,6 @@
     const closeAppSaveBtn = document.getElementById("closeAppSaveBtn");
     const closeAppCloseBtn = document.getElementById("closeAppCloseBtn");
     const closeAppCancelBtn = document.getElementById("closeAppCancelBtn");
-
     // close task modal
     const closeTaskOverlay = document.getElementById("closeTaskOverlay");
     const closeTaskNewPhaseBtn = document.getElementById("closeTaskNewPhaseBtn");
@@ -2311,6 +2277,18 @@
     const closeTaskCancelBtn = document.getElementById("closeTaskCancelBtn");
     const popupOverlay = document.getElementById("popupOverlay");
     const popupModal = popupOverlay ? popupOverlay.querySelector(".popupModal") : null;
+    const personalizationOverlay = document.getElementById("personalizationOverlay");
+    const personalizationCloseBtn = document.getElementById("personalizationCloseBtn");
+    const personalizationDetails = document.getElementById("personalizationDetails");
+    const personalizationPreviewImg = document.getElementById("personalizationPreviewImg");
+    const personalizationWhatsappBtn = document.getElementById("personalizationWhatsappBtn");
+    const personalizationStampDownload = document.getElementById("personalizationStampDownload");
+    const personalizationMockupDownload = document.getElementById("personalizationMockupDownload");
+    const personalizationFinalDownload = document.getElementById("personalizationFinalDownload");
+    const personalizationFinalInput = document.getElementById("personalizationFinalInput");
+    const personalizationFinalSaveBtn = document.getElementById("personalizationFinalSaveBtn");
+    const personalizationCompleteBtn = document.getElementById("personalizationCompleteBtn");
+    const personalizationDeleteBtn = document.getElementById("personalizationDeleteBtn");
     const popupTitle = document.getElementById("popupTitle");
     const popupMessage = document.getElementById("popupMessage");
     const popupInputWrap = document.getElementById("popupInputWrap");
@@ -2332,14 +2310,12 @@
     let popupGalleryFiles = [];
     let popupShortcutContext = null;
     let popupInlineActions = null;
-
     function clearPopupInlineActions(){
       if(popupInlineActions && popupInlineActions.parentNode){
         popupInlineActions.parentNode.removeChild(popupInlineActions);
       }
       popupInlineActions = null;
     }
-
     function mountPopupInlineActions(labels){
       if(!popupInputWrap) return;
       clearPopupInlineActions();
@@ -2363,7 +2339,6 @@
       popupInlineActions = wrap;
       if(popupActions) popupActions.classList.add("isHidden");
     }
-
     function getTaskRefById(taskId){
       const id = (taskId || "").toString().trim();
       if(!id) return null;
@@ -2371,7 +2346,6 @@
         || (tasksDone || []).find(t => String(t.id || "") === id)
         || null;
     }
-
     function collectUniqueStrings(values){
       const out = [];
       const seen = new Set();
@@ -2383,7 +2357,6 @@
       });
       return out;
     }
-
     function buildPopupShortcutContext(taskId){
       const ref = getTaskRefById(taskId);
       if(!ref) return { taskId:"", pedidos:[], rastreios:[] };
@@ -2401,30 +2374,25 @@
       ]);
       return { taskId: String(ref.id || ""), pedidos, rastreios };
     }
-
     function clearPopupQuickPick(){
       if(!popupInputWrap) return;
       const existing = popupInputWrap.querySelector("#popupQuickPick");
       if(existing) existing.remove();
     }
-
     function getActivePopupInput(){
       if(popupTextarea && popupTextarea.style.display !== "none") return popupTextarea;
       return popupInput;
     }
-
     function clearPopupImageUrls(){
       popupImageUrls.forEach(url => URL.revokeObjectURL(url));
       popupImageUrls = [];
     }
-
     function resetPopupImages(){
       popupImageFiles = [];
       clearPopupImageUrls();
       if(popupImagesInput) popupImagesInput.value = "";
       if(popupImagesList) popupImagesList.innerHTML = "";
     }
-
     function buildPopupImagesGrid(files, options){
       const list = Array.isArray(files) ? files : [];
       const allowRemove = Boolean(options && options.allowRemove);
@@ -2451,12 +2419,10 @@
       }).join("");
       return `<div class=\"popupImagesGrid\">${cards}</div>`;
     }
-
 function renderPopupImages(){
       if(!popupImagesList) return;
       popupImagesList.innerHTML = buildPopupImagesGrid(popupImageFiles, { allowRemove: true });
     }
-
     function showPopupImageGallery(images, title){
       const list = Array.isArray(images) ? images : [];
       if(!list.length) return;
@@ -2467,8 +2433,6 @@ function renderPopupImages(){
         popupMessage.innerHTML = buildPopupImagesGrid(popupGalleryFiles, { allowRemove: false });
       }
     }
-
-
     function insertPopupValue(value){
       const input = getActivePopupInput();
       if(!input) return;
@@ -2482,7 +2446,6 @@ function renderPopupImages(){
       input.setSelectionRange(cursor, cursor);
       input.focus();
     }
-
     function showPopupQuickPick({ items, label, onPick }){
       if(!popupInputWrap) return;
       clearPopupQuickPick();
@@ -2509,7 +2472,6 @@ function renderPopupImages(){
       wrap.appendChild(options);
       popupInputWrap.appendChild(wrap);
     }
-
     // buscar pedido (Nuvemshop)
     const orderLookupBtn = document.getElementById("orderLookupBtn");
     const sakChatBtn = document.getElementById("sakChatBtn");
@@ -2525,7 +2487,6 @@ function renderPopupImages(){
     const orderLookupType = document.getElementById("orderLookupType");
     const orderLookupQuery = document.getElementById("orderLookupQuery");
     const orderLookupGoBtn = document.getElementById("orderLookupGoBtn");
-
     // calend\u00e1rio (visualiza\u00e7\u00e3o)
     const openCalendarBtn = document.getElementById("openCalendarBtn");
     const calendarOverlay = document.getElementById("calendarOverlay");
@@ -2551,7 +2512,6 @@ function renderPopupImages(){
     const miniCalendarLabel = document.getElementById("miniCalendarLabel");
     const miniCalPrev = document.getElementById("miniCalPrev");
     const miniCalNext = document.getElementById("miniCalNext");
-
     const simpleTaskOverlay = document.getElementById("simpleTaskOverlay");
     const simpleTaskCloseBtn = document.getElementById("simpleTaskCloseBtn");
     const simpleTaskCancelBtn = document.getElementById("simpleTaskCancelBtn");
@@ -2578,7 +2538,6 @@ function renderPopupImages(){
     const recurrenceEndCount = document.getElementById("recurrenceEndCount");
     const recurrenceEndDateInput = document.getElementById("recurrenceEndDateInput");
     const recurrenceEndCountInput = document.getElementById("recurrenceEndCountInput");
-
     // modal: editar/adicionar fase (no card)
     const phaseEditOverlay = document.getElementById("phaseEditOverlay");
     const closePhaseEditBtn = document.getElementById("closePhaseEditBtn");
@@ -2589,6 +2548,8 @@ function renderPopupImages(){
     const phaseEditRastreio = document.getElementById("phaseEditRastreio");
     const phaseEditSizeFrom = document.getElementById("phaseEditSizeFrom");
     const phaseEditSizeTo = document.getElementById("phaseEditSizeTo");
+    const phaseEditSizeFromCustom = document.getElementById("phaseEditSizeFromCustom");
+    const phaseEditSizeToCustom = document.getElementById("phaseEditSizeToCustom");
     const phaseEditSizeWrap = document.getElementById("phaseEditSizeWrap");
     const phaseEditAttention = document.getElementById("phaseEditAttention");
     const phaseEditAttentionWrap = document.getElementById("phaseEditAttentionWrap");
@@ -2602,21 +2563,20 @@ function renderPopupImages(){
     const phaseEditCloseTaskBtn = document.getElementById("phaseEditCloseTaskBtn");
     const phaseEditDeleteBtn = document.getElementById("phaseEditDeleteBtn");
     const phaseEditCancelBtn = document.getElementById("phaseEditCancelBtn");
-
-
     // nav drawer (2 bot\u00f5es)
     const navAtalhosBtn = document.getElementById("navAtalhosBtn");
     const navToggleViewBtn = document.getElementById("navToggleViewBtn");
     const navTasksExtraBtn = document.getElementById("navTasksExtraBtn");
+    const navPersonalizationsBtn = document.getElementById("navPersonalizationsBtn");
     const navUsersBtn = document.getElementById("navUsersBtn");
     const goToDoneTasksBtn = document.getElementById("goToDoneTasksBtn");
     const goToUsersBtn = document.getElementById("goToUsersBtn");
     const goToSearchBtn = document.getElementById("goToSearchBtn");
     const goToTasksBtn = document.getElementById("goToTasksBtn");
+    const goToPersonalizationsBtn = document.getElementById("goToPersonalizationsBtn");
     const goToTasksExtraBtn = document.getElementById("goToTasksExtraBtn");
     const atalhosCreateCard = document.getElementById("atalhosCreateCard");
     const drawerBd = document.getElementById("drawerBd");
-
     // logos
 // menu edit modal
     const menuEditOverlay = document.getElementById("menuEditOverlay");
@@ -2628,14 +2588,12 @@ function renderPopupImages(){
     const menuEditLinksHost = document.getElementById("menuEditLinksHost");
     const menuEditSaveBtn = document.getElementById("menuEditSaveBtn");
     const menuEditDeleteBtn = document.getElementById("menuEditDeleteBtn");
-
     // import choice modal
     const importChoiceOverlay = document.getElementById("importChoiceOverlay");
     const importOption1Btn = document.getElementById("importOption1Btn");
     const importOption2Btn = document.getElementById("importOption2Btn");
     const importCancelBtn = document.getElementById("importCancelBtn");
     const importChoiceCloseX = document.getElementById("importChoiceCloseX");
-
     // tasks elements
     const tasksModeLabel = document.getElementById("tasksModeLabel");
     const tasksCount = document.getElementById("tasksCount");
@@ -2643,6 +2601,8 @@ function renderPopupImages(){
     const tasksList = document.getElementById("tasksList");
     const doneTasksCount = document.getElementById("doneTasksCount");
     const doneTasksList = document.getElementById("doneTasksList");
+    const personalizationsList = document.getElementById("personalizationsList");
+    const personalizationsCount = document.getElementById("personalizationsCount");
     const usersCount = document.getElementById("usersCount");
     const usersCards = document.getElementById("usersCards");
     const usersSearchStoreSelect = document.getElementById("usersSearchStore");
@@ -2663,7 +2623,7 @@ function renderPopupImages(){
     const userActivityBackBtn = document.getElementById("userActivityBackBtn");
     const tasksCountBadge = document.getElementById("tasksCountBadge");
     const tasksExtraCountBadge = document.getElementById("tasksExtraCountBadge");
-
+    const personalizationsCountBadge = document.getElementById("personalizationsCountBadge");
     const tData = document.getElementById("tData");
     const tCliente = document.getElementById("tCliente");
     const tWhatsapp = document.getElementById("tWhatsapp");
@@ -2679,7 +2639,6 @@ function renderPopupImages(){
     const obsList = document.getElementById("obsList");
     const tasksSaveBtn = document.getElementById("tasksSaveBtn");
     const tasksClearBtn = document.getElementById("tasksClearBtn");
-
     const tasksSearch = document.getElementById("tasksSearch");
     const tasksSearchStore = document.getElementById("tasksSearchStore");
     const tasksSearchPeriod = document.getElementById("tasksSearchPeriod");
@@ -2708,7 +2667,6 @@ function renderPopupImages(){
     const tasksAllBtn = document.getElementById("tasksAllBtn");
     const tasksSingleBtn = document.getElementById("tasksSingleBtn");
     const quickLinkButtons = Array.from(document.querySelectorAll("[data-quick-link]"));
-
     const authOverlay = document.getElementById("authOverlay");
     const authTitle = document.getElementById("authTitle");
     const authError = document.getElementById("authError");
@@ -2761,28 +2719,23 @@ function renderPopupImages(){
     const userProfileLogoutBtn = document.getElementById("userProfileLogoutBtn");
     const userProfileStoresBtn = document.getElementById("userProfileStoresBtn");
     const userProfileNextBtn = document.getElementById("userProfileNextBtn");
-
     /***********************
      * STATE
      ***********************/
     let items = [];
     let editIndex = -1;
-
     let qImages = [];
     let pendingDeleteImages = [];
     let qLinks = [];
-
     // modal steps
     let modalItemIndex = -1;
     let modalStepIndex = 0;
-
     // modal: fase (card)
     let phaseEditTaskId = "";
     let phaseEditIndex = -1;
     let phaseEditMode = "add"; // add | edit
     let phaseEditOrigin = "";
     let pendingPhaseSave = null;
-
     // drawer
     let menuButtons = [];
     let drawerPage = 1;
@@ -2812,38 +2765,33 @@ function renderPopupImages(){
     let nuvemEditIsNew = false;
     let nuvemPageByStore = {};
     let storesDraft = [];
-
     // cards navigation
     let showAllCards = false;
     let currentSingleIndex = 0;
     let searchTagsFilter = [];
     let searchQueryCache = "";
-
     // menu edit state
     let editingMenuGlobalIndex = -1;
     let editingMenuLinks = [];
-
     // view state
     let currentView = "search"; // "search" | "tasks"
     let taskModalFromCalendar = false;
-
     // close flow
     let allowAppClose = false;
-
     // product details state
     let currentProductTableUrl = "";
     let currentProductPrice = "";
     let currentProductDetails = null;
     let currentProductVideoUrl = "";
     let currentProductVideoText = "";
-
     // tasks state
     let tasks = [];
     let tasksDone = [];
+    let personalizations = [];
+    let personalizationSelectedId = "";
     let tasksEditId = null;
     let pendingTaskDraft = null;
     let tasksTypeFilter = "normal";
-
     // tasks list view state (\u00daltimo chamado / pr\u00f3ximo / todos + busca)
     let tasksShowAll = false;
     let tasksSingleIndex = 0;
@@ -2859,20 +2807,18 @@ function renderPopupImages(){
     let doneSearchPeriodFromValue = "";
     let doneSearchPeriodToValue = "";
     let doneSearchStatusValue = "";
-
     // calend\u00e1rio state
     let calendarHistory = [];
     let calViewYear = new Date().getFullYear();
     let calViewMonth = new Date().getMonth(); // 0-11
     let calSelectedISO = "";
     let calStoreFilterValue = "";
-
     
     const PHASE_STATE_ACTIVE = "Ativa";
     const PHASE_STATE_DONE = "Conclu\u00edda";
     const PHASE_STATUS_OPTIONS = [
       { group: "Extras", options: [
-        "Personalizacao",
+        "Personaliza\u00e7\u00e3o",
         PHASE_STATE_DONE
       ]},
       { group: "Trocas e Devolu\u00e7\u00f5es", options: [
@@ -2898,14 +2844,12 @@ function renderPopupImages(){
         "Estorno por extravio ou avaria"
       ]}
     ];
-
     const SIZE_TABLES = [
       { name:"Camisetas", file:"camisetas.png" },
       { name:"Manga longa", file:"manga-longa.png" },
       { name:"Plus size", file:"plus-size.png" },
       { name:"Regatas", file:"regatas.png" },
     ];
-
     const PRODUCT_TABLE_BASE = "../imagens/app/tabelas de medida/";
     const PRODUCT_SPECS_INFO = [
       "Tamanhos do P ao XGG",
@@ -3093,7 +3037,6 @@ function renderPopupImages(){
         noTable: true,
       },
     };
-
     function getDefaultProductDetails(key, store){
       const details = PRODUCT_DETAILS[key];
       if(!details) return null;
@@ -3116,7 +3059,6 @@ function renderPopupImages(){
         tableUrl
       };
     }
-
     const BONES_VIDEO_URL_DN = "https://www.youtube.com/watch?v=GG3vdVu70gM&t=2s";
     const BONES_VIDEO_URL_SHOP = "https://www.youtube.com/watch?v=EdJdy_sxons&embeds_referring_euri=https%3A%2F%2Fshop80.com.br%2F&source_ve_path=OTY3MTQ";
     const BONES_VIDEO_TEXT = "Segue um link do v\u00eddeo real do bon\u00e9. Nele voc\u00ea consegue ver os detalhes e os \u00e2ngulos da pe\u00e7a.";
@@ -3133,23 +3075,18 @@ function renderPopupImages(){
         .replaceAll('"',"&quot;")
         .replaceAll("'","&#039;");
     }
-
     function isDailyRepeatLabel(label){
       return (label || "").toString().trim().toLowerCase() === DAILY_REPEAT_LABEL.toLowerCase();
     }
-
     function isNoRepeatLabel(label){
       return normalizeLabelText(label) === "nao se repete";
     }
-
     function isDailyRepeatTask(t){
       return Boolean(t?.isExtra) && isDailyRepeatLabel(t?.repeat);
     }
-
     function isDailyRepeatCalendarEntry(e){
       return (e?.extra || e?.simple) && isDailyRepeatLabel(e?.repeat);
     }
-
     function addDaysISO(iso, days){
       if(!iso || !Number.isFinite(days)) return "";
       const d = new Date(`${iso}T00:00:00`);
@@ -3157,14 +3094,12 @@ function renderPopupImages(){
       d.setDate(d.getDate() + days);
       return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
     }
-
     function getDaysDiff(startIso, endIso){
       const a = new Date(`${startIso}T00:00:00`);
       const b = new Date(`${endIso}T00:00:00`);
       if(Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return NaN;
       return Math.floor((b - a) / 86400000);
     }
-
     function getNextBusinessDayISO(iso){
       if(!iso) return "";
       const d = new Date(`${iso}T00:00:00`);
@@ -3177,13 +3112,11 @@ function renderPopupImages(){
       }
       return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
     }
-
     function getRepeatExclusions(entry){
       return Array.isArray(entry?.repeatExclusions)
         ? entry.repeatExclusions.map(v => (v || "").toString().trim()).filter(Boolean)
         : [];
     }
-
     function shouldIncludeRepeatWindow(entry, iso){
       if(!iso) return false;
       const start = (entry?.date || "").toString().trim();
@@ -3194,7 +3127,6 @@ function renderPopupImages(){
       if(exclusions.includes(iso)) return false;
       return true;
     }
-
     const WEEKDAY_LABELS_PT = [
       "domingo",
       "segunda-feira",
@@ -3219,7 +3151,6 @@ function renderPopupImages(){
       "novembro",
       "dezembro"
     ];
-
     function normalizeLabelText(text){
       return (text || "")
         .toString()
@@ -3228,18 +3159,15 @@ function renderPopupImages(){
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
     }
-
     function getWeekdayIndexFromISO(iso){
       if(!iso) return NaN;
       const d = new Date(`${iso}T00:00:00`);
       if(Number.isNaN(d.getTime())) return NaN;
       return d.getDay();
     }
-
     function getWeekdayLabelFromIndex(idx){
       return WEEKDAY_LABELS_PT[idx] || "";
     }
-
     function getMonthlyOrdinalFromISO(iso){
       if(!iso) return null;
       const d = new Date(`${iso}T00:00:00`);
@@ -3252,7 +3180,6 @@ function renderPopupImages(){
       const isLast = (day + 7) > daysInMonth;
       return { ordinal, isLast };
     }
-
     function getMonthlyOrdinalWordFromISO(iso){
       const info = getMonthlyOrdinalFromISO(iso);
       if(!info) return "";
@@ -3263,7 +3190,6 @@ function renderPopupImages(){
       if(info.ordinal === 4) return "quarta(as)";
       return "quinta(as)";
     }
-
     function getMonthlyOrdinalInfoFromLabel(label){
       const normalized = normalizeLabelText(label);
       const prefix = normalizeLabelText(MONTHLY_ORDINAL_PREFIX);
@@ -3282,7 +3208,6 @@ function renderPopupImages(){
       const weekdayIndex = getWeekdayIndexFromLabel(rest);
       return { ordinal, isLast, weekdayIndex };
     }
-
     function getWeekdayIndexFromLabel(label){
       const normalized = normalizeLabelText(label);
       for(let i = 0; i < WEEKDAY_LABELS_PT.length; i++){
@@ -3291,27 +3216,23 @@ function renderPopupImages(){
       }
       return NaN;
     }
-
     function getSimpleTaskWeeklyLabelByDate(iso){
       const idx = getWeekdayIndexFromISO(iso);
       const label = getWeekdayLabelFromIndex(idx);
       return label ? `${WEEKLY_REPEAT_PREFIX}${label}` : "Semanal";
     }
-
     function getSimpleTaskMonthlyLabelByDate(iso){
       const idx = getWeekdayIndexFromISO(iso);
       const label = getWeekdayLabelFromIndex(idx);
       const ordinalWord = getMonthlyOrdinalWordFromISO(iso);
       return label ? `${MONTHLY_ORDINAL_PREFIX}${ordinalWord} ${label}` : "Mensal";
     }
-
     function getMonthlyDayOptionLabel(iso){
       if(!iso) return "Mensal no dia";
       const d = new Date(`${iso}T00:00:00`);
       if(Number.isNaN(d.getTime())) return "Mensal no dia";
       return `Mensal no dia ${d.getDate()}`;
     }
-
     function getMonthlyWeekdayOptionLabel(iso){
       if(!iso) return "Mensal no(a)";
       const idx = getWeekdayIndexFromISO(iso);
@@ -3319,7 +3240,6 @@ function renderPopupImages(){
       const ordinal = getMonthlyOrdinalWordFromISO(iso);
       return weekday ? `Mensal no(a) ${ordinal} ${weekday}` : "Mensal no(a)";
     }
-
     function getDefaultRecurrenceDraft(iso){
       const startIso = iso || todayISO();
       return {
@@ -3329,7 +3249,6 @@ function renderPopupImages(){
         monthlyMode: "by_day"
       };
     }
-
     function setRecurrenceDraftFromEntry(entry, iso){
       const base = getDefaultRecurrenceDraft(iso);
       if(entry?.repeatUnit){
@@ -3346,7 +3265,6 @@ function renderPopupImages(){
       }
       recurrenceDraft = base;
     }
-
     function applyRecurrenceDraftToUI(){
       if(recurrenceStepInput){
         recurrenceStepInput.value = String(recurrenceDraft.interval || 1);
@@ -3366,7 +3284,6 @@ function renderPopupImages(){
       }
       syncRecurrenceWeekdaysVisibility();
     }
-
     function saveRecurrenceDraftFromUI(){
       const intervalRaw = Number.parseInt((recurrenceStepInput?.value || "").toString(), 10);
       const interval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? intervalRaw : 1;
@@ -3386,9 +3303,8 @@ function renderPopupImages(){
       recurrenceDraft = { interval, unit, weekdays, monthlyMode };
       saveRecurrenceEndDraftFromUI();
     }
-
     function getCustomRepeatLabel(config){
-      if(!config || !config.unit) return "Personalizado";
+      if(!config || !config.unit) return "Personaliza\u00e7\u00e3o";
       const interval = Number.isFinite(config.interval) ? config.interval : 1;
       if(config.unit === "day"){
         return `Personalizado: a cada ${interval} dia${interval > 1 ? "s" : ""}`;
@@ -3407,9 +3323,8 @@ function renderPopupImages(){
       if(config.unit === "year"){
         return `Personalizado: a cada ${interval} ano${interval > 1 ? "s" : ""}`;
       }
-      return "Personalizado";
+      return "Personaliza\u00e7\u00e3o";
     }
-
     function getCustomMonthlyTarget(entry){
       const start = (entry?.date || "").toString().trim();
       if(!start) return { day:null, weekday:null, ordinal:null, isLast:false };
@@ -3418,14 +3333,12 @@ function renderPopupImages(){
       const ordinalInfo = getRepeatMonthlyOrdinalFromEntry(entry);
       return { day, weekday, ordinal: ordinalInfo?.ordinal || null, isLast: Boolean(ordinalInfo?.isLast) };
     }
-
     function shouldIncludeCustomRepeatOnDate(entry, iso){
       if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const unit = (entry?.repeatUnit || "").toString().trim();
       const interval = Number.isFinite(entry?.repeatEvery) ? entry.repeatEvery : 1;
       const start = (entry?.date || "").toString().trim();
       if(!unit || !start) return false;
-
       if(unit === "day"){
         const diff = getDaysDiff(start, iso);
         return Number.isFinite(diff) && diff >= 0 && diff % interval === 0;
@@ -3470,7 +3383,6 @@ function renderPopupImages(){
       }
       return false;
     }
-
     function syncRecurrenceEndInputs(){
       if(!recurrenceEndNever || !recurrenceEndDate || !recurrenceEndCount) return;
       if(recurrenceEndDateInput){
@@ -3480,7 +3392,6 @@ function renderPopupImages(){
         recurrenceEndCountInput.disabled = !recurrenceEndCount.checked;
       }
     }
-
     function setRecurrenceEndDraftFromEntry(entry){
       const count = Number.isFinite(entry?.repeatCount) ? entry.repeatCount : null;
       const endDate = (entry?.repeatUntil || entry?.repeatEnd || "").toString().trim();
@@ -3494,7 +3405,6 @@ function renderPopupImages(){
       }
       recurrenceEndDraft = { mode:"never", date:"", count:null };
     }
-
     function applyRecurrenceEndDraftToUI(){
       if(recurrenceEndNever) recurrenceEndNever.checked = recurrenceEndDraft.mode === "never";
       if(recurrenceEndDate) recurrenceEndDate.checked = recurrenceEndDraft.mode === "date";
@@ -3505,7 +3415,6 @@ function renderPopupImages(){
       }
       syncRecurrenceEndInputs();
     }
-
     function saveRecurrenceEndDraftFromUI(){
       if(recurrenceEndDate && recurrenceEndDate.checked){
         recurrenceEndDraft = { mode:"date", date:(recurrenceEndDateInput?.value || "").toString().trim(), count:null };
@@ -3520,7 +3429,6 @@ function renderPopupImages(){
       }
       recurrenceEndDraft = { mode:"never", date:"", count:null };
     }
-
     function getMonthlyWeekdayOccurrenceDate(year, month, weekday, ordinalInfo){
       const first = new Date(year, month, 1);
       const firstWeekday = (first.getDay() - weekday + 7) % 7;
@@ -3538,7 +3446,6 @@ function renderPopupImages(){
       }
       return `${year}-${pad2(month+1)}-${pad2(day)}`;
     }
-
     function computeRepeatUntilByCount(startIso, repeatValue, repeatWeekday, repeatOrdinal, repeatCount, customConfig){
       if(!startIso || !Number.isFinite(repeatCount) || repeatCount <= 0) return "";
       if(repeatCount === 1) return startIso;
@@ -3611,7 +3518,6 @@ function renderPopupImages(){
       }
       return "";
     }
-
     function getSimpleTaskAnnualLabelByDate(iso){
       if(!iso) return "Anual";
       const d = new Date(`${iso}T00:00:00`);
@@ -3620,30 +3526,24 @@ function renderPopupImages(){
       const day = d.getDate();
       return monthLabel ? `${ANNUAL_REPEAT_PREFIX}${monthLabel} ${day}` : "Anual";
     }
-
     function isWeeklyRepeatLabel(label){
       return normalizeLabelText(label).startsWith(normalizeLabelText(WEEKLY_REPEAT_PREFIX));
     }
-
     function isMonthlyLastWeekdayLabel(label){
       return normalizeLabelText(label).startsWith(normalizeLabelText(MONTHLY_ORDINAL_PREFIX));
     }
-
     function isWeekdaysRepeatLabel(label){
       return normalizeLabelText(label) === normalizeLabelText(WEEKDAYS_REPEAT_LABEL);
     }
-
     function isAnnualRepeatLabel(label){
       return normalizeLabelText(label).startsWith(normalizeLabelText(ANNUAL_REPEAT_PREFIX));
     }
-
     function getRepeatWeekdayFromEntry(entry){
       if(Number.isFinite(entry?.repeatWeekday)) return entry.repeatWeekday;
       const fromLabel = getWeekdayIndexFromLabel(entry?.repeat || "");
       if(Number.isFinite(fromLabel)) return fromLabel;
       return getWeekdayIndexFromISO(entry?.date || "");
     }
-
     function getRepeatMonthlyOrdinalFromEntry(entry){
       if(entry?.repeatOrdinal === "last") return { isLast:true, ordinal:null };
       if(Number.isFinite(entry?.repeatOrdinal)) return { isLast:false, ordinal: entry.repeatOrdinal };
@@ -3657,20 +3557,17 @@ function renderPopupImages(){
       }
       return { isLast:false, ordinal:null };
     }
-
     function getMonthlyWeekdayOccurrenceIndex(iso){
       const d = new Date(`${iso}T00:00:00`);
       if(Number.isNaN(d.getTime())) return NaN;
       return Math.floor((d.getDate() - 1) / 7) + 1;
     }
-
     function shouldIncludeWeeklyRepeatOnDate(entry, iso){
       if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const weekday = getRepeatWeekdayFromEntry(entry);
       if(!Number.isFinite(weekday)) return false;
       return getWeekdayIndexFromISO(iso) === weekday;
     }
-
     function isLastWeekdayOfMonth(iso, weekday){
       const d = new Date(`${iso}T00:00:00`);
       if(Number.isNaN(d.getTime())) return false;
@@ -3681,7 +3578,6 @@ function renderPopupImages(){
       const lastWeekdayDate = lastDay.getDate() - diff;
       return d.getDate() === lastWeekdayDate;
     }
-
     function shouldIncludeMonthlyLastWeekdayOnDate(entry, iso){
       if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const weekday = getRepeatWeekdayFromEntry(entry);
@@ -3693,13 +3589,11 @@ function renderPopupImages(){
       if(!Number.isFinite(occurrence)) return false;
       return occurrence === ordinalInfo.ordinal;
     }
-
     function shouldIncludeWeekdaysRepeatOnDate(entry, iso){
       if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const weekday = getWeekdayIndexFromISO(iso);
       return weekday >= 1 && weekday <= 5;
     }
-
     function getAnnualRepeatMonthDay(label, fallbackIso){
       const normalized = normalizeLabelText(label);
       const prefix = normalizeLabelText(ANNUAL_REPEAT_PREFIX);
@@ -3732,7 +3626,6 @@ function renderPopupImages(){
       if(Number.isNaN(d.getTime())) return null;
       return { month: d.getMonth(), day: d.getDate() };
     }
-
     function shouldIncludeAnnualRepeatOnDate(entry, iso){
       if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       const target = getAnnualRepeatMonthDay(entry?.repeat || "", entry?.date || "");
@@ -3741,27 +3634,21 @@ function renderPopupImages(){
       if(Number.isNaN(d.getTime())) return false;
       return d.getMonth() === target.month && d.getDate() === target.day;
     }
-
     function isWeeklyRepeatCalendarEntry(e){
       return (e?.extra || e?.simple) && isWeeklyRepeatLabel(e?.repeat);
     }
-
     function isMonthlyLastWeekdayCalendarEntry(e){
       return (e?.extra || e?.simple) && isMonthlyLastWeekdayLabel(e?.repeat);
     }
-
     function isWeekdaysRepeatCalendarEntry(e){
       return (e?.extra || e?.simple) && isWeekdaysRepeatLabel(e?.repeat);
     }
-
     function isAnnualRepeatCalendarEntry(e){
       return (e?.extra || e?.simple) && isAnnualRepeatLabel(e?.repeat);
     }
-
     function isCustomRepeatCalendarEntry(e){
       return (e?.extra || e?.simple) && Boolean((e?.repeatUnit || "").toString().trim());
     }
-
     function isCalendarRepeatEntry(e){
       return isDailyRepeatCalendarEntry(e)
         || isWeeklyRepeatCalendarEntry(e)
@@ -3770,11 +3657,10 @@ function renderPopupImages(){
         || isAnnualRepeatCalendarEntry(e)
         || isCustomRepeatCalendarEntry(e);
     }
-
     async function copyTextToClipboard(text, btn, doneLabel){
       try{
         if(!navigator.clipboard){
-          showAlert("C¥pia de texto nÊo suportada neste navegador.");
+          showAlert("Cpia de texto no suportada neste navegador.");
           return;
         }
         await navigator.clipboard.writeText(text);
@@ -3790,14 +3676,13 @@ function renderPopupImages(){
           }
         }
       }catch(e){
-        showAlert("NÊo foi poss¦vel copiar o texto.");
+        showAlert("No foi possvel copiar o texto.");
       }
     }
-
     async function copyImageToClipboard(url, btn, defaultLabel){
       try{
         if(!navigator.clipboard || !window.ClipboardItem){
-          showAlert("C¥pia de imagem nÊo suportada neste navegador.");
+          showAlert("Cpia de imagem no suportada neste navegador.");
           return;
         }
         const res = await fetch(url);
@@ -3816,14 +3701,12 @@ function renderPopupImages(){
           }
         }
       }catch(e){
-        showAlert("NÊo foi poss¦vel copiar a imagem.");
+        showAlert("No foi possvel copiar a imagem.");
       }
     }
-
     let popupResolver = null;
     let popupMode = "alert";
     let popupActionSource = "dismiss";
-
     function openPopup(options){
       if(!popupOverlay) return Promise.resolve(false);
       clearPopupInlineActions();
@@ -3891,7 +3774,6 @@ function renderPopupImages(){
         popupResolver = resolve;
       });
     }
-
     function closePopup(result){
       if(!popupOverlay) return;
       popupOverlay.classList.remove("show");
@@ -3929,7 +3811,6 @@ function renderPopupImages(){
       clearPopupInlineActions();
       handleDrawerReturnAfterClose(popupOverlay, [popupCloseBtn]);
     }
-
     if(popupImagesInput){
       popupImagesInput.addEventListener("change", ()=>{
         popupImageFiles = Array.from(popupImagesInput.files || []);
@@ -3947,15 +3828,12 @@ function renderPopupImages(){
         copyImageToClipboard(url, btn, "Copiar");
       });
     }
-
     function showAlert(message, title){
       return openPopup({ title: title || "Aviso", message, okLabel: "", showCancel: false });
     }
-
     function showConfirm(message, title){
       return openPopup({ title: title || "Confirmar", message, showCancel: true, centerMessage: true });
     }
-
     function showPrompt(message, title, options){
       return openPopup({
         title: title || "Aviso",
@@ -3969,7 +3847,6 @@ function renderPopupImages(){
         inputPlaceholder: options?.inputPlaceholder || ""
       });
     }
-
     /***********************
      * CALEND\u00c1RIO (visualiza\u00e7\u00e3o)
      ***********************/
@@ -3980,7 +3857,6 @@ function renderPopupImages(){
       const nowIso = new Date().toISOString();
       const map = new Map((calendarHistory || []).map(e => [String(e.id || ""), { ...e }]));
       let changed = false;
-
       for(const t of list){
         if(t?.isExtra) continue;
         const id = String(t.id || "");
@@ -4007,7 +3883,6 @@ function renderPopupImages(){
           createdAt: prev?.createdAt || nowIso,
           updatedAt: prev?.updatedAt || prev?.createdAt || nowIso,
         };
-
         const same =
           prev &&
           prev.date === entry.date &&
@@ -4021,7 +3896,6 @@ function renderPopupImages(){
           prev.phaseIdx === entry.phaseIdx &&
           prev.lastPhaseText === entry.lastPhaseText &&
           prev.open === true;
-
         if(!same){
           entry.updatedAt = nowIso;
           map.set(id, entry);
@@ -4030,7 +3904,6 @@ function renderPopupImages(){
           map.set(id, prev);
         }
       }
-
       for(const [id, entry] of map){
         const shouldOpen = ids.has(id);
         if(Boolean(entry.open) !== shouldOpen){
@@ -4038,10 +3911,8 @@ function renderPopupImages(){
           changed = true;
         }
       }
-
       if(changed) saveCalendarHistory([...map.values()]);
     }
-
     let simpleTaskEditId = "";
     let lastSimpleTaskRepeatValue = "nao_repite";
     let recurrenceEndDraft = { mode:"never", date:"", count:null };
@@ -4057,7 +3928,6 @@ function renderPopupImages(){
       if(monthlyOption) monthlyOption.text = getSimpleTaskMonthlyLabelByDate(iso);
       if(annualOption) annualOption.text = getSimpleTaskAnnualLabelByDate(iso);
     }
-
     function openSimpleTaskModal(date, existing){
       if(!simpleTaskOverlay) return;
       const ref = existing || null;
@@ -4115,13 +3985,11 @@ function renderPopupImages(){
       simpleTaskOverlay.classList.add("show");
       setTimeout(()=>{ if(simpleTaskSubject) simpleTaskSubject.focus(); }, 40);
     }
-
     function closeSimpleTaskModal(){
       if(!simpleTaskOverlay) return;
       simpleTaskOverlay.classList.remove("show");
       simpleTaskEditId = "";
     }
-
     function openRecurrenceModal(){
       if(!recurrenceOverlay) return;
       const iso = (simpleTaskDate?.value || "").toString().trim() || todayISO();
@@ -4143,7 +4011,6 @@ function renderPopupImages(){
       syncRecurrenceWeekdaysVisibility();
       recurrenceOverlay.classList.add("show");
     }
-
     function closeRecurrenceModal(){
       if(!recurrenceOverlay) return;
       recurrenceOverlay.classList.remove("show");
@@ -4152,7 +4019,6 @@ function renderPopupImages(){
       }
       syncSimpleTaskRepeatEditButton();
     }
-
     function syncRecurrenceWeekdaysVisibility(){
       if(!recurrenceWeekdays || !recurrenceFrequency) return;
       const value = (recurrenceFrequency.value || "").toString().trim();
@@ -4165,13 +4031,11 @@ function renderPopupImages(){
         updateRecurrenceMonthlyOptions(iso);
       }
     }
-
     function syncSimpleTaskRepeatEditButton(){
       if(!simpleTaskRepeatEditBtn || !simpleTaskRepeat) return;
       const value = (simpleTaskRepeat.value || "").toString().trim();
       simpleTaskRepeatEditBtn.style.display = value === "personalizar" ? "inline-flex" : "none";
     }
-
     function updateRecurrenceMonthlyOptions(iso){
       if(!recurrenceMonthlyOptions) return;
       const options = Array.from(recurrenceMonthlyOptions.options || []);
@@ -4180,7 +4044,6 @@ function renderPopupImages(){
       if(byDay) byDay.text = getMonthlyDayOptionLabel(iso);
       if(byWeekday) byWeekday.text = getMonthlyWeekdayOptionLabel(iso);
     }
-
     function saveSimpleTask(){
       if(!simpleTaskDate || !simpleTaskText || !simpleTaskSubject) return;
       let date = (simpleTaskDate.value || "").toString().trim();
@@ -4333,7 +4196,6 @@ function renderPopupImages(){
       saveTasks(list);
       closeSimpleTaskModal();
     }
-
     async function closeExtraTask(taskId){
       const id = (taskId || "").trim();
       if(!id) return;
@@ -4354,21 +4216,17 @@ function renderPopupImages(){
         renderCalendarDayDetails(calSelectedISO);
       }
     }
-
     function upsertCalendarFromTask(t){
       if(!t) return false;
       const date = getTaskDisplayDate(t) || (t.proxEtapa || "").trim();
       if(!date) return; // s\u00f3 entra no calend\u00e1rio se tiver Pr\u00f3xima Etapa
-
       const assunto = getCalendarAssuntoFromTask(t);
       const nowIso = new Date().toISOString();
       const prev = (calendarHistory || []).find(x => x.id === t.id);
-
       const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
       const rastEfetivo = (getEffectiveRastreioFromTask(t) || "").trim();
       const lastPhaseText = getLastPhaseText(t);
       const prazoHora = getEffectivePhaseTime(t);
-
       const entry = {
         id: String(t.id || ""),
         date,
@@ -4391,22 +4249,18 @@ function renderPopupImages(){
       next.push(entry);
       saveCalendarHistory(next);
     }
-
     function markCalendarClosed(t){
       if(!t) return false;
       const prev = (calendarHistory || []).find(x => x.id === t.id);
       const date = ((getEffectivePhaseDate(t) || t.proxEtapa || prev?.date || "")).trim();
       if(!date) return;
-
       const assunto = getCalendarAssuntoFromTask(t) || ((t.assunto || prev?.assunto || "").trim()) || "(Sem assunto)";
       const nowIso = new Date().toISOString();
-
       const pedidoEfetivo = (getEffectivePedidoFromTask(t) || prev?.pedido || "").toString().trim();
       const rastEfetivo = (getEffectiveRastreioFromTask(t) || prev?.rastreio || "").toString().trim();
       const clienteEfetivo = (t.cliente || prev?.cliente || "").toString().trim();
       const lastPhaseText = getLastPhaseText(t) || (prev?.lastPhaseText || "");
       const prazoHora = getEffectivePhaseTime(t) || (prev?.prazoHora || "");
-
       const entry = {
         id: String(t.id || ""),
         date,
@@ -4429,7 +4283,6 @@ function renderPopupImages(){
       next.push(entry);
       saveCalendarHistory(next);
     }
-
     function monthLabelPT(year, monthIdx){
       const d = new Date(year, monthIdx, 1);
       try{
@@ -4438,7 +4291,6 @@ function renderPopupImages(){
         return `${monthIdx+1}/${year}`;
       }
     }
-
     function buildWeekHeader(){
       if(!calWeekHeader) return;
       if(calWeekHeader.dataset.built === "1") return;
@@ -4451,7 +4303,6 @@ function renderPopupImages(){
       }
       calWeekHeader.dataset.built = "1";
     }
-
     function getMondayBasedWeekdayIndex(date){
       const day = date.getDay(); // 0 (Dom) - 6 (S\u00e1b)
       return (day + 6) % 7; // 0 (Seg) - 6 (Dom)
@@ -4459,7 +4310,6 @@ function renderPopupImages(){
     function isMobileCalendarLayout(){
       return window.matchMedia && window.matchMedia("(max-width:720px)").matches;
     }
-
     function syncCalendarNavPlacement(){
       if(!calNavRow) return;
       const mobile = isMobileCalendarLayout();
@@ -4473,37 +4323,30 @@ function renderPopupImages(){
         }
       }
     }
-
     function renderCalendar(){
       if(!calendarOverlay || !calGrid || !calMonthLabel) return;
-
       // sempre sincroniza para garantir cores corretas
       syncCalendarOpenFlags();
       syncOverdueCalendarEntries();
       syncCalendarNavPlacement();
-
       buildWeekHeader();
       calMonthLabel.textContent = monthLabelPT(calViewYear, calViewMonth);
-
       const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
       const firstDayOfMonth = new Date(calViewYear, calViewMonth, 1);
       const leadingBlanks = getMondayBasedWeekdayIndex(firstDayOfMonth);
       const totalCells = leadingBlanks + daysInMonth;
       const trailingBlanks = (7 - (totalCells % 7)) % 7;
-
       const todayIso = todayISO();
       const cells = [];
       const prevMonthDate = new Date(calViewYear, calViewMonth, 0);
       const prevMonthDays = prevMonthDate.getDate();
       const prevMonth = prevMonthDate.getMonth();
       const prevMonthYear = prevMonthDate.getFullYear();
-
       for(let i = 0; i < leadingBlanks; i++){
         const dayNum = prevMonthDays - leadingBlanks + i + 1;
         const iso = `${prevMonthYear}-${pad2(prevMonth+1)}-${pad2(dayNum)}`;
         cells.push({ blank:false, dayNum, iso, entries:[], isOtherMonth:true });
       }
-
       for(let dayNum = 1; dayNum <= daysInMonth; dayNum++){
         const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
         const entries = getCalendarEntriesForDate(iso)
@@ -4516,11 +4359,9 @@ function renderPopupImages(){
           });
         cells.push({ blank:false, dayNum, iso, entries, valid:true });
       }
-
       for(let i = 0; i < trailingBlanks; i++){
         cells.push({ blank:true });
       }
-
       const showGridNote = !calSelectedISO;
       const isMobileLayout = isMobileCalendarLayout();
       if(calGridNote){
@@ -4531,15 +4372,12 @@ function renderPopupImages(){
       const gridNoteHtml = (!isMobileLayout && showGridNote)
         ? `<div class="calGridNote">Clique em um dia para ver os assuntos.</div>`
         : "";
-
       calGrid.innerHTML = cells.map(c => {
         if(c.blank){
           return `<div class="calCell isBlank" aria-hidden="true"></div>`;
         }
-
         const isToday = c.iso && (c.iso === todayIso);
         const isSelected = c.iso && (c.iso === calSelectedISO);
-
         const normalEntries = (c.entries || []).filter(e => !(e.extra || e.simple));
         const extraEntries = (c.entries || []).filter(e => (e.extra || e.simple));
         const normalCount = normalEntries.length;
@@ -4554,10 +4392,12 @@ function renderPopupImages(){
         const extraList = extraCount > 1
           ? `<div class="calItem extra" title="${extraCount} tarefas extras">${extraCount} extras</div>`
           : extraEntries.map(e => {
-              return `<div class="calItem extra" title="${escapeHtml(e.assunto)}">${escapeHtml(e.assunto)}</div>`;
+              const isClosed = e.open === false;
+              const extraCls = `extra${isClosed ? " closed" : ""}`;
+              const extraTitle = isClosed ? "Conclu\u00edda" : (e.assunto || "Tarefa extra");
+              return `<div class="calItem ${extraCls}" title="${escapeHtml(extraTitle)}">${escapeHtml(extraTitle)}</div>`;
             }).join("");
         const list = [normalList, extraList].filter(Boolean).join("");
-
         const entriesCount = normalCount + extraCount;
         const countType = extraCount ? "extra" : (normalCount ? "normal" : "");
         const countAttr = entriesCount ? ` data-count="${entriesCount}" data-count-type="${countType}"` : "";
@@ -4579,7 +4419,6 @@ function renderPopupImages(){
           </div>
         `;
       }).join("") + gridNoteHtml;
-
       // se nao houver dia selecionado (ou saiu do mes), limpa detalhes
       if(calSelectedISO){
         const stillInMonth = calSelectedISO.startsWith(`${calViewYear}-${pad2(calViewMonth+1)}-`);
@@ -4595,14 +4434,11 @@ function renderPopupImages(){
         if(calSide) calSide.classList.remove("isVisible");
       }
     }
-
     function renderMiniCalendar(){
       if(!miniCalendarGrid || !miniCalendarLabel) return;
-
       ensureMiniCalendarNavPlacement();
       syncCalendarOpenFlags();
       miniCalendarLabel.textContent = monthLabelPT(calViewYear, calViewMonth);
-
       const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
       const firstDayOfMonth = new Date(calViewYear, calViewMonth, 1);
       const leadingBlanks = getMondayBasedWeekdayIndex(firstDayOfMonth);
@@ -4614,13 +4450,11 @@ function renderPopupImages(){
       const prevMonthDays = prevMonthDate.getDate();
       const prevMonth = prevMonthDate.getMonth();
       const prevMonthYear = prevMonthDate.getFullYear();
-
       for(let i = 0; i < leadingBlanks; i++){
         const dayNum = prevMonthDays - leadingBlanks + i + 1;
         const iso = `${prevMonthYear}-${pad2(prevMonth+1)}-${pad2(dayNum)}`;
         cells.push({ blank:false, dayNum, iso, normalCount:0, extraCount:0, isOtherMonth:true });
       }
-
       for(let dayNum = 1; dayNum <= daysInMonth; dayNum++){
         const iso = `${calViewYear}-${pad2(calViewMonth+1)}-${pad2(dayNum)}`;
         const entries = getCalendarEntriesForDate(iso, { applyStoreFilter:false });
@@ -4629,11 +4463,9 @@ function renderPopupImages(){
         const extraCount = openEntries.filter(e => (e.extra || e.simple)).length;
         cells.push({ blank:false, dayNum, iso, normalCount, extraCount });
       }
-
       for(let i = 0; i < trailingBlanks; i++){
         cells.push({ blank:true });
       }
-
       miniCalendarGrid.innerHTML = cells.map(c => {
         if(c.blank){
           return `<div class="miniCalCell isBlank" aria-hidden="true"></div>`;
@@ -4645,7 +4477,7 @@ function renderPopupImages(){
         const extraHtml = c.extraCount
           ? `<span class="miniCalCount miniCalCountExtra">${c.extraCount}</span>`
           : "";
-        const ariaSuffix = c.isOtherMonth ? " (m¦s anterior)" : "";
+        const ariaSuffix = c.isOtherMonth ? " (ms anterior)" : "";
         const ariaLabel = `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
         const isoAttr = c.isOtherMonth ? "" : ` data-mini-iso="${c.iso}"`;
         return `
@@ -4659,7 +4491,6 @@ function renderPopupImages(){
         `;
       }).join("");
     }
-
     function openTaskSummaryPopup(ref){
       if(!ref) return;
       const phases = Array.isArray(ref.obs) && ref.obs.length ? ref.obs : [{
@@ -4707,13 +4538,11 @@ function renderPopupImages(){
       });
       if(popupMessage) popupMessage.innerHTML = summaryHtml;
     }
-
     function openAttentionPopup(note){
       const raw = (note ?? "").toString();
       const text = raw.trim() ? raw : "Fazer acompanhamento di\u00e1rio";
       openPopup({ title: "Aten\u00e7\u00e3o", message: text, okLabel: "", showCancel: false });
     }
-
     function showRecurringDeletePopup(){
       const popupPromise = openPopup({
         title: "Excluir tarefa recorrente",
@@ -4748,11 +4577,10 @@ function renderPopupImages(){
         return (selected?.value || "this").toString();
       });
     }
-
     async function openNuvemshopSupportPopup(storeName, taskId){
       const base = getNuvemshopSupportBaseUrl(storeName);
       if(!base){
-        showAlert("WhatsApp do suporte da Nuvemshop não informado.");
+        showAlert("WhatsApp do suporte da Nuvemshop no informado.");
         return;
       }
       popupShortcutContext = taskId ? buildPopupShortcutContext(taskId) : null;
@@ -4782,11 +4610,10 @@ function renderPopupImages(){
       const url = `${base}${base.includes("?") ? "&" : "?"}text=${encodeURIComponent(text)}`;
       window.open(url, "_blank", "noopener");
     }
-
     async function openCustomerWhatsappPopup(raw, taskId){
       const base = buildCustomerWhatsappUrl(raw || "");
       if(!base){
-        showAlert("Nenhum número de WhatsApp informado.");
+        showAlert("Nenhum nmero de WhatsApp informado.");
         return;
       }
       popupShortcutContext = taskId ? buildPopupShortcutContext(taskId) : null;
@@ -4816,7 +4643,6 @@ function renderPopupImages(){
       const url = `${base}${base.includes("?") ? "&" : "?"}text=${encodeURIComponent(text)}`;
       window.open(url, "_blank", "noopener");
     }
-
     function renderCalendarDayDetails(iso, options){
       if(!calDayTitle || !calDayDetails) return;
       bindCalDayDetailsDelegation();
@@ -4833,14 +4659,12 @@ function renderPopupImages(){
       }
       const shouldScroll = Boolean(options && options.scrollToFirst);
       syncOverdueCalendarEntries();
-
       if(!iso){
         calDayDetails.innerHTML = "";
         if(calSide) calSide.classList.remove("isVisible");
         return;
       }
       if(calSide) calSide.classList.add("isVisible");
-
       const entries = getCalendarEntriesForDate(iso)
         .sort((a,b) => {
           const overA = isCalendarEntryOverdue(a);
@@ -4851,15 +4675,12 @@ function renderPopupImages(){
           if(ta != tb) return ta - tb;
           return (a.assunto||"").localeCompare(b.assunto||"");
         });
-
       if(!entries.length){
         calDayDetails.innerHTML = `<div class="note">Nenhuma tarefa neste dia.</div>`;
         return;
       }
-
       const copyIconSmall = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
         const trashIcon = `<svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><rect x="6" y="6" width="12" height="14" rx="2"></rect><path d="M10 10v6"></path><path d="M14 10v6"></path></svg>`;
-
       const html = entries.map(e => {
         if(e.extra || e.simple){
           const start = (e.startTime || "").toString().trim();
@@ -4868,11 +4689,13 @@ function renderPopupImages(){
           const repeatLabel = (e.repeat || "").toString().trim();
           const extraText = (e.extraText || "").toString().trim();
           const lojaLabel = (e.loja || "").toString().trim();
+          const isClosed = e.open === false;
+          const title = isClosed ? "Conclu\u00edda" : (e.assunto || "Tarefa extra");
           return `
-            <div class="calDetailRow calSimpleRow" data-cal-simple-id="${escapeHtml(String(e.id || ""))}">
+            <div class="calDetailRow calSimpleRow${isClosed ? " isClosed" : ""}" data-cal-simple-id="${escapeHtml(String(e.id || ""))}">
               <div class="dot extra"></div>
               <div class="txt">
-                <p class="title">${escapeHtml(e.assunto || "Tarefa extra")}</p>
+                <p class="title">${escapeHtml(title)}</p>
                 <div class="meta">
                   ${extraText ? `<div class="extraMeta"><span>Descri\u00e7\u00e3o:</span> <span class="extraValue">${escapeHtml(extraText)}</span></div>` : ""}
                   ${lojaLabel ? `<div class="extraMeta"><span>Loja:</span> <span class="extraValue">${escapeHtml(lojaLabel)}</span></div>` : ""}
@@ -4880,7 +4703,7 @@ function renderPopupImages(){
                   ${repeatLabel ? `<div class="extraMeta"><span>Repeti\u00e7\u00e3o:</span> <span class="extraValue">${escapeHtml(repeatLabel)}</span></div>` : ""}
                 </div>
               </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <div class="calSimpleActions">
                 <button class="btn small iconBtn" data-cal-simple-view="${escapeHtml(String(e.id || ""))}" title="Ver na lista" aria-label="Ver na lista">
                   <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="3"></circle>
@@ -4921,23 +4744,19 @@ function renderPopupImages(){
           : null;
         const lastPhaseText = (e.lastPhaseText || getLastPhaseText(doneTask) || "").trim();
         const closedSummaryText = lastPhaseText || "-";
-
         const pedidoUrl = pedido ? getNuvemshopOrderUrl(loja, pedido) : "";
         const rastreioUrl = rastreio ? (detectCarrierFromCode(rastreio).url || "") : "";
         const suporteBase = getNuvemshopSupportBaseUrl(loja);
-
         const pedidoHtml = pedido
           ? (pedidoUrl
             ? `<a href="${escapeHtml(pedidoUrl)}" target="_blank" rel="noopener">${escapeHtml(pedido)}</a>`
             : `<span>${escapeHtml(pedido)}</span>`)
           : "-";
-
         const rastreioHtml = rastreio
           ? (rastreioUrl
             ? `<a href="${escapeHtml(rastreioUrl)}" data-cal-rastreio="${escapeHtml(rastreio)}" data-cal-rastreio-url="${escapeHtml(rastreioUrl)}" target="_blank" rel="noopener">${escapeHtml(rastreio)}</a>`
             : `<span>${escapeHtml(rastreio)}</span>`)
           : "-";
-
         const pedidoCopyBtn = pedido
           ? `<button class="btn small copyBtn" data-copy-text="${escapeHtml(pedido)}" title="Copiar pedido" aria-label="Copiar pedido" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
           : "";
@@ -4954,7 +4773,6 @@ function renderPopupImages(){
         const rastreioCopyBtn = rastreio
           ? `<button class="btn small copyBtn" data-copy-text="${escapeHtml(rastreio)}" title="Copiar rastreio" aria-label="Copiar rastreio" style="padding:4px 6px; margin-left:6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${copyIconSmall}</button>`
           : "";
-
         const titleGreen = (t) => `<span style="color:#38d9a9; font-weight:800;">${t}</span>`;
         const prazoInfo = taskRef ? getLastPhasePrazoInfo(taskRef) : { date:"", time:"", has:false };
         const prazoResolucao = (prazoInfo.date || e.date || "").toString().trim();
@@ -4999,7 +4817,6 @@ function renderPopupImages(){
           `${titleGreen("Prazo de resolu\u00e7\u00e3o:")} ${escapeHtml(prazoResolucaoLabel)} ${prazoCopyBtn}`,
           `${titleGreen("N\u00famero da fase:")} ${escapeHtml(phaseInfo.label)} ${phaseCopyBtn}`
         ].filter(Boolean).map(line => `<div>${line}</div>`).join("");
-
         return `
           <div class="calDetailRow ${isOverdue ? "calOverdue" : ""}" data-cal-item-id="${escapeHtml(String(e.id || ""))}">
             <div class="dot ${cls} ${isOverdue ? "overdue" : ""}"></div>
@@ -5081,14 +4898,10 @@ function renderPopupImages(){
           </div>
         `;
       }).join("");
-
       // Botao "Limpar dia" (se existir container/UX ja previsto)
       const clearBtnHtml = `<button class="btn danger" type="button" data-cal-clear-day="${escapeHtml(iso)}">Limpar dia</button>`;
-
       const legend = `<div class="note" style="margin-top:6px; opacity:.85;">Verde = chamado em aberto | Vermelho = chamado removido (resolvido)</div>`;
-
       calDayDetails.innerHTML = html + clearBtnHtml + legend;
-
       // copiar (pedido / rastreio / cliente)
       calDayDetails.querySelectorAll("[data-copy-text]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
@@ -5097,7 +4910,7 @@ function renderPopupImages(){
           navigator.clipboard.writeText(val).then(()=>{
             btn.style.opacity = "0.6";
             setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
-          }).catch(()=> showAlert("NÒo foi possÝvel copiar."));
+          }).catch(()=> showAlert("No foi possvel copiar."));
         });
       });
       calDayDetails.querySelectorAll("[data-cal-rastreio]").forEach(link=>{
@@ -5110,7 +4923,6 @@ function renderPopupImages(){
           if(url) window.open(url, "_blank");
         });
       });
-
       // excluir item (do calendario e da lista)
       calDayDetails.querySelectorAll("[data-cal-item-del]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
@@ -5125,7 +4937,6 @@ function renderPopupImages(){
             centerMessage: true,
           });
           if(!result && popupActionSource !== "ok" && popupActionSource !== "cancel") return;
-
           // remove da lista
           const taskRef = (tasks || []).find(t => String(t.id || "") === String(id));
           if(popupActionSource === "cancel"){
@@ -5144,11 +4955,11 @@ function renderPopupImages(){
               markCalendarClosed(taskRef);
             }
           }
-
-          // remove do calendario
-          calendarHistory = (calendarHistory || []).filter(e => String(e.id) !== String(id));
-          saveCalendarHistory(calendarHistory);
-
+          // remove do calendario apenas se foi exclusao definitiva
+          if(popupActionSource === "ok"){
+            calendarHistory = (calendarHistory || []).filter(e => String(e.id) !== String(id));
+            saveCalendarHistory(calendarHistory);
+          }
           // re-render
           renderTasks();
           renderCalendar();
@@ -5162,7 +4973,6 @@ function renderPopupImages(){
           openCloseTaskModal(id);
         });
       });
-
       calDayDetails.querySelectorAll("[data-cal-simple-del]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-simple-del") || "").toString().trim();
@@ -5188,7 +4998,6 @@ function renderPopupImages(){
             renderCalendarDayDetails(calSelectedISO);
             return;
           }
-
           const choice = await showRecurringDeletePopup();
           if(!choice) return;
           const occurrenceIso = (calSelectedISO || entry.date || "").toString().trim();
@@ -5196,7 +5005,6 @@ function renderPopupImages(){
             showAlert("Data da ocorr\u00eancia inv\u00e1lida.");
             return;
           }
-
           if(choice === "all"){
             calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
             saveCalendarHistory(calendarHistory);
@@ -5245,6 +5053,46 @@ function renderPopupImages(){
           openSimpleTaskModal(entry.date || calSelectedISO || todayISO(), entry);
         });
       });
+      const resetTasksFilters = () => {
+        tasksSearchQuery = "";
+        tasksSearchStoreValue = "";
+        tasksSearchPeriodValue = "ALL";
+        tasksSearchPeriodFromValue = "";
+        tasksSearchPeriodToValue = "";
+        tasksSearchStatusValue = "";
+        if(tasksSearch) tasksSearch.value = "";
+        if(tasksSearchStore) tasksSearchStore.value = "";
+        if(tasksSearchPeriod) tasksSearchPeriod.value = "ALL";
+        if(tasksSearchPeriodCustom) tasksSearchPeriodCustom.style.display = "none";
+        if(tasksSearchPeriodFrom) tasksSearchPeriodFrom.value = "";
+        if(tasksSearchPeriodTo) tasksSearchPeriodTo.value = "";
+        if(tasksSearchStatus) tasksSearchStatus.value = "";
+      };
+      const openTaskFromCalendar = (id, isExtraTask) => {
+        resetTasksFilters();
+        tasksTypeFilter = isExtraTask ? "extra" : "normal";
+        const filtered = getFilteredTasks();
+        const idx = filtered.findIndex(t => String(t.id || "") === id);
+        tasksShowAll = false;
+        tasksSingleIndex = idx >= 0 ? idx : 0;
+        setView("tasks");
+        renderTasks();
+        requestAnimationFrame(()=>{
+          if(!tasksList) return;
+          const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
+          if(!card){
+            showAlert(isExtraTask ? "Tarefa extra n\u00e3o encontrada na lista." : "Tarefa n\u00e3o encontrada na lista.");
+            return;
+          }
+          card.scrollIntoView({ behavior:"smooth", block:"center" });
+          if(!isExtraTask){
+            const phasesWrap = card.querySelector(`.linksBlock[data-task-phases="${CSS.escape(id)}"]`);
+            if(phasesWrap){
+              phasesWrap.classList.add("isExpanded");
+            }
+          }
+        });
+      };
       calDayDetails.querySelectorAll("[data-cal-simple-view]").forEach(btn=>{
         btn.addEventListener("click", (e)=>{
           e.preventDefault();
@@ -5257,37 +5105,9 @@ function renderPopupImages(){
             return;
           }
           closeCalendar();
-
-          tasksSearchQuery = "";
-          tasksSearchStoreValue = "";
-          tasksSearchPeriodValue = "ALL";
-          tasksSearchPeriodFromValue = "";
-          tasksSearchPeriodToValue = "";
-          tasksSearchStatusValue = "";
-          if(tasksSearch) tasksSearch.value = "";
-          if(tasksSearchStore) tasksSearchStore.value = "";
-          if(tasksSearchPeriod) tasksSearchPeriod.value = "ALL";
-          if(tasksSearchPeriodCustom) tasksSearchPeriodCustom.style.display = "none";
-          if(tasksSearchPeriodFrom) tasksSearchPeriodFrom.value = "";
-          if(tasksSearchPeriodTo) tasksSearchPeriodTo.value = "";
-          if(tasksSearchStatus) tasksSearchStatus.value = "";
-
-          tasksShowAll = true;
-          setView("tasks");
-          renderTasks();
-
-          requestAnimationFrame(()=>{
-            if(!tasksList) return;
-            const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
-            if(!card){
-              showAlert("Tarefa extra n\u00e3o encontrada na lista.");
-              return;
-            }
-            card.scrollIntoView({ behavior:"smooth", block:"center" });
-          });
+          openTaskFromCalendar(id, true);
         });
       });
-
       if(shouldScroll){
         const firstRow = calDayDetails.querySelector(".calDetailRow");
         const target = firstRow || calDayDetails;
@@ -5295,55 +5115,14 @@ function renderPopupImages(){
           target.scrollIntoView({ behavior:"smooth", block:"start" });
         }, 0);
       }
-
       calDayDetails.querySelectorAll("[data-cal-item-view]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const id = (btn.getAttribute("data-cal-item-view") || "").toString().trim();
-          const idxRaw = (btn.getAttribute("data-cal-phase-idx") || "0").toString();
-          const phaseIdx = Number.parseInt(idxRaw, 10);
           if(!id) return;
           closeCalendar();
-
-          tasksSearchQuery = "";
-          tasksSearchStoreValue = "";
-          tasksSearchPeriodValue = "ALL";
-          tasksSearchPeriodFromValue = "";
-          tasksSearchPeriodToValue = "";
-          tasksSearchStatusValue = "";
-          if(tasksSearch) tasksSearch.value = "";
-          if(tasksSearchStore) tasksSearchStore.value = "";
-          if(tasksSearchPeriod) tasksSearchPeriod.value = "ALL";
-          if(tasksSearchPeriodCustom) tasksSearchPeriodCustom.style.display = "none";
-          if(tasksSearchPeriodFrom) tasksSearchPeriodFrom.value = "";
-          if(tasksSearchPeriodTo) tasksSearchPeriodTo.value = "";
-          if(tasksSearchStatus) tasksSearchStatus.value = "";
-
-          tasksShowAll = true;
-          setView("tasks");
-          renderTasks();
-
-          requestAnimationFrame(()=>{
-            if(!tasksList) return;
-            const card = tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`);
-            if(!card){
-              showAlert("Tarefa nÊo encontrada na lista.");
-              return;
-            }
-            card.scrollIntoView({ behavior:"smooth", block:"center" });
-            const phasesWrap = card.querySelector(`.linksBlock[data-task-phases="${CSS.escape(id)}"]`);
-            if(phasesWrap){
-              phasesWrap.classList.add("isExpanded");
-              const phaseEl = phasesWrap.querySelector(`[data-phase-idx="${Number.isFinite(phaseIdx) ? String(phaseIdx) : "0"}"]`);
-              if(phaseEl){
-                phaseEl.classList.add("phaseFocus");
-                phaseEl.scrollIntoView({ behavior:"smooth", block:"center" });
-                setTimeout(()=> phaseEl.classList.remove("phaseFocus"), 1400);
-              }
-            }
-          });
+          openTaskFromCalendar(id, false);
         });
       });
-
       calDayDetails.querySelectorAll("[data-cal-item-summary]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const id = (btn.getAttribute("data-cal-item-summary") || "").toString().trim();
@@ -5352,13 +5131,12 @@ function renderPopupImages(){
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
           if(!ref){
-            showAlert("Tarefa nÊo encontrada.");
+            showAlert("Tarefa no encontrada.");
             return;
           }
           openTaskSummaryPopup(ref);
         });
       });
-
       calDayDetails.querySelectorAll("[data-cal-item-attn]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const id = (btn.getAttribute("data-cal-item-attn") || "").toString().trim();
@@ -5374,7 +5152,6 @@ function renderPopupImages(){
           openAttentionPopup(info.note);
         });
       });
-
       calDayDetails.querySelectorAll("[data-cal-item-reactivate]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-reactivate") || "").toString().trim();
@@ -5405,7 +5182,6 @@ function renderPopupImages(){
           renderCalendarDayDetails(calSelectedISO);
         });
       });
-
       calDayDetails.querySelectorAll("[data-cal-item-add]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-cal-item-add") || "").toString().trim();
@@ -5431,14 +5207,13 @@ function renderPopupImages(){
           }
         });
       });
-
       // limpar dia
       const clearBtn = calDayDetails.querySelector("[data-cal-clear-day]");
       if(clearBtn){
         clearBtn.addEventListener("click", async ()=>{
           const dayIso = (clearBtn.getAttribute("data-cal-clear-day") || "").trim();
           if(!dayIso) return;
-          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calend¯rio?\n\nIsso N+O remove as tarefas em aberto, apenas apaga os itens do calend¯rio deste dia.`);
+          const ok = await showConfirm(`Limpar todos os registros do dia ${dayIso} no calendrio?\n\nIsso N+O remove as tarefas em aberto, apenas apaga os itens do calendrio deste dia.`);
           if(!ok) return;
           const next = (calendarHistory || []).filter(e => e.date !== dayIso);
           saveCalendarHistory(next);
@@ -5447,7 +5222,6 @@ function renderPopupImages(){
         });
       }
     }
-
     function openCalendar(){
       if(!calendarOverlay) return;
       calendarOverlay.classList.add("show");
@@ -5462,7 +5236,6 @@ function renderPopupImages(){
         renderCalendarDayDetails("");
       }
     }
-
     function closeCalendar(){
       if(!calendarOverlay) return;
       calendarOverlay.classList.remove("show");
@@ -5489,7 +5262,6 @@ function renderPopupImages(){
     function pad2(n){ return String(n).padStart(2,"0"); }
     function scrollToTop(){ window.scrollTo({ top:0, behavior:"smooth" }); }
     function scrollToBottom(){ window.scrollTo({ top:document.documentElement.scrollHeight, behavior:"smooth" }); }
-
     function ensureMiniCalendarNavPlacement(){
       const body = document.querySelector(".miniCalendarBody");
       if(!body) return;
@@ -5498,12 +5270,10 @@ function renderPopupImages(){
         body.appendChild(nav);
       }
     }
-
     // senha apenas para PERGUNTAS e IMPORT
     async function requirePassword(actionName){
       return true;
     }
-
     function todayISO(){
       const d = new Date();
       const y = d.getFullYear();
@@ -5511,7 +5281,6 @@ function renderPopupImages(){
       const day = pad2(d.getDate());
       return `${y}-${m}-${day}`;
     }
-
     function formatDateBR(value){
       const s = (value || "").toString().trim();
       if(!s) return "-";
@@ -5545,7 +5314,6 @@ function renderPopupImages(){
       if(m > 0) return `${m}m ${s}s`;
       return `${s}s`;
     }
-
     function stopActivityTracking(){
       if(activityPingTimer){
         clearInterval(activityPingTimer);
@@ -5553,7 +5321,6 @@ function renderPopupImages(){
       }
       lastActivityPing = 0;
     }
-
     function sendActivityPing(force){
       if(!currentUser) return;
       const now = Date.now();
@@ -5561,13 +5328,11 @@ function renderPopupImages(){
       lastActivityPing = now;
       apiActivityPing().catch(() => {});
     }
-
     function startActivityTracking(){
       stopActivityTracking();
       sendActivityPing(true);
       activityPingTimer = setInterval(() => sendActivityPing(false), 60000);
     }
-
     function initActivityListeners(){
       const handler = () => sendActivityPing(false);
       document.addEventListener("mousemove", handler, { passive:true });
@@ -5578,13 +5343,14 @@ function renderPopupImages(){
       document.addEventListener("visibilitychange", () => {
         if(!document.hidden){
           sendActivityPing(true);
+          void refreshPersonalizationsFromServer();
+          void refreshTasksFromServer();
           if(currentView === "users"){
             refreshUsersView();
           }
         }
       });
     }
-
     function startUsersAutoRefresh(){
       if(usersAutoRefreshTimer){
         clearInterval(usersAutoRefreshTimer);
@@ -5595,14 +5361,29 @@ function renderPopupImages(){
         }
       }, 60000);
     }
-
     function stopUsersAutoRefresh(){
       if(usersAutoRefreshTimer){
         clearInterval(usersAutoRefreshTimer);
         usersAutoRefreshTimer = null;
       }
     }
-
+    function startPersonalizationsAutoRefresh(){
+      if(personalizationsRefreshTimer){
+        clearInterval(personalizationsRefreshTimer);
+      }
+      personalizationsRefreshTimer = setInterval(() => {
+        if(!document.hidden){
+          void refreshPersonalizationsFromServer();
+          void refreshTasksFromServer();
+        }
+      }, 30000);
+    }
+    function stopPersonalizationsAutoRefresh(){
+      if(personalizationsRefreshTimer){
+        clearInterval(personalizationsRefreshTimer);
+        personalizationsRefreshTimer = null;
+      }
+    }
     function setUsersRefreshStatus(message, isError){
       if(!usersRefreshStatus) return;
       if(usersRefreshStatusTimer){
@@ -5620,22 +5401,18 @@ function renderPopupImages(){
         }, 2200);
       }
     }
-
     function isAdminUser(){
       if(!currentUser) return false;
       if(typeof currentUser.is_admin !== "undefined") return Boolean(currentUser.is_admin);
       if(!currentUser.username) return false;
       return String(currentUser.username).trim().toLowerCase() === String(ADMIN_USERNAME).trim().toLowerCase();
     }
-
     function normalizeUserRole(role){
       return String(role || "").toLowerCase() === "secundario" ? "secundario" : "principal";
     }
-
     function getCpfDigits(value){
       return (value || "").toString().replace(/\D/g, "");
     }
-
     function isValidCpf(value){
       const cpf = getCpfDigits(value);
       if(cpf.length !== 11) return false;
@@ -5679,29 +5456,23 @@ function renderPopupImages(){
       if(result !== Number(digits[1])) return false;
       return true;
     }
-
     function isSecondaryUser(){
       if(!currentUser) return false;
       return normalizeUserRole(currentUser.role) === "secundario";
     }
-
     function isPrincipalUser(){
       if(!currentUser) return false;
       return normalizeUserRole(currentUser.role) === "principal";
     }
-
     function canAccessUsersView(){
       return isAdminUser() || isPrincipalUser();
     }
-
     function getAccountOwnerId(){
       if(!currentUser) return 0;
       const ownerId = Number(currentUser.owner_user_id || 0);
       if(isSecondaryUser() && ownerId > 0) return ownerId;
       return Number(currentUser.id || 0);
     }
-
-
     function getNuvemshopOrderUrl(loja, pedido){
       const p = (pedido || "").trim();
       if(!p) return "";
@@ -5714,27 +5485,24 @@ function renderPopupImages(){
       }
       return "";
     }
-
-
     function uid(){
       return Math.random().toString(16).slice(2) + Date.now().toString(16);
     }
-
     function statusColors(status){
       const found = STATUS_OPTIONS.find(s => s.value === status);
       if(found) return { a: found.colorA, b: found.colorB };
       return { a: "#7c8cff", b: "#38d9a9" };
     }
-
     /***********************
      * VIEW SWITCH
      ***********************/
     function setView(view){
       const prevView = currentView;
-      const allowedViews = ["search", "tasks", "done", "users", "userActivity"];
+      const allowedViews = ["search", "tasks", "personalizations", "done", "users", "userActivity"];
       currentView = allowedViews.includes(view) ? view : "search";
       storageSet(STORAGE_KEY_VIEW, currentView);
       const toTasks = currentView === "tasks";
+      const toPersonalizations = currentView === "personalizations";
       const toDone = currentView === "done";
       const toUsers = currentView === "users";
       const toUserActivity = currentView === "userActivity";
@@ -5743,12 +5511,15 @@ function renderPopupImages(){
       }else{
         startUsersAutoRefresh();
       }
-
       if(searchInput){
         if(prevView === "tasks") tasksSearchQuery = (searchInput.value || "");
         if(prevView === "done") doneSearchQuery = (searchInput.value || "");
       }
-
+      if(goToPersonalizationsBtn){
+        goToPersonalizationsBtn.classList.toggle("isPersonalizationsView", currentView === "personalizations");
+        goToPersonalizationsBtn.setAttribute("title", "Personaliza\u00e7\u00f5es");
+        goToPersonalizationsBtn.setAttribute("aria-label", "Personaliza\u00e7\u00f5es");
+      }
       const animateFromRight = (el) => {
         if(!el) return;
         el.classList.remove("toLeft", "toRight");
@@ -5757,25 +5528,44 @@ function renderPopupImages(){
           el.classList.remove("toRight");
         });
       };
-
       if(viewStack && viewSearch && viewTasks){
-        if(viewDone && toDone){
+        if(viewPersonalizations && toPersonalizations){
           const isFirst = !viewStack.classList.contains("viewReady");
           if(isFirst) viewStack.classList.add("isInstant");
           viewStack.classList.add("viewReady");
-
+          void refreshPersonalizationsFromServer();
           viewSearch.classList.remove("isActive", "toLeft", "toRight");
           viewTasks.classList.remove("isActive", "toLeft", "toRight");
+          if(viewDone) viewDone.classList.remove("isActive", "toLeft", "toRight");
           if(viewUsers) viewUsers.classList.remove("isActive", "toLeft", "toRight");
           if(viewUserActivity) viewUserActivity.classList.remove("isActive", "toLeft", "toRight");
           viewSearch.classList.add("viewHidden");
           viewTasks.classList.add("viewHidden");
+          if(viewDone) viewDone.classList.add("viewHidden");
           if(viewUsers) viewUsers.classList.add("viewHidden");
           if(viewUserActivity) viewUserActivity.classList.add("viewHidden");
-
+          viewPersonalizations.classList.remove("viewHidden", "toLeft", "toRight");
+          viewPersonalizations.classList.add("isActive", "toRight");
+          requestAnimationFrame(() => {
+            if(isFirst) viewStack.classList.remove("isInstant");
+            viewPersonalizations.classList.remove("toRight");
+          });
+        }else if(viewDone && toDone){
+          const isFirst = !viewStack.classList.contains("viewReady");
+          if(isFirst) viewStack.classList.add("isInstant");
+          viewStack.classList.add("viewReady");
+          viewSearch.classList.remove("isActive", "toLeft", "toRight");
+          viewTasks.classList.remove("isActive", "toLeft", "toRight");
+            if(viewPersonalizations) viewPersonalizations.classList.remove("isActive", "toLeft", "toRight");
+          if(viewUsers) viewUsers.classList.remove("isActive", "toLeft", "toRight");
+          if(viewUserActivity) viewUserActivity.classList.remove("isActive", "toLeft", "toRight");
+          viewSearch.classList.add("viewHidden");
+          viewTasks.classList.add("viewHidden");
+            if(viewPersonalizations) viewPersonalizations.classList.add("viewHidden");
+          if(viewUsers) viewUsers.classList.add("viewHidden");
+          if(viewUserActivity) viewUserActivity.classList.add("viewHidden");
           viewDone.classList.remove("viewHidden", "toLeft", "toRight");
           viewDone.classList.add("isActive", "toRight");
-
           requestAnimationFrame(() => {
             if(isFirst) viewStack.classList.remove("isInstant");
             viewDone.classList.remove("toRight");
@@ -5784,19 +5574,18 @@ function renderPopupImages(){
           const isFirst = !viewStack.classList.contains("viewReady");
           if(isFirst) viewStack.classList.add("isInstant");
           viewStack.classList.add("viewReady");
-
           viewSearch.classList.remove("isActive", "toLeft", "toRight");
           viewTasks.classList.remove("isActive", "toLeft", "toRight");
+            if(viewPersonalizations) viewPersonalizations.classList.remove("isActive", "toLeft", "toRight");
           if(viewDone) viewDone.classList.remove("isActive", "toLeft", "toRight");
           if(viewUserActivity) viewUserActivity.classList.remove("isActive", "toLeft", "toRight");
           viewSearch.classList.add("viewHidden");
           viewTasks.classList.add("viewHidden");
+            if(viewPersonalizations) viewPersonalizations.classList.add("viewHidden");
           if(viewDone) viewDone.classList.add("viewHidden");
           if(viewUserActivity) viewUserActivity.classList.add("viewHidden");
-
           viewUsers.classList.remove("viewHidden", "toLeft", "toRight");
           viewUsers.classList.add("isActive", "toRight");
-
           requestAnimationFrame(() => {
             if(isFirst) viewStack.classList.remove("isInstant");
             viewUsers.classList.remove("toRight");
@@ -5805,19 +5594,18 @@ function renderPopupImages(){
           const isFirst = !viewStack.classList.contains("viewReady");
           if(isFirst) viewStack.classList.add("isInstant");
           viewStack.classList.add("viewReady");
-
           viewSearch.classList.remove("isActive", "toLeft", "toRight");
           viewTasks.classList.remove("isActive", "toLeft", "toRight");
+            if(viewPersonalizations) viewPersonalizations.classList.remove("isActive", "toLeft", "toRight");
           if(viewDone) viewDone.classList.remove("isActive", "toLeft", "toRight");
           if(viewUsers) viewUsers.classList.remove("isActive", "toLeft", "toRight");
           viewSearch.classList.add("viewHidden");
           viewTasks.classList.add("viewHidden");
+            if(viewPersonalizations) viewPersonalizations.classList.add("viewHidden");
           if(viewDone) viewDone.classList.add("viewHidden");
           if(viewUsers) viewUsers.classList.add("viewHidden");
-
           viewUserActivity.classList.remove("viewHidden", "toLeft", "toRight");
           viewUserActivity.classList.add("isActive", "toRight");
-
           requestAnimationFrame(() => {
             if(isFirst) viewStack.classList.remove("isInstant");
             viewUserActivity.classList.remove("toRight");
@@ -5838,49 +5626,41 @@ function renderPopupImages(){
           const incoming = toTasks ? viewTasks : viewSearch;
           const outgoing = toTasks ? viewSearch : viewTasks;
           const isFirst = !viewStack.classList.contains("viewReady");
-
           viewSearch.classList.remove("viewHidden");
           viewTasks.classList.remove("viewHidden");
-
           if(isFirst) viewStack.classList.add("isInstant");
           viewStack.classList.add("viewReady");
-
           incoming.classList.remove("toLeft", "toRight");
           incoming.classList.add("isActive", "toRight");
           outgoing.classList.remove("toLeft", "toRight");
           outgoing.classList.add("toLeft");
           outgoing.classList.remove("isActive");
-
           requestAnimationFrame(() => {
             if(isFirst) viewStack.classList.remove("isInstant");
             incoming.classList.remove("toLeft", "toRight");
           });
         }
       }
-
       if(prevView === "tasks" && currentView === "tasks"){
         animateFromRight(viewTasks);
       }
       if(prevView === "done" && currentView === "done"){
         animateFromRight(viewDone);
       }
-
       const showSearchRow = !toUserActivity;
       if(searchRow) searchRow.style.display = showSearchRow ? "" : "none";
       if(searchFilterBtn) searchFilterBtn.disabled = !showSearchRow;
       if(searchInput) searchInput.disabled = !showSearchRow;
-
       if(currentView === "tasks"){
-
         if(searchInput) searchInput.placeholder = "Buscar por cliente ou pedido...";
         if(searchInput){
           searchQueryCache = (searchInput.value || "");
           searchInput.value = tasksSearchQuery || "";
         }
-
         navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
-        if(viewTitleText) viewTitleText.textContent = (tasksTypeFilter === "extra" ? "Tarefas extras" : "Tarefas Diarias");
+        if(viewTitleText) viewTitleText.textContent = (tasksTypeFilter === "extra" ? "Tarefas extras" : "Tarefas DiÃ¡rias");
+        void refreshTasksFromServer();
 if(goToSearchBtn){
           goToSearchBtn.classList.remove("isSearchView");
           goToSearchBtn.setAttribute("title", "Ir para o buscador");
@@ -5903,20 +5683,59 @@ if(goToSearchBtn){
           goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
           goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
         }
-
         renderTasks();
         scrollToTop();
         updateFilterButtonsState();
         return;
       }
-
+      if(currentView === "personalizations"){
+        if(searchInput) searchInput.placeholder = "PersonalizaÃ§Ãµes";
+        if(searchInput) searchInput.value = "";
+        navToggleViewBtn.textContent = "Tarefas";
+        navToggleViewBtn.classList.remove("primary");
+        if(viewTitleText) viewTitleText.textContent = "PersonalizaÃ§Ãµes";
+        if(goToSearchBtn){
+          goToSearchBtn.classList.remove("isSearchView");
+          goToSearchBtn.setAttribute("title", "Ir para o buscador");
+          goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
+        }
+        if(goToTasksBtn){
+          goToTasksBtn.classList.remove("isTasksView");
+          goToTasksBtn.setAttribute("title", "Tarefas");
+          goToTasksBtn.setAttribute("aria-label", "Tarefas");
+        }
+        if(goToTasksExtraBtn){
+          goToTasksExtraBtn.classList.remove("isTasksView");
+          goToTasksExtraBtn.setAttribute("title", "Tarefas extras");
+          goToTasksExtraBtn.setAttribute("aria-label", "Tarefas extras");
+        }
+        if(goToDoneTasksBtn){
+          goToDoneTasksBtn.classList.remove("isDoneView");
+          goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
+          goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
+        }
+        if(goToUsersBtn){
+          goToUsersBtn.classList.remove("isUsersView");
+          goToUsersBtn.setAttribute("title", "UsuÃ¡rios");
+          goToUsersBtn.setAttribute("aria-label", "UsuÃ¡rios");
+        }
+        if(goToPersonalizationsBtn){
+          goToPersonalizationsBtn.classList.add("isPersonalizationsView");
+          goToPersonalizationsBtn.setAttribute("title", "PersonalizaÃ§Ãµes");
+          goToPersonalizationsBtn.setAttribute("aria-label", "PersonalizaÃ§Ãµes");
+        }
+        renderPersonalizations();
+        scrollToTop();
+        updateFilterButtonsState();
+        return;
+      }
       if(currentView === "done"){
         if(searchInput) searchInput.placeholder = "Buscar tarefas encerradas...";
         if(searchInput) searchInput.value = doneSearchQuery || "";
-
         navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Encerradas";
+        void refreshTasksFromServer();
         if(goToSearchBtn){
           goToSearchBtn.classList.remove("isSearchView");
           goToSearchBtn.setAttribute("title", "Ir para o buscador");
@@ -5942,13 +5761,11 @@ if(goToSearchBtn){
           goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
           goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
         }
-
         renderDoneTasks();
         scrollToTop();
         updateFilterButtonsState();
         return;
       }
-
       if(currentView === "users"){
         navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
@@ -5995,7 +5812,6 @@ if(goToSearchBtn){
         updateFilterButtonsState();
         return;
       }
-
       if(currentView === "userActivity"){
         navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
@@ -6029,10 +5845,8 @@ if(goToSearchBtn){
         updateFilterButtonsState();
         return;
       }
-
       if(searchInput) searchInput.placeholder = "Digite uma palavra-chave (ex: troca, prazo, rastreio, pix, tamanho...)";
       if(searchInput) searchInput.value = searchQueryCache || "";
-
       navToggleViewBtn.textContent = "Tarefas";
       navToggleViewBtn.classList.remove("primary");
       if(viewTitleText) viewTitleText.textContent = "Buscador de Solu\u00e7\u00f5es";
@@ -6061,12 +5875,10 @@ if(goToSearchBtn){
         goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
         goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
       }
-
       render();
       scrollToTop();
       updateFilterButtonsState();
     }
-
     /***********************
      * THEME
      ***********************/
@@ -6112,7 +5924,6 @@ if(goToSearchBtn){
       const isLight = document.body.classList.contains("light");
       applyTheme(isLight ? "dark" : "light");
     }
-
     function setSideMenuCollapsed(collapsed){
       if(!sideMenu) return;
       document.body.classList.toggle("sideMenuCollapsed", collapsed);
@@ -6125,31 +5936,24 @@ if(goToSearchBtn){
       updateTaskCountBadges();
       storageSet(STORAGE_KEY_SIDE_MENU, collapsed ? "1" : "0");
     }
-
     function initSideMenu(){
       const saved = storageGet(STORAGE_KEY_SIDE_MENU);
       const collapsed = saved === "1";
       setSideMenuCollapsed(collapsed);
     }
-
     
-
 function fillPhaseStatusSelect(){
   if(!phaseEditStatus) return;
-
   // preserva sele\u00e7\u00e3o atual (evita perder o status ao abrir/editar)
   const prev = (phaseEditStatus.value || "").toString();
-
   // preenche apenas uma vez, mas sempre restaura o valor
   const alreadyFilled = (phaseEditStatus.dataset.filled === "1");
-
   if(!alreadyFilled){
     phaseEditStatus.innerHTML = "";
     const opt0 = document.createElement("option");
     opt0.value = "";
     opt0.textContent = "Selecione o status";
     phaseEditStatus.appendChild(opt0);
-
     PHASE_STATUS_OPTIONS.forEach(g=>{
       const og = document.createElement("optgroup");
       og.label = g.group;
@@ -6161,28 +5965,22 @@ function fillPhaseStatusSelect(){
       });
       phaseEditStatus.appendChild(og);
     });
-
     phaseEditStatus.dataset.filled = "1";
   }
-
   if(prev){
     phaseEditStatus.value = prev;
   }
 }
-
 function fillAssuntoSelect(){
   if(!tAssunto) return;
-
   const prev = (tAssunto.value || "").toString();
   const alreadyFilled = (tAssunto.dataset.filled === "1");
-
   if(!alreadyFilled){
     tAssunto.innerHTML = "";
     const opt0 = document.createElement("option");
     opt0.value = "";
     opt0.textContent = "Selecione o assunto";
     tAssunto.appendChild(opt0);
-
     PHASE_STATUS_OPTIONS.forEach(g=>{
       const og = document.createElement("optgroup");
       og.label = g.group;
@@ -6194,10 +5992,8 @@ function fillAssuntoSelect(){
       });
       tAssunto.appendChild(og);
     });
-
     tAssunto.dataset.filled = "1";
   }
-
   if(prev){
     tAssunto.value = prev;
   }
@@ -6231,7 +6027,6 @@ function fillAssuntoSelect(){
       }));
     }
     function saveBase(next){ storageSet(STORAGE_KEY_BASE, JSON.stringify(next || [])); }
-
     function normalizeMenuButtons(arr){
       return (arr||[]).map(b => ({
         name: (b?.name || "").toString(),
@@ -6241,12 +6036,10 @@ function fillAssuntoSelect(){
           : (b?.url ? [{ name:(b?.name||"").toString(), url:(b?.url||"").toString() }] : []),
       })).filter(b => b.name);
     }
-
     function loadMenuButtons(){
       const raw = storageGet(STORAGE_KEY_MENU);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return normalizeMenuButtons(parsed);
-
       const defaults = [
         {
           name:"Nuvemshop",
@@ -6278,13 +6071,11 @@ function fillAssuntoSelect(){
       storageSet(STORAGE_KEY_MENU, JSON.stringify(defaults));
       return defaults;
     }
-
     function saveMenuButtons(next){
       menuButtons = normalizeMenuButtons(next);
       storageSet(STORAGE_KEY_MENU, JSON.stringify(menuButtons));
       renderDrawer();
     }
-
     // tasks storage
     function normalizePhaseStates(phases){
       const list = Array.isArray(phases) ? phases : [];
@@ -6304,13 +6095,11 @@ function fillAssuntoSelect(){
         };
       });
     }
-
     function normalizeTasks(arr){
       return (arr||[]).map(t => {
         // compat: vers\u00f3es antigas salvavam obs como array de strings
         const rawObs = t?.obs;
         let obsArr = [];
-
         if(Array.isArray(rawObs)){
           if(rawObs.length && typeof rawObs[0] === "object" && rawObs[0] !== null){
             obsArr = rawObs.map(o => ({
@@ -6346,7 +6135,6 @@ function fillAssuntoSelect(){
         }else if(typeof rawObs === "string" && rawObs.trim().length){
           obsArr = [{ text: rawObs.toString(), date: "", prazo: "", prazoHora: "", chamado: "", etiqueta: "", novoPedido: "", rastreio: "", status: "", attention: false, attentionNote: "", state: "" }];
         }
-
         // limpa objetos vazios
         obsArr = obsArr
           .map(o => ({
@@ -6378,7 +6166,6 @@ function fillAssuntoSelect(){
             (o.state||"").trim()
           );
         obsArr = normalizePhaseStates(obsArr);
-
         return ({
         id: (t?.id || uid()).toString(),
         data: (t?.data || "").toString(),
@@ -6438,7 +6225,6 @@ function fillAssuntoSelect(){
         });
       });
     }
-
     function hydrateTaskOwnership(list){
       const ownerId = getAccountOwnerId();
       const ownerIdStr = ownerId ? String(ownerId) : "";
@@ -6457,28 +6243,24 @@ function fillAssuntoSelect(){
         };
       });
     }
-
     function loadTasks(){
       const raw = storageGet(STORAGE_KEY_TASKS);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return hydrateTaskOwnership(normalizeTasks(parsed));
       return [];
     }
-
     function saveTasks(next){
       tasks = normalizeTasks(next);
       storageSet(STORAGE_KEY_TASKS, JSON.stringify(tasks));
       updateTaskCountBadges();
       renderTasks();
       renderMiniCalendar();
-
       // mant\u00e9m o calend\u00e1rio consistente (verde = aberto, vermelho = removido)
       syncCalendarOpenFlags();
       if(calendarOverlay && calendarOverlay.classList.contains("show")){
         renderCalendar();
       }
     }
-
     // calend\u00e1rio storage (hist\u00f3rico)
     function normalizeCalendarHistory(arr){
       const out = [];
@@ -6554,7 +6336,6 @@ function fillAssuntoSelect(){
       }
       return [...map.values()];
     }
-
     function hydrateCalendarOwnership(list){
       const ownerId = getAccountOwnerId();
       const ownerIdStr = ownerId ? String(ownerId) : "";
@@ -6573,20 +6354,17 @@ function fillAssuntoSelect(){
         };
       });
     }
-
     function loadCalendarHistory(){
       const raw = storageGet(STORAGE_KEY_CALENDAR);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return hydrateCalendarOwnership(normalizeCalendarHistory(parsed));
       return [];
     }
-
     function saveCalendarHistory(next){
       calendarHistory = hydrateCalendarOwnership(normalizeCalendarHistory(next));
       storageSet(STORAGE_KEY_CALENDAR, JSON.stringify(calendarHistory));
       renderMiniCalendar();
     }
-
     /***********************
      * BACKUP (export/import)
      ***********************/
@@ -6600,7 +6378,6 @@ function fillAssuntoSelect(){
       const ss = pad2(d.getSeconds());
       return `${FILE_NAME_PREFIX}_${y}-${m}-${day}_${hh}-${mm}-${ss}.txt`;
     }
-
     function exportFile(){
       const themePref = storageGet(STORAGE_KEY_THEME) || "";
       const data = {
@@ -6623,7 +6400,6 @@ function fillAssuntoSelect(){
       const text = JSON.stringify(data, null, 2);
       const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-
       const a = document.createElement("a");
       a.href = url;
       a.download = makeBackupFileName();
@@ -6632,7 +6408,6 @@ function fillAssuntoSelect(){
       a.remove();
       URL.revokeObjectURL(url);
     }
-
     function exportDoneTasks(){
       const data = {
         version: BACKUP_VERSION,
@@ -6642,7 +6417,6 @@ function fillAssuntoSelect(){
       const text = JSON.stringify(data, null, 2);
       const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-
       const a = document.createElement("a");
       a.href = url;
       a.download = `tarefas-concluidas_${Date.now()}.txt`;
@@ -6651,7 +6425,6 @@ function fillAssuntoSelect(){
       a.remove();
       URL.revokeObjectURL(url);
     }
-
     // >>> tentativa de backup autom\u00e1tico ao fechar aba (melhor esfor\u00e7o; pode ser bloqueado pelo navegador)
     function autoExportOnClose(){
       try{
@@ -6661,11 +6434,9 @@ function fillAssuntoSelect(){
         const last = Number(localStorage.getItem(key) || "0");
         if(now - last < 15000) return; // 15s
         localStorage.setItem(key, String(now));
-
         exportFile();
       }catch(e){}
     }
-
     function showImportChoiceModal(){
       return new Promise((resolve) => {
         function cleanup(){
@@ -6683,38 +6454,30 @@ function fillAssuntoSelect(){
             resolve("cancel");
           }
         }
-
         importChoiceOverlay.classList.add("show");
-
         importOption1Btn.onclick = () => { cleanup(); resolve("merge"); };
         importOption2Btn.onclick = () => { cleanup(); resolve("replace"); };
         importCancelBtn.onclick  = () => { cleanup(); resolve("cancel"); };
         importChoiceCloseX.onclick = () => { cleanup(); resolve("cancel"); };
         importChoiceOverlay.onclick = (e)=>{ if(e.target === importChoiceOverlay){ cleanup(); resolve("cancel"); } };
-
         document.addEventListener("keydown", onEsc);
       });
     }
-
     async function importFile(file){
       const reader = new FileReader();
-
       reader.onload = async () => {
         const parsed = safeJsonParse(reader.result);
         if(!parsed || !Array.isArray(parsed.items)){
           showAlert("Arquivo inv\u00e1lido. Gere o backup pelo bot\u00e3o do sistema e tente importar novamente.");
           return;
         }
-
         const importedItems = parsed.items.map(it => {
           const qImgs =
             Array.isArray(it.qImages) ? it.qImages.map(x => (x||"").toString()) :
             (it.qImageFilename ? [(it.qImageFilename||"").toString()] : []);
-
           const importedQLinks =
             Array.isArray(it.qLinks) ? it.qLinks.map(l => ({ name:(l?.name||"").toString(), url:(l?.url||"").toString() })) :
             [];
-
           return ({
             store: ((it.store || it.loja || "").toString().trim() || "Di\u00e1rio Nerdify"),
             q: (it.q || "").toString(),
@@ -6735,32 +6498,26 @@ function fillAssuntoSelect(){
             })) : [],
           });
         });
-
         // tasks (se existir)
         const importedTasks = Array.isArray(parsed.tasks) ? normalizeTasks(parsed.tasks) : null;
         const importedDone = Array.isArray(parsed.tasksDone) ? normalizeTasks(parsed.tasksDone) : null;
-
         // calend\u00e1rio (se existir)
         const importedCalendar = Array.isArray(parsed.calendarHistory)
           ? normalizeCalendarHistory(parsed.calendarHistory)
           : null;
-
         if(Array.isArray(parsed.menuButtons)){
           const choice = await showImportChoiceModal();
           if(choice === "cancel"){
             showAlert("Importa\u00e7\u00e3o cancelada.");
             return;
           }
-
           items = importedItems;
           saveBase(items);
-
           if(choice === "replace"){
             saveMenuButtons(parsed.menuButtons);
           }else{
             const current = menuButtons.slice();
             const incoming = normalizeMenuButtons(parsed.menuButtons);
-
             for(const b of incoming){
               const idx = current.findIndex(x =>
                 (x.name||"").toLowerCase() === (b.name||"").toLowerCase()
@@ -6781,64 +6538,49 @@ function fillAssuntoSelect(){
           items = importedItems;
           saveBase(items);
         }
-
         if(Array.isArray(parsed.stores)){
           saveStores(parsed.stores);
         }
-
         if(parsed.quickLinks && typeof parsed.quickLinks === "object"){
           saveQuickLinks(parsed.quickLinks);
         }
-
         if(parsed.nuvemLinks && typeof parsed.nuvemLinks === "object"){
           saveNuvemLinks(parsed.nuvemLinks);
         }
-
         if(Array.isArray(parsed.searchTags)){
           saveSearchTags(parsed.searchTags);
         }
-
         if(Array.isArray(parsed.sizeTablesCustom)){
           saveSizeTablesCustom(parsed.sizeTablesCustom);
         }
-
         if(Array.isArray(parsed.sizeTablesOverrides)){
           saveSizeTablesOverrides(parsed.sizeTablesOverrides);
         }
-
         if(Array.isArray(parsed.productsCustom)){
           saveProducts(parsed.productsCustom);
         }
-
         // aplica tasks importadas (se vier)
         if(importedTasks){
           saveTasks(importedTasks);
         }
-
         if(importedDone){
           saveTasksDone(importedDone);
         }
-
         // aplica calend\u00e1rio importado (se vier)
         if(importedCalendar){
           saveCalendarHistory(importedCalendar);
         }
-
         if(parsed.themePref === "light" || parsed.themePref === "dark"){
           applyTheme(parsed.themePref);
         }
-
         // sincroniza flags open/closed e datas do calend\u00e1rio com a lista atual
         syncCalendarOpenFlags();
-
         render();
         clearForm();
         showAlert("Importa\u00e7\u00e3o conclu\u00edda!");
       };
-
       reader.readAsText(file);
     }
-
     /***********************
      * DRAWER (menu) - SEM SENHA
      ***********************/
@@ -6869,7 +6611,6 @@ function fillAssuntoSelect(){
       }
       if(shouldReturn) openDrawer();
     }
-
     let pendingDrawerReturn = false;
     function isMobileViewport(){
       return window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
@@ -6904,14 +6645,12 @@ function fillAssuntoSelect(){
       if(overlay.dataset.returnDrawer === "1") overlay.dataset.returnDrawer = "";
       restoreCloseButtons(closeButtons);
     }
-
     function setSizeTableUploadError(message){
       if(!sizeTableUploadError) return;
       const text = (message || "").toString().trim();
       sizeTableUploadError.textContent = text;
       sizeTableUploadError.style.display = text ? "block" : "none";
     }
-
     function openSizeTableUpload(options){
       if(!sizeTableUploadOverlay) return;
       const mode = options && options.mode === "update" ? "update" : "add";
@@ -6938,13 +6677,11 @@ function fillAssuntoSelect(){
       setSizeTableUploadError("");
       sizeTableUploadOverlay.classList.add("show");
     }
-
     function closeSizeTableUpload(){
       if(!sizeTableUploadOverlay) return;
       sizeTableUploadOverlay.classList.remove("show");
       setSizeTableUploadError("");
     }
-
     function buildSizeTablesGrid(){
       if(!sizeTablesGrid) return;
       const basePath = PRODUCT_TABLE_BASE;
@@ -6972,7 +6709,6 @@ function fillAssuntoSelect(){
           </div>
         `;
       }).join("");
-
       sizeTablesGrid.querySelectorAll("[data-copy-table]").forEach(btn => {
         btn.addEventListener("click", async ()=>{
           const src = (btn.getAttribute("data-copy-table") || "").trim();
@@ -6980,7 +6716,6 @@ function fillAssuntoSelect(){
           await copyImageToClipboard(src, btn, "Copiar imagem");
         });
       });
-
       sizeTablesGrid.querySelectorAll("[data-customize-table]").forEach(btn => {
         btn.addEventListener("click", ()=>{
           const card = btn.closest(".sizeTableCard");
@@ -6992,7 +6727,6 @@ function fillAssuntoSelect(){
         });
       });
     }
-
     function openSizeTables(){
       if(!sizeTablesOverlay) return;
       closeRightDrawer();
@@ -7009,14 +6743,12 @@ function fillAssuntoSelect(){
       productManageError.textContent = text;
       productManageError.style.display = text ? "block" : "none";
     }
-
     function setProductManageFieldError(el, message){
       if(!el) return;
       const text = (message || "").toString().trim();
       el.textContent = text;
       el.style.display = text ? "block" : "none";
     }
-
     function clearProductManageFieldErrors(){
       setProductManageFieldError(productManageStoreError, "");
       setProductManageFieldError(productManageNameError, "");
@@ -7078,7 +6810,6 @@ function fillAssuntoSelect(){
       productManageSpecsItems = [];
       productManageSelectedColors = [];
     }
-
     function buildProductsGrid(){
       if(!productsGrid) return;
       const storesList = getProductsStoreList();
@@ -7138,7 +6869,6 @@ function fillAssuntoSelect(){
         `;
       }).join("");
     }
-
     function openProducts(){
       if(!productsOverlay) return;
       closeRightDrawer();
@@ -7150,7 +6880,6 @@ function fillAssuntoSelect(){
       if(!productsOverlay) return;
       productsOverlay.classList.remove("show");
     }
-
     function buildProductSpecsText(price, details){
       const specs = Array.isArray(details?.specs) ? details.specs : [];
       const infoLines = specs.map(t => `- ${t}`);
@@ -7161,7 +6890,6 @@ function fillAssuntoSelect(){
         ...infoLines,
       ].join("\n");
     }
-
     function buildProductColorsText(colors){
       const list = Array.isArray(colors) ? colors : [];
       const names = list.map(c => c.name);
@@ -7169,7 +6897,6 @@ function fillAssuntoSelect(){
       if(names.length === 1) return names[0];
       return `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}`;
     }
-
     function getStampsButtonLabel(key, name){
       const labelName = (name || "").trim() || "produto";
       const map = {
@@ -7183,7 +6910,6 @@ function fillAssuntoSelect(){
       const article = map[key] || "do";
       return `Estampas ${article} ${labelName}`;
     }
-
     function resolveProductDetails(item){
       const key = (item?.key || productKeyFromName(item?.name || "")).toString().trim();
       const store = (item?.store || "").toString().trim();
@@ -7203,7 +6929,6 @@ function fillAssuntoSelect(){
       const tableUrl = (item?.tableUrl || "").toString().trim() || fallback.tableUrl || "";
       return { specs, colors, stampsUrl, tableUrl };
     }
-
     function renderProductDetails(info){
       if(!productDetailsTitle || !productDetailsMeta) return;
       const key = (info?.key || "").trim();
@@ -7216,7 +6941,6 @@ function fillAssuntoSelect(){
       const storeLabel = storeData ? storeData.name : store;
       currentProductPrice = price;
       currentProductDetails = details || null;
-
       productDetailsTitle.innerHTML = `Detalhes do produto: ${escapeHtml(name)}`;
       productDetailsMeta.innerHTML = `
         <div class="productMetaItem">
@@ -7228,7 +6952,6 @@ function fillAssuntoSelect(){
           <strong>${escapeHtml(price)}</strong>
         </div>
       `;
-
       if(productDetailsStore){
         if(storeLabel){
           productDetailsStore.textContent = `Loja: ${storeLabel}`;
@@ -7236,7 +6959,6 @@ function fillAssuntoSelect(){
           productDetailsStore.textContent = "";
         }
       }
-
       const hasDetails =
         (details?.specs && details.specs.length) ||
         (details?.colors && details.colors.length) ||
@@ -7259,13 +6981,11 @@ function fillAssuntoSelect(){
         currentProductTableUrl = "";
         return;
       }
-
       if(productDetailsEmpty) productDetailsEmpty.style.display = "none";
       if(productDetailsContent) productDetailsContent.style.display = "block";
       const storeNormalized = store.toLowerCase();
       const isShop80 = storeNormalized.includes("shop 80");
       const isDiario = storeNormalized.includes("di\u00e1rio nerdify") || storeNormalized.includes("diario nerdify");
-
       if(productDetailsStampsBtn){
         const label = getStampsButtonLabel(key, name);
         productDetailsStampsBtn.setAttribute("title", label);
@@ -7278,7 +6998,6 @@ function fillAssuntoSelect(){
           productDetailsStampsBtn.href = "#";
         }
       }
-
       if(productDetailsSpecs){
         const specs = [
           `Valor do produto: ${price}`,
@@ -7303,7 +7022,6 @@ function fillAssuntoSelect(){
             </div>
           `;
         }).join("");
-
         productColorsList.querySelectorAll("[data-copy-hex]").forEach(btn => {
           btn.addEventListener("click", async ()=>{
             const hex = (btn.getAttribute("data-copy-hex") || "").trim();
@@ -7312,7 +7030,6 @@ function fillAssuntoSelect(){
           });
         });
       }
-
       if(productDetailsTableSection){
         const hideTable = !details?.tableUrl;
         productDetailsTableSection.style.display = hideTable ? "none" : "flex";
@@ -7328,7 +7045,6 @@ function fillAssuntoSelect(){
       }else{
         currentProductTableUrl = "";
       }
-
       if(productDetailsVideoSection){
         const isBones = key === "bones";
         const isBaby = key === "baby-look";
@@ -7352,7 +7068,6 @@ function fillAssuntoSelect(){
         if(productVideoWhatsapp) productVideoWhatsapp.value = "";
       }
     }
-
     function openProductDetails(info){
       if(!productDetailsOverlay) return;
       renderProductDetails(info);
@@ -7362,7 +7077,6 @@ function fillAssuntoSelect(){
       if(!productDetailsOverlay) return;
       productDetailsOverlay.classList.remove("show");
     }
-
     function firstTwoLetters(name){
       const t = (name||"").trim().replace(/\s+/g," ");
       if(!t) return "BT";
@@ -7370,33 +7084,26 @@ function fillAssuntoSelect(){
       if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
       return (parts[0][0] + (parts[1] ? parts[1][0] : parts[0][1]||"")).toUpperCase();
     }
-
     function renderDrawer(){
       const totalPages = Math.max(1, Math.ceil(menuButtons.length / DRAWER_PAGE_SIZE));
       if(drawerPage > totalPages) drawerPage = totalPages;
-
       const start = (drawerPage - 1) * DRAWER_PAGE_SIZE;
       const pageItems = menuButtons.slice(start, start + DRAWER_PAGE_SIZE);
-
       drawerButtonsHost.innerHTML = pageItems.map((b, idxOnPage) => {
         const globalIndex = start + idxOnPage;
-
         const icon = (b.iconUrl || "").trim();
         const iconHtml = icon
           ? `<img alt="" src="${escapeHtml(icon)}" onerror="this.parentElement.innerHTML='<div class=\\'txt\\'>${escapeHtml(firstTwoLetters(b.name))}</div>'">`
           : `<div class="txt">${escapeHtml(firstTwoLetters(b.name))}</div>`;
-
         const subBtns = (b.links||[]).map(l => {
           const url = (l.url||"").trim();
           const nm = (l.name||"").trim() || "Abrir";
           return `<button class="btn small" data-open="${escapeHtml(url)}">${escapeHtml(nm)}</button>`;
         }).join("");
-
         const canUp = globalIndex > 0;
         const canDown = globalIndex < (menuButtons.length - 1);
         const title = (b.name || "Sem nome").toString();
         const linksHtml = subBtns || `<div class="note">Sem links.</div>`;
-
         return `
           <div class="menuCard" data-menu-idx="${escapeHtml(String(globalIndex))}">
             <div class="menuTop">
@@ -7420,13 +7127,10 @@ function fillAssuntoSelect(){
           </div>
         `;
       }).join("");
-
       drawerPager.style.display = (menuButtons.length > DRAWER_PAGE_SIZE) ? "flex" : "none";
       drawerPageInfo.textContent = `P\u00e1gina ${drawerPage}/${totalPages}`;
-
       drawerPrev.disabled = drawerPage <= 1;
       drawerNext.disabled = drawerPage >= totalPages;
-
       // open links
       drawerButtonsHost.querySelectorAll("[data-open]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
@@ -7436,7 +7140,6 @@ function fillAssuntoSelect(){
           window.open(url, "_blank", "noopener");
         });
       });
-
       // move up/down (sem senha)
       drawerButtonsHost.querySelectorAll("[data-move-up]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
@@ -7466,7 +7169,6 @@ function fillAssuntoSelect(){
           renderDrawer();
         });
       });
-
       // edit / delete (sem senha)
       drawerButtonsHost.querySelectorAll("[data-edit-menu]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
@@ -7483,7 +7185,6 @@ function fillAssuntoSelect(){
         });
       });
     }
-
     function handleMenuIconUpload(fileInput, targetInput){
       if(!fileInput || !targetInput) return;
       fileInput.addEventListener("change", ()=>{
@@ -7497,44 +7198,34 @@ function fillAssuntoSelect(){
         reader.readAsDataURL(file);
       });
     }
-
     function addCustomMenuButton(){
       const name = (newMenuBtnName.value || "").trim();
       const iconUrl = (newMenuBtnIcon.value || "").trim();
       const link = (newMenuBtnLink.value || "").trim();
-
       if(!name){ showAlert("Informe o nome do bot\u00e3o."); return; }
       if(!link){ showAlert("Informe o link do bot\u00e3o."); return; }
-
       const next = menuButtons.slice();
       next.push({ name, iconUrl, links: [{ name:"Abrir", url: link }] });
-
       saveMenuButtons(next);
-
       const totalPages = Math.max(1, Math.ceil(next.length / DRAWER_PAGE_SIZE));
       drawerPage = totalPages;
       renderDrawer();
-
       newMenuBtnName.value = "";
       newMenuBtnIcon.value = "";
       if(newMenuBtnIconFile) newMenuBtnIconFile.value = "";
       newMenuBtnLink.value = "";
     }
-
     function openMenuEdit(globalIdx){
       const b = menuButtons[globalIdx];
       if(!b) return;
-
       editingMenuGlobalIndex = globalIdx;
       menuEditName.value = b.name || "";
       menuEditIcon.value = b.iconUrl || "";
       if(menuEditIconFile) menuEditIconFile.value = "";
       editingMenuLinks = Array.isArray(b.links) ? b.links.map(l => ({ name:(l.name||""), url:(l.url||"") })) : [];
-
       renderMenuEditLinks();
       menuEditOverlay.classList.add("show");
     }
-
     function closeMenuEdit(){
       menuEditOverlay.classList.remove("show");
       editingMenuGlobalIndex = -1;
@@ -7544,7 +7235,6 @@ function fillAssuntoSelect(){
       menuEditIcon.value = "";
       if(menuEditIconFile) menuEditIconFile.value = "";
     }
-
     function renderMenuEditLinks(){
       menuEditLinksHost.innerHTML = editingMenuLinks.map((l, i) => `
         <div class="linkRow">
@@ -7553,7 +7243,6 @@ function fillAssuntoSelect(){
           <button class="btn small danger" data-mlrm="${i}">Remover</button>
         </div>
       `).join("");
-
       menuEditLinksHost.querySelectorAll("[data-mln]").forEach(inp=>{
         inp.addEventListener("input", ()=>{
           const i = Number(inp.getAttribute("data-mln"));
@@ -7574,40 +7263,32 @@ function fillAssuntoSelect(){
         });
       });
     }
-
     function saveMenuEdit(){
       if(editingMenuGlobalIndex < 0) return;
       const name = (menuEditName.value || "").trim();
       if(!name){ showAlert("Informe o nome do bot\u00e3o."); return; }
-
       const iconUrl = (menuEditIcon.value || "").trim();
       const links = editingMenuLinks
         .map(x => ({ name:(x.name||"").trim(), url:(x.url||"").trim() }))
         .filter(x => x.name || x.url);
-
       const next = menuButtons.slice();
       next[editingMenuGlobalIndex] = { name, iconUrl, links };
       saveMenuButtons(next);
       renderDrawer();
       closeMenuEdit();
     }
-
     async function removeMenuButton(globalIdx){
       const b = menuButtons[globalIdx];
       if(!b) return;
-
       const ok = await showConfirm(`Remover o bot\u00e3o do menu:\n\n"${b.name}"\n\nConfirmar?`);
       if(!ok) return;
-
       const next = menuButtons.slice();
       next.splice(globalIdx,1);
       saveMenuButtons(next);
-
       const totalPages = Math.max(1, Math.ceil(next.length / DRAWER_PAGE_SIZE));
       if(drawerPage > totalPages) drawerPage = totalPages;
       renderDrawer();
     }
-
     /***********************
      * FORM: LINKS DA PERGUNTA
      ***********************/
@@ -7618,7 +7299,6 @@ function fillAssuntoSelect(){
       })) : [];
       renderQuestionLinksUI();
     }
-
     function renderQuestionLinksUI(){
       questionLinksHost.innerHTML = qLinks.map((l, idx) => `
         <div class="linkRow">
@@ -7627,7 +7307,6 @@ function fillAssuntoSelect(){
           <button class="btn small danger" data-qrm="${idx}">Remover</button>
         </div>
       `).join("");
-
       questionLinksHost.querySelectorAll("[data-qname]").forEach(inp=>{
         inp.addEventListener("input", ()=>{
           const i = Number(inp.getAttribute("data-qname"));
@@ -7648,12 +7327,10 @@ function fillAssuntoSelect(){
         });
       });
     }
-
     function addQuestionLinkRow(){
       qLinks.push({ name:"", url:"" });
       renderQuestionLinksUI();
     }
-
     /***********************
      * FORM: IMAGENS DA PERGUNTA
      ***********************/
@@ -7662,7 +7339,6 @@ function fillAssuntoSelect(){
       qImgsCount.textContent = `${qImages.length} arquivo(s)`;
       renderQImgsPreview();
     }
-
     function queueImageDeletes(list){
       const names = (Array.isArray(list) ? list : [])
         .map(x => (x || "").toString().trim())
@@ -7670,7 +7346,6 @@ function fillAssuntoSelect(){
       if(!names.length) return;
       pendingDeleteImages = uniq(pendingDeleteImages.concat(names));
     }
-
     async function deleteImagesNow(list){
       const names = uniq((Array.isArray(list) ? list : [])
         .map(x => (x || "").toString().trim())
@@ -7688,14 +7363,12 @@ function fillAssuntoSelect(){
         showAlert("N\u00e3o foi poss\u00edvel remover uma das imagens do servidor.");
       }
     }
-
     async function flushPendingImageDeletes(){
       if(!pendingDeleteImages.length) return;
       const list = pendingDeleteImages.slice();
       pendingDeleteImages = [];
       await deleteImagesNow(list);
     }
-
     function renderQImgsPreview(){
       if(!qImages.length){
         qImgsPreviewGrid.innerHTML = `
@@ -7708,7 +7381,6 @@ function fillAssuntoSelect(){
         `;
         return;
       }
-
       qImgsPreviewGrid.innerHTML = qImages.map((fn, i) => `
         <div class="qImgBox">
           <button type="button" class="qImgDelBtn" title="Remover imagem" data-qimg-remove="${i}">&times;</button>
@@ -7717,24 +7389,20 @@ function fillAssuntoSelect(){
         </div>
       `).join("");
     }
-
     /***********************
      * MODE
      ***********************/
     function updateModeLabel(){ modeLabel.textContent = ""; }
     function updateQCount(){ qCountEl.textContent = `${(qInput.value || "").length}/140`; }
-
     function openQuestionModal(mode){
       if(questionModalTitle){
         questionModalTitle.textContent = mode === "edit" ? "Editar pergunta" : "Cadastrar pergunta";
       }
       if(questionOverlay) questionOverlay.classList.add("show");
     }
-
     function closeQuestionModal(){
       if(questionOverlay) questionOverlay.classList.remove("show");
     }
-
     function openTaskModal(){
       fillAssuntoSelect();
       if(taskOverlay){
@@ -7746,7 +7414,6 @@ function fillAssuntoSelect(){
       }
       if(tData && !tData.value) tData.value = todayISO();
     }
-
     function closeTaskModal(){
       if(taskOverlay){
         taskOverlay.classList.remove("show");
@@ -7759,7 +7426,6 @@ function fillAssuntoSelect(){
         }
       }
     }
-
     function bindCalDayDetailsDelegation(){
       if(!calDayDetails || calDayDetailsBound) return;
       calDayDetailsBound = true;
@@ -7782,33 +7448,27 @@ function fillAssuntoSelect(){
         openPhaseEditor({ taskId:id, mode:"edit", index:idx });
       });
     }
-
 /***********************
      * STEPS (UI)
      ***********************/
     function addStepUI(stepData){
       const step = stepData || { name:"", text:"", imageFilename:"", stepLinks:[] };
-
       const wrap = document.createElement("div");
       wrap.className = "item stepCard";
       wrap.style.marginTop = "10px";
-
       wrap.innerHTML = `
         <div class="row" style="align-items:center;">
           <div class="label" style="margin:0;">Passo</div>
           <button class="btn small danger" data-step-remove>Remover passo</button>
         </div>
-
         <div style="margin-top:10px;">
           <div class="label">Nome do passo</div>
           <input type="text" placeholder="Ex: Confirmar no sistema" data-step-name value="${escapeHtml(step.name||"")}">
         </div>
-
         <div style="margin-top:10px;">
           <div class="label">Texto do passo</div>
           <textarea data-step-text placeholder="O que fazer neste passo...">${escapeHtml(step.text||"")}</textarea>
         </div>
-
         <div style="margin-top:10px;">
           <div class="row" style="align-items:center;">
             <div class="label" style="margin:0;">Links do passo</div>
@@ -7816,7 +7476,6 @@ function fillAssuntoSelect(){
           </div>
           <div class="linkRows" data-step-links></div>
         </div>
-
         <div style="margin-top:10px;">
           <div class="label">Imagem do passo <span class="count">opcional</span></div>
           <div class="row" style="gap:10px; align-items:center; flex-wrap:wrap;">
@@ -7827,24 +7486,19 @@ function fillAssuntoSelect(){
           </div>
         </div>
       `;
-
       const nameEl = wrap.querySelector("[data-step-name]");
       const textEl = wrap.querySelector("[data-step-text]");
       const rmBtn = wrap.querySelector("[data-step-remove]");
-
       const pickBtn = wrap.querySelector("[data-step-pick]");
       const clearBtn = wrap.querySelector("[data-step-clear]");
       const fileEl = wrap.querySelector("[data-step-file]");
       const imgNameEl = wrap.querySelector("[data-step-imgname]");
-
       const addLinkBtn = wrap.querySelector("[data-step-addlink]");
       const linksHost = wrap.querySelector("[data-step-links]");
-
       let stepLinks = Array.isArray(step.stepLinks) ? step.stepLinks.slice() : [];
       if(step.link && !stepLinks.length){
         stepLinks = [{ name: (step.linkName||"Link"), url: step.link }];
       }
-
       function renderStepLinks(){
         linksHost.innerHTML = stepLinks.map((l, i) => `
           <div class="linkRow">
@@ -7853,7 +7507,6 @@ function fillAssuntoSelect(){
             <button class="btn small danger" data-slrm="${i}">Remover</button>
           </div>
         `).join("");
-
         linksHost.querySelectorAll("[data-sln]").forEach(inp=>{
           inp.addEventListener("input", ()=>{
             const i = Number(inp.getAttribute("data-sln"));
@@ -7875,47 +7528,29 @@ function fillAssuntoSelect(){
         });
       }
       renderStepLinks();
-
       addLinkBtn.addEventListener("click", ()=>{
         stepLinks.push({ name:"", url:"" });
         renderStepLinks();
       });
-
       rmBtn.addEventListener("click", ()=> wrap.remove());
-
       pickBtn.addEventListener("click", ()=> fileEl.click());
-
       fileEl.addEventListener("change", async ()=>{
-
       	const f = fileEl.files && fileEl.files[0];
-
       	if(!f) return;
-
       	fileEl.value = "";
-
       	try{
-
       		const filename = await apiUploadImage(f, "respostas");
-
       		if(filename){
-
       			imgNameEl.textContent = filename;
-
       		}
-
       	}catch(err){
-
-      		showAlert("NÊo foi poss¦vel enviar a imagem do passo.");
-
+      		showAlert("No foi possvel enviar a imagem do passo.");
       	}
-
       });
-
       clearBtn.addEventListener("click", ()=>{
         fileEl.value = "";
         imgNameEl.textContent = "Nenhuma imagem";
       });
-
       wrap.__getStep = () => ({
         name: nameEl.value || "",
         text: textEl.value || "",
@@ -7924,17 +7559,14 @@ function fillAssuntoSelect(){
         link: "",
         linkName: ""
       });
-
       stepsHost.appendChild(wrap);
     }
-
     function getStepsFromUI(){
       return [...stepsHost.querySelectorAll(".stepCard")]
         .map(n => (typeof n.__getStep === "function" ? n.__getStep() : null))
         .filter(Boolean);
     }
     function clearStepsUI(){ stepsHost.innerHTML = ""; }
-
     /***********************
      * SAVE / EDIT / DELETE (perguntas) - COM SENHA
      ***********************/
@@ -7942,42 +7574,31 @@ function fillAssuntoSelect(){
       editIndex = -1;
       updateModeLabel();
       pendingDeleteImages = [];
-
       qInput.value = "";
       if(qStoreSelect) qStoreSelect.value = "ALL";
       rInput.value = "";
       linksInput.value = "";
       tagsInput.value = "";
-
       setQuestionImagesUI([]);
       setQuestionLinksUI([]);
-
       clearStepsUI();
       updateQCount();
     }
-
     function parseTags(raw){
       return (raw || "").split(",").map(s => s.trim()).filter(Boolean);
     }
-
     function handleSave(){
       const q = (qInput.value || "").trim();
       const r = (rInput.value || "").trim();
-
       if(!q){ showAlert("Informe a Pergunta."); return; }
       if(!r){ showAlert("Informe a Resposta."); return; }
-
       const store = (qStoreSelect ? (qStoreSelect.value || "").trim() : "");
       if(!store){ showAlert("Escolha a loja."); return; }
-
       const links = (linksInput.value || "").trim();
       const tags = parseTags(tagsInput.value);
-
       const steps = getStepsFromUI();
-
       const fallbackUserId = String(currentUser?.id || "");
       const fallbackUserName = (currentUser?.display_name || currentUser?.username || "").toString().trim();
-
       const payload = {
         store,
         q, r, links, tags,
@@ -7987,9 +7608,7 @@ function fillAssuntoSelect(){
         created_by_user_id: fallbackUserId,
         created_by_username: fallbackUserName
       };
-
       const next = items.slice();
-
       if(editIndex === -1){
         next.push(payload);
       }else{
@@ -7998,62 +7617,47 @@ function fillAssuntoSelect(){
         payload.created_by_username = (prev.created_by_username || "").toString() || payload.created_by_username;
         next[editIndex] = payload;
       }
-
       items = next;
       saveBase(items);
-
       void flushPendingImageDeletes();
       clearForm();
       render();
       scrollToTop();
       closeQuestionModal();
     }
-
     async function startEdit(idx){
       if(!await requirePassword("editar")) return;
-
       const it = items[idx];
       if(!it) return;
-
       pendingDeleteImages = [];
       editIndex = idx;
       updateModeLabel();
-
       qInput.value = it.q || "";
       if(qStoreSelect) qStoreSelect.value = (it.store || "Di\u00e1rio Nerdify");
       rInput.value = it.r || "";
       linksInput.value = it.links || "";
       tagsInput.value = (it.tags || []).join(", ");
-
       setQuestionImagesUI(Array.isArray(it.qImages) ? it.qImages : []);
       setQuestionLinksUI(Array.isArray(it.qLinks) ? it.qLinks : []);
-
       clearStepsUI();
       (Array.isArray(it.steps) ? it.steps : []).forEach(s => addStepUI(s));
-
       updateQCount();
       scrollToTop();
       openQuestionModal("edit");
     }
-
     async function deleteItem(idx){
       if(!await requirePassword("excluir")) return;
-
       const it = items[idx];
       if(!it) return;
-
       const ok = await showConfirm(`Excluir a pergunta:\n\n"${it.q}"\n\nConfirmar?`);
       if(!ok) return;
-
       items.splice(idx,1);
       saveBase(items);
-
       void deleteImagesNow(Array.isArray(it.qImages) ? it.qImages : []);
       if(editIndex === idx) clearForm();
       render();
       scrollToTop();
     }
-
     /***********************
      * SEARCH / RENDER
      ***********************/
@@ -8062,22 +7666,18 @@ function fillAssuntoSelect(){
     }
     function itemMatches(it, term){
       if(!term) return true;
-
       const t = term.toLowerCase();
       if(includesTerm(it.q, t)) return true;
       if(includesTerm(it.r, t)) return true;
       if(includesTerm(it.links, t)) return true;
-
       if(Array.isArray(it.qLinks)){
         for(const l of it.qLinks){
           if(includesTerm(l.name, t) || includesTerm(l.url, t)) return true;
         }
       }
-
       if(Array.isArray(it.steps)){
         for(const s of it.steps){
           if(includesTerm(s.name, t) || includesTerm(s.text, t)) return true;
-
           if(Array.isArray(s.stepLinks)){
             for(const l of s.stepLinks){
               if(includesTerm(l.name, t) || includesTerm(l.url, t)) return true;
@@ -8085,19 +7685,15 @@ function fillAssuntoSelect(){
           }
         }
       }
-
       if(Array.isArray(it.tags) && it.tags.join(" ").toLowerCase().includes(t)) return true;
-
       return false;
     }
-
     function loadTasksDone(){
       const raw = storageGet(STORAGE_KEY_TASKS_DONE);
       const parsed = safeJsonParse(raw);
       if(Array.isArray(parsed)) return hydrateTaskOwnership(normalizeTasks(parsed));
       return [];
     }
-
     function saveTasksDone(next){
       tasksDone = hydrateTaskOwnership(normalizeTasks(next));
       storageSet(STORAGE_KEY_TASKS_DONE, JSON.stringify(tasksDone));
@@ -8107,7 +7703,6 @@ function fillAssuntoSelect(){
     function renderLinksList(list){
       const arr = Array.isArray(list) ? list : [];
       if(!arr.length) return "";
-
       return `
         <div class="linkList">
           ${arr.map(l => {
@@ -8130,7 +7725,6 @@ function fillAssuntoSelect(){
       const qText = (it.q || "").trim();
       const rText = (it.r || "").trim();
       const qLinksHtml = renderLinksList(it.qLinks);
-
       const stRaw = (((it && it.store) ? it.store : "Di\u00e1rio Nerdify") + "").trim();
       const storeLabel = (stRaw === "ALL") ? "Todas as lojas" : stRaw;
       const storeData = getStoreByName(storeLabel);
@@ -8150,7 +7744,6 @@ function fillAssuntoSelect(){
         it.created_by_username = fallbackAuthor;
       }
       const authorHtml = `<div class="note" style="margin-top:6px;">Usu\u00e1rio: <b>${escapeHtml(questionAuthor)}</b></div>`;
-
       const imgs = Array.isArray(it.qImages) ? it.qImages : [];
       const imgsHtml = imgs.length
         ? `
@@ -8163,7 +7756,6 @@ function fillAssuntoSelect(){
             </div>
           </div>
         ` : "";
-
       const linksDmText = (it.links || "").trim();
       const linksDmBlock = linksDmText
         ? `
@@ -8182,10 +7774,8 @@ function fillAssuntoSelect(){
             </div>
           </div>
         ` : "";
-
       const steps = Array.isArray(it.steps) ? it.steps : [];
       const stepsBtn = steps.length ? `<button class="btn small" data-steps="${idx}">O que fazer (${steps.length})</button>` : "";
-
       const tags = Array.isArray(it.tags) ? it.tags : [];
       const tagsHtml = tags.length
         ? `
@@ -8194,7 +7784,6 @@ function fillAssuntoSelect(){
           <div class="tags">${tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>
         `
         : "";
-
       return `
         <div class="item">
           <div class="row">
@@ -8217,10 +7806,8 @@ function fillAssuntoSelect(){
               </button>
             </div>
           </div>
-
           ${storeBlockHtml}
           ${authorHtml}
-
           ${rText ? `
             <div class="linksBlock">
               <div class="copyRow">
@@ -8237,30 +7824,24 @@ function fillAssuntoSelect(){
               </div>
             </div>
           ` : ""}
-
           ${linksDmBlock}
-
           ${qLinksHtml ? `
             <div class="linksBlock">
               <div class="label">Links</div>
               ${qLinksHtml}
             </div>
           ` : ""}
-
           ${imgsHtml}
           ${tagsHtml}
-
           ${stepsBtn ? `<div class="stepsBtn">${stepsBtn}</div>` : ""}
         </div>
       `;
     }
-
     function renderNav(){
       const selectedStore = (searchStoreSelect ? (searchStoreSelect.value || "ALL").trim() : "ALL");
       const term = (searchInput.value || "").trim();
       if(term){ cardsNav.innerHTML = ""; return; }
       if(items.length <= 1){ cardsNav.innerHTML = ""; return; }
-
       if(showAllCards){
         cardsNav.innerHTML = `<button class="btn small" id="showSingleBtn">Exibir apenas uma pergunta por vez</button>`;
         document.getElementById("showSingleBtn").addEventListener("click", ()=>{
@@ -8271,12 +7852,10 @@ function fillAssuntoSelect(){
         });
         return;
       }
-
       cardsNav.innerHTML = `
         <button class="btn small" id="nextQuestionBtn">Ver pr\u00f3xima</button>
         <button class="btn small" id="showAllBtn">Ver todas</button>
       `;
-
       document.getElementById("nextQuestionBtn").addEventListener("click", ()=>{
         currentSingleIndex = Math.min(items.length - 1, currentSingleIndex + 1);
         render();
@@ -8288,10 +7867,8 @@ function fillAssuntoSelect(){
         scrollToTop();
       });
     }
-
     function render(){
       if(currentView !== "search") return;
-
       const selectedStore = (searchStoreSelect ? (searchStoreSelect.value || "ALL").trim() : "ALL");
       let backfilledAuthors = false;
       const fallbackAuthor = (currentUser?.display_name || currentUser?.username || "").toString().trim();
@@ -8320,9 +7897,7 @@ function fillAssuntoSelect(){
           const tagSet = new Set(tags.map(t => (t || "").toString().trim().toLowerCase()).filter(Boolean));
           return searchTagsFilter.some(t => tagSet.has(t));
         });
-
       countEl.textContent = `${filtered.length} item(ns)`;
-
       let listToRender = filtered;
       if(searchTagsFilter.length || (selectedStore && selectedStore !== "ALL")){
         listToRender = filtered;
@@ -8331,10 +7906,8 @@ function fillAssuntoSelect(){
         const found = filtered.find(x => x.idx === realIndex);
         listToRender = found ? [found] : (filtered.length ? [filtered[0]] : []);
       }
-
       resultsEl.innerHTML = listToRender.map(x => renderCard(x.it, x.idx)).join("")
         || `<div class="note">Nenhum resultado encontrado.</div>`;
-
       resultsEl.querySelectorAll("[data-copybtn]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const pre = btn.parentElement.querySelector("[data-copy]");
@@ -8351,14 +7924,12 @@ function fillAssuntoSelect(){
           }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
         });
       });
-
       resultsEl.querySelectorAll("[data-steps]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const idx = Number(btn.getAttribute("data-steps"));
           openModal(idx);
         });
       });
-
       resultsEl.querySelectorAll("[data-edit]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const idx = Number(btn.getAttribute("data-edit"));
@@ -8371,10 +7942,8 @@ function fillAssuntoSelect(){
           await deleteItem(idx);
         });
       });
-
       renderNav();
     }
-
     /***********************
      * MODAL (O QUE FAZER)
      ***********************/
@@ -8399,20 +7968,15 @@ function fillAssuntoSelect(){
         nextStepBtn.style.display = "none";
         return;
       }
-
       const s = steps[modalStepIndex] || {};
       const stepNum = modalStepIndex + 1;
-
       const nameHtml = s.name ? `<p class="stepName">${escapeHtml(s.name)}</p>` : ``;
-
       const linksHtml = (Array.isArray(s.stepLinks) && s.stepLinks.length)
         ? `<div style="margin-top:8px;">${renderLinksList(s.stepLinks)}</div>`
         : ``;
-
       const imgHtml = s.imageFilename
         ? `<img alt="Imagem do passo" src="${buildImagePath(s.imageFilename, "respostas")}" onerror="this.style.display='none'">`
         : ``;
-
       modalBody.innerHTML = `
         <div class="stepView">
           <p class="stepNum">Passo ${stepNum}</p>
@@ -8422,7 +7986,6 @@ function fillAssuntoSelect(){
           ${imgHtml}
         </div>
       `;
-
       prevStepBtn.style.display = modalStepIndex > 0 ? "inline-block" : "none";
       nextStepBtn.style.display = modalStepIndex < steps.length - 1 ? "inline-block" : "none";
     }
@@ -8440,7 +8003,6 @@ function fillAssuntoSelect(){
         renderModalStep();
       }
     }
-
     /***********************
      * TAREFAS DI\u00c1RIAS
      ***********************/
@@ -8448,17 +8010,14 @@ function fillAssuntoSelect(){
       if(!selectEl) return;
       selectEl.innerHTML = options.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
     }
-
     function fillStatusOptions(){
       if(!tStatus) return;
       tStatus.innerHTML = STATUS_OPTIONS.map(s => `<option value="${escapeHtml(s.value)}">${escapeHtml(s.value)}</option>`).join("");
     }
-
     function setTasksModeLabel(){
       if(!tasksModeLabel) return;
       tasksModeLabel.textContent = tasksEditId ? "Modo: editando" : "Modo: novo";
     }
-
     
     // =========================
     // DESCRICAO (FASES + DATA + NOVO PEDIDO + RASTREIO)
@@ -8496,15 +8055,12 @@ function fillAssuntoSelect(){
           _i: i,
         };
       });
-
       // remove totalmente vazias
       const cleaned = out
         .map(o => ({ text:o.text, date:o.date, prazo:o.prazo, prazoHora:o.prazoHora, chamado:o.chamado, etiqueta:o.etiqueta, novoPedido:o.novoPedido, rastreio:o.rastreio, status:o.status, attention:o.attention, attentionNote:o.attentionNote, state:o.state }))
         .filter(o => o.text || o.date || o.prazo || o.prazoHora || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.status || o.attention || o.attentionNote || o.state);
-
       return cleaned;
     }
-
     function createDescPhaseBlock(idx, data){
       const d = data || { text:"", date:"", prazo:"", prazoHora:"", chamado:"", etiqueta:"", novoPedido:"", rastreio:"", attention:false, attentionNote:"", state:"" };
       // monta as op\u00e7\u00f5es do select de status reutilizando PHASE_STATUS_OPTIONS
@@ -8528,20 +8084,17 @@ function fillAssuntoSelect(){
       wrap.style.display = "flex";
       wrap.style.flexDirection = "column";
       wrap.style.gap = "8px";
-
       const textarea = document.createElement("textarea");
       textarea.className = "obsItem";
       textarea.dataset.index = String(idx);
       textarea.placeholder = `Fase ${idx + 1} - descri\u00e7\u00e3o do caso...`;
       textarea.style.width = "100%";
       textarea.value = (d.text || "");
-
       const row = document.createElement("div");
       row.className = "row";
       row.style.gap = "10px";
       row.style.flexWrap = "wrap";
       row.style.alignItems = "flex-end";
-
       const colDate = document.createElement("div");
       colDate.style.flex = "1";
       colDate.style.minWidth = "180px";
@@ -8552,7 +8105,6 @@ function fillAssuntoSelect(){
       inputDate.dataset.index = String(idx);
       inputDate.value = (d.date || "");
       colDate.appendChild(inputDate);
-
       const colPrazo = document.createElement("div");
       colPrazo.style.flex = "1";
       colPrazo.style.minWidth = "180px";
@@ -8563,7 +8115,6 @@ function fillAssuntoSelect(){
       inputPrazo.dataset.index = String(idx);
       inputPrazo.value = (d.prazo || "");
       colPrazo.appendChild(inputPrazo);
-
       const colPrazoHora = document.createElement("div");
       colPrazoHora.style.flex = "1";
       colPrazoHora.style.minWidth = "180px";
@@ -8574,7 +8125,6 @@ function fillAssuntoSelect(){
       inputPrazoHora.dataset.index = String(idx);
       inputPrazoHora.value = (d.prazoHora || "");
       colPrazoHora.appendChild(inputPrazoHora);
-
       const colChamado = document.createElement("div");
       colChamado.style.flex = "1";
       colChamado.style.minWidth = "180px";
@@ -8586,7 +8136,6 @@ function fillAssuntoSelect(){
       inputChamado.placeholder = "Opcional";
       inputChamado.value = (d.chamado || "");
       colChamado.appendChild(inputChamado);
-
       const colEtiqueta = document.createElement("div");
       colEtiqueta.style.flex = "1";
       colEtiqueta.style.minWidth = "180px";
@@ -8598,7 +8147,6 @@ function fillAssuntoSelect(){
       inputEtiqueta.placeholder = "Opcional";
       inputEtiqueta.value = (d.etiqueta || "");
       colEtiqueta.appendChild(inputEtiqueta);
-
       const colNovo = document.createElement("div");
       colNovo.style.flex = "1";
       colNovo.style.minWidth = "180px";
@@ -8610,7 +8158,6 @@ function fillAssuntoSelect(){
       inputNovo.placeholder = "Se houver troca/novo envio";
       inputNovo.value = (d.novoPedido || "");
       colNovo.appendChild(inputNovo);
-
       const colRast = document.createElement("div");
       colRast.style.flex = "1";
       colRast.style.minWidth = "180px";
@@ -8622,7 +8169,6 @@ function fillAssuntoSelect(){
       inputRast.placeholder = "Opcional";
       inputRast.value = (d.rastreio || "");
       colRast.appendChild(inputRast);
-
       const colStatus = document.createElement("div");
       colStatus.style.flex = "1";
       colStatus.style.minWidth = "200px";
@@ -8632,7 +8178,6 @@ function fillAssuntoSelect(){
       selectStatus.dataset.index = String(idx);
       selectStatus.innerHTML = buildStatusOptions(d.status || "");
       colStatus.appendChild(selectStatus);
-
       row.appendChild(colDate);
       row.appendChild(colPrazo);
       row.appendChild(colPrazoHora);
@@ -8641,7 +8186,6 @@ function fillAssuntoSelect(){
       row.appendChild(colNovo);
       row.appendChild(colRast);
       row.appendChild(colStatus);
-
       const attentionRow = document.createElement("div");
       attentionRow.className = "attentionRow";
       const attentionLabel = document.createElement("label");
@@ -8652,50 +8196,42 @@ function fillAssuntoSelect(){
       attentionInput.dataset.index = String(idx);
       attentionInput.checked = Boolean(d.attention || d.attentionNote);
       attentionLabel.appendChild(attentionInput);
-      attentionLabel.appendChild(document.createTextNode(" Aten¦Êo"));
+      attentionLabel.appendChild(document.createTextNode(" Ateno"));
       attentionRow.appendChild(attentionLabel);
-
       const attentionWrap = document.createElement("div");
       attentionWrap.className = "attentionNoteWrap";
       attentionWrap.style.display = attentionInput.checked ? "block" : "none";
       const attentionLabelText = document.createElement("div");
       attentionLabelText.className = "label";
-      attentionLabelText.textContent = "Observa¦ºes";
+      attentionLabelText.textContent = "Observaes";
       const attentionNote = document.createElement("textarea");
       attentionNote.className = "obsAttentionNote";
       attentionNote.dataset.index = String(idx);
       attentionNote.rows = 3;
-      attentionNote.placeholder = "Digite as observa¦ºes...";
+      attentionNote.placeholder = "Digite as observaes...";
       attentionNote.value = (d.attentionNote || "");
       attentionWrap.appendChild(attentionLabelText);
       attentionWrap.appendChild(attentionNote);
-
       attentionInput.addEventListener("change", ()=>{
         attentionWrap.style.display = attentionInput.checked ? "block" : "none";
       });
-
       wrap.appendChild(textarea);
       wrap.appendChild(row);
       wrap.appendChild(attentionRow);
       wrap.appendChild(attentionWrap);
       return wrap;
     }
-
     function setDescPhasesToUI(phases){
       if(!obsList) return;
-
       const safe = Array.isArray(phases) ? phases : [];
       const list = (safe.length ? safe : [{ text:"", date:"", prazo:"", prazoHora:"", chamado:"", etiqueta:"", novoPedido:"", rastreio:"", attention:false, attentionNote:"", state:"" }]);
-
       obsList.innerHTML = "";
       list.forEach((p, idx) => {
         obsList.appendChild(createDescPhaseBlock(idx, p));
       });
-
       // garante regra de n\u00e3o deletar a \u00daltima fase
       updateDescPhaseButtonsState();
     }
-
     function updateDescPhaseButtonsState(){
       if(!obsList) return;
       const blocks = Array.from(obsList.querySelectorAll(".descPhase"));
@@ -8724,7 +8260,6 @@ function fillAssuntoSelect(){
         if(a) a.dataset.index = String(idx);
         const an = b.querySelector("textarea.obsAttentionNote");
         if(an) an.dataset.index = String(idx);
-
         const add = b.querySelector("[data-obs-add]");
         if(add) add.setAttribute("data-obs-add", String(idx));
         const del = b.querySelector("[data-obs-del]");
@@ -8735,7 +8270,6 @@ function fillAssuntoSelect(){
         }
       });
     }
-
     function getEffectivePedidoFromTask(t){
       const base = ((t?.pedido || "").toString()).trim();
       const phases = Array.isArray(t?.obs) ? t.obs : [];
@@ -8745,7 +8279,6 @@ function fillAssuntoSelect(){
       }
       return base;
     }
-
     function getEffectiveRastreioFromTask(t){
       const base = ((t?.rastreio || "").toString()).trim();
       const phases = Array.isArray(t?.obs) ? t.obs : [];
@@ -8755,7 +8288,6 @@ function fillAssuntoSelect(){
       }
       return base;
     }
-
     function getEffectivePhaseDate(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       if(!phases.length){
@@ -8771,7 +8303,6 @@ function fillAssuntoSelect(){
       }
       return "";
     }
-
     function getEffectivePhaseTime(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       if(!phases.length) return "";
@@ -8785,7 +8316,6 @@ function fillAssuntoSelect(){
       }
       return "";
     }
-
     function getLastPhasePrazoInfo(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       for(let i = phases.length - 1; i >= 0; i--){
@@ -8797,7 +8327,6 @@ function fillAssuntoSelect(){
       }
       return { date: "", time: "", has: false };
     }
-
     function isTaskOverdue(t, nowTs){
       if(!t || t.isExtra) return false;
       const info = getLastPhasePrazoInfo(t);
@@ -8807,14 +8336,12 @@ function fillAssuntoSelect(){
       const now = Number.isFinite(nowTs) ? nowTs : Date.now();
       return now > dueTs;
     }
-
     function getTaskDisplayDate(t){
       const base = (getEffectivePhaseDate(t) || (t?.proxEtapa || "")).toString().trim();
       if(!base) return "";
       if(isTaskOverdue(t)) return addDaysISO(todayISO(), 1) || base;
       return base;
     }
-
     function getTaskSortTimestamp(t){
       if(!t) return Number.POSITIVE_INFINITY;
       if(isTaskOverdue(t)){
@@ -8823,7 +8350,6 @@ function fillAssuntoSelect(){
       }
       return getDueTimestamp(getTaskDisplayDate(t), getEffectivePhaseTime(t));
     }
-
     function syncOverdueCalendarEntries(){
       const tomorrow = addDaysISO(todayISO(), 1);
       if(!tomorrow) return;
@@ -8842,13 +8368,11 @@ function fillAssuntoSelect(){
         saveCalendarHistory(next);
       }
     }
-
     function isCalendarEntryOverdue(entry){
       if(!entry || entry.open === false || entry.extra || entry.simple) return false;
       const taskRef = (tasks || []).find(t => String(t?.id || "") === String(entry.id || ""));
       return taskRef ? isTaskOverdue(taskRef) : false;
     }
-
     function getDueTimestamp(dateStr, timeStr){
       const date = (dateStr || "").toString().trim();
       if(!date) return Number.POSITIVE_INFINITY;
@@ -8856,7 +8380,6 @@ function fillAssuntoSelect(){
       const ts = new Date(`${date}T${time}:00`).getTime();
       return Number.isNaN(ts) ? Number.POSITIVE_INFINITY : ts;
     }
-
     function getEffectivePhaseIndex(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       if(!phases.length) return 0;
@@ -8870,7 +8393,6 @@ function fillAssuntoSelect(){
       }
       return phases.length - 1;
     }
-
     function getActivePhaseIndex(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       if(!phases.length) return 0;
@@ -8880,12 +8402,10 @@ function fillAssuntoSelect(){
       }
       return phases.length - 1;
     }
-
     function getLastPhaseIndex(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       return phases.length ? phases.length - 1 : 0;
     }
-
     function getEffectivePhaseStatus(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       for(let i = phases.length - 1; i >= 0; i--){
@@ -8894,7 +8414,6 @@ function fillAssuntoSelect(){
       }
       return "";
     }
-
     function getPhaseAttentionByIndex(t, idx){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       if(!Number.isFinite(idx) || idx < 0 || idx >= phases.length) return { has:false, note:"" };
@@ -8903,19 +8422,16 @@ function fillAssuntoSelect(){
       const has = Boolean(phase.attention || note);
       return { has, note };
     }
-
     function getPhaseDateByIndex(t, idx){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       if(!Number.isFinite(idx) || idx < 0 || idx >= phases.length) return "";
       const phase = phases[idx] || {};
       return ((phase.prazo || phase.date || "")).toString().trim();
     }
-
     function getEffectivePhaseAttention(t){
       const idx = getEffectivePhaseIndex(t);
       return getPhaseAttentionByIndex(t, idx);
     }
-
     function getCalendarAssuntoFromTask(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       const baseAssunto = (t.assunto || "").trim();
@@ -8925,7 +8441,6 @@ function fillAssuntoSelect(){
       const phaseStatus = getEffectivePhaseStatus(t);
       return (phaseStatus || baseAssunto || "(Sem assunto)");
     }
-
     function getLastPhaseText(t){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       for(let i = phases.length - 1; i >= 0; i--){
@@ -8934,11 +8449,9 @@ function fillAssuntoSelect(){
       }
       return "";
     }
-
     function detectCarrierFromCode(code){
       const c = (code || "").toString().trim();
       if(!c) return { carrier:"", action:"copy", url:"" };
-
       // Jadlog: somente n\u00fameros (qualquer tamanho)
       if(/^\d+$/.test(c)){
         return { carrier:"jadlog", action:"open", url:`https://www.jadlog.com.br/jadlog/captcha?cte=${encodeURIComponent(c)}` };
@@ -8953,24 +8466,19 @@ function fillAssuntoSelect(){
       if(hasMix && !/BR$/i.test(c)){
         return { carrier:"loggi", action:"open", url:`https://app.loggi.com/rastreador/${encodeURIComponent(c)}` };
       }
-
       return { carrier:"", action:"copy+open", url:"https://rastreamento.correios.com.br/app/index.php" };
     }
-
     function handleTrackingButton(code){
       const c = (code || "").toString().trim();
       if(!c){
         showAlert("Nenhum c\u00f3digo de rastreio informado.");
         return;
       }
-
       const rule = detectCarrierFromCode(c);
-
       if(rule.action === "open"){
         window.open(rule.url, "_blank", "noopener");
         return;
       }
-
       // copy (e depois abre o site)
       navigator.clipboard.writeText(c).then(()=>{
         if(rule.url){
@@ -8984,7 +8492,6 @@ function fillAssuntoSelect(){
         showAlert("N\u00e3o foi poss\u00edvel copiar automaticamente. Copie manualmente o c\u00f3digo exibido no card.");
       });
     }
-
     
     // WhatsApp Cliente (formata e gera link)
     function normalizeWhatsappNumber(raw){
@@ -9015,7 +8522,6 @@ function fillAssuntoSelect(){
       const url = buildCustomerWhatsappUrl(tWhatsapp ? tWhatsapp.value : "");
       tWhatsappPreview.textContent = url ? `Link gerado: ${url}` : "Link gerado: -";
     }
-
 function getNuvemshopSupportBaseUrl(lojaText){
       const l = (lojaText || "").trim();
       const store = getStoreByName(l);
@@ -9036,7 +8542,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const d = (dataInicial || "").trim() || "-";
       const p = (pedidoEfetivo || "").trim() || "-";
       const r = (rastreioEfetivo || "").trim() || "-";
-
       const lines = [
         `Ol\u00e1, abri um chamado sobre: ${a}`,
         `Gostaria de uma posi\u00e7\u00e3o sobre o chamado.`,
@@ -9045,17 +8550,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
         `Com rastreio: ${r}`,
         `Minha loja: ${site}`,
       ];
-
       const text = encodeURIComponent(lines.join("\n"));
       return `${base}&text=${text}`;
     }
-
     function addPhaseFromCard(taskId){
       const id = (taskId || "").trim();
       if(!id) return;
       openPhaseEditor({ taskId:id, mode:"add", index:-1 });
     }
-
     function openExtraTaskInCalendar(taskId){
       const id = (taskId || "").trim();
       if(!id) return;
@@ -9091,7 +8593,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         setTimeout(()=> row.classList.remove("isFocus"), 1400);
       });
     }
-
     let pendingCloseTaskId = "";
     function openCloseTaskModal(taskId){
       const id = (taskId || "").trim();
@@ -9107,7 +8608,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         abortPendingPhaseSave();
       }
     }
-
     function closeTaskAsDone(taskId){
       const id = (taskId || "").trim();
       if(!id) return;
@@ -9128,7 +8628,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(tasksEditId === id) clearTasksForm();
       renderTasks();
     }
-
     function addTaskToDone(task, options){
       if(!task) return;
       const closedAt = options?.closedAt || new Date().toISOString();
@@ -9141,7 +8640,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       tasksDone.unshift({ ...task, closedAt, closed_by_user_id: closedById, closed_by_username: closedByName, isExtra });
       saveTasksDone(tasksDone);
     }
-
     function togglePhaseEditAttention(){
       if(!phaseEditAttentionWrap) return;
       const show = Boolean(phaseEditAttention && phaseEditAttention.checked);
@@ -9153,7 +8651,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }, 0);
       }
     }
-
     function togglePhaseSizeFields(){
       const statusValue = (phaseEditStatus?.value || "").toString();
       const show = /troca/i.test(statusValue);
@@ -9161,20 +8658,67 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(!show){
         if(phaseEditSizeFrom) phaseEditSizeFrom.value = "";
         if(phaseEditSizeTo) phaseEditSizeTo.value = "";
+        if(phaseEditSizeFromCustom){
+          phaseEditSizeFromCustom.value = "";
+          phaseEditSizeFromCustom.style.display = "none";
+        }
+        if(phaseEditSizeToCustom){
+          phaseEditSizeToCustom.value = "";
+          phaseEditSizeToCustom.style.display = "none";
+        }
       }
     }
-
+    function toggleCustomSizeInput(selectEl, customEl){
+      if(!selectEl || !customEl) return;
+      if(selectEl.value === "__custom__"){
+        customEl.style.display = "block";
+      }else{
+        customEl.style.display = "none";
+        customEl.value = "";
+      }
+    }
+    function resolveSizeValue(selectEl, customEl){
+      const val = (selectEl?.value || "").toString().trim();
+      if(val === "__custom__"){
+        return (customEl?.value || "").toString().trim();
+      }
+      return val;
+    }
+    function applySizeValue(selectEl, customEl, value){
+      if(!selectEl) return;
+      const v = (value || "").toString().trim();
+      if(!v){
+        selectEl.value = "";
+        if(customEl){
+          customEl.value = "";
+          customEl.style.display = "none";
+        }
+        return;
+      }
+      const hasOption = Array.from(selectEl.options || []).some(opt => opt.value === v && opt.value !== "__custom__");
+      if(hasOption){
+        selectEl.value = v;
+        if(customEl){
+          customEl.value = "";
+          customEl.style.display = "none";
+        }
+        return;
+      }
+      selectEl.value = "__custom__";
+      if(customEl){
+        customEl.value = v;
+        customEl.style.display = "block";
+      }
+    }
     function openPhaseEditor({ taskId, mode, index }){
       const id = (taskId || "").trim();
       if(!id) return;
       const t = tasks.find(x => x.id === id)
         || (pendingTaskDraft && String(pendingTaskDraft.id || "") === id ? pendingTaskDraft : null);
       if(!t) return false;
-
       phaseEditTaskId = id;
       phaseEditMode = (mode === "edit") ? "edit" : "add";
       phaseEditIndex = Number.isFinite(index) ? index : -1;
-
       if(!phaseEditOverlay) return;
       if(phaseEditOverlay){
         const backContext = (phaseEditOrigin === "calendar" || phaseEditOrigin === "taskModal");
@@ -9190,20 +8734,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
           closePhaseEditBtn.setAttribute("aria-label", backContext ? "Voltar" : "Fechar");
         }
       }
-
       const obs = Array.isArray(t.obs) ? t.obs : [];
       const hasIndex = phaseEditMode === "edit" && phaseEditIndex >= 0 && phaseEditIndex < obs.length;
       const current = hasIndex ? (obs[phaseEditIndex] || {}) : {};
-
       // garante que o select de status esteja populado antes de setar o valor
       fillPhaseStatusSelect();
-
       if(phaseEditTitle){
         phaseEditTitle.textContent = phaseEditMode === "edit"
           ? `Editar fase ${phaseEditIndex + 1}`
           : "Nova fase";
       }
-
       if(phaseEditText) fillPhaseStatusSelect();
       if(phaseEditText) phaseEditText.value = (current.text || "");
       const lastPhase = (obs && obs.length) ? (obs[obs.length - 1] || {}) : {};
@@ -9218,8 +8758,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(phaseEditDate) phaseEditDate.value = (current.date || defaultPhaseDate);
       if(phaseEditNovoPedido) phaseEditNovoPedido.value = (current.novoPedido || (phaseEditMode === "add" ? lastPedido : ""));
       if(phaseEditRastreio) phaseEditRastreio.value = (current.rastreio || (phaseEditMode === "add" ? lastRastreio : ""));
-      if(phaseEditSizeFrom) phaseEditSizeFrom.value = (current.sizeFrom || "");
-      if(phaseEditSizeTo) phaseEditSizeTo.value = (current.sizeTo || "");
+      const defaultSizeFrom = (phaseEditMode === "add")
+        ? ((lastPhase.sizeFrom || "").toString().trim())
+        : ((current.sizeFrom || "").toString().trim());
+      const defaultSizeTo = (phaseEditMode === "add")
+        ? ((lastPhase.sizeTo || "").toString().trim())
+        : ((current.sizeTo || "").toString().trim());
+      applySizeValue(phaseEditSizeFrom, phaseEditSizeFromCustom, defaultSizeFrom);
+      applySizeValue(phaseEditSizeTo, phaseEditSizeToCustom, defaultSizeTo);
       if(phaseEditChamado) phaseEditChamado.value = (current.chamado || "");
       if(phaseEditEtiqueta) phaseEditEtiqueta.value = (current.etiqueta || "");
       if(phaseEditPrazo) phaseEditPrazo.value = (current.prazo || "");
@@ -9237,16 +8783,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
         : (current.status || "");
       if(phaseEditStatus) phaseEditStatus.value = phaseStatusValue.toString();
       togglePhaseSizeFields();
-
       // delete s\u00f3 no modo edit
       if(phaseEditDeleteBtn){
         phaseEditDeleteBtn.style.display = (phaseEditMode === "edit") ? "inline-flex" : "none";
       }
-
       phaseEditOverlay.classList.add("show");
       setTimeout(()=>{ if(phaseEditText) phaseEditText.focus(); }, 60);
     }
-
     function closePhaseEditor(){
       if(!phaseEditOverlay) return;
       phaseEditOverlay.classList.remove("show");
@@ -9267,7 +8810,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       phaseEditMode = "add";
       phaseEditOrigin = "";
     }
-
     function applyPhaseToTaskData(task, phase, mode, index){
       if(!task) return;
       if(!Array.isArray(task.obs)) task.obs = [];
@@ -9288,7 +8830,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       task.proxEtapa = getEffectivePhaseDate(task) || "";
     }
-
     function abortPendingPhaseSave(){
       if(!pendingPhaseSave) return;
       const origin = pendingPhaseSave.origin;
@@ -9302,7 +8843,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       showAlert("A fase n\u00e3o foi inserida porque o status foi marcado como conclu\u00edda, mas a tarefa n\u00e3o foi encerrada.");
     }
-
     function savePhaseEditor(){
       const id = (phaseEditTaskId || "").trim();
       if(!id) return false;
@@ -9310,7 +8850,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         || (pendingTaskDraft && String(pendingTaskDraft.id || "") === id ? pendingTaskDraft : null);
       const usingDraft = Boolean(pendingTaskDraft && t === pendingTaskDraft);
       if(!t) return false;
-
       const next = {
         text: ((phaseEditText?.value || "").toString()).trim(),
         date: ((phaseEditDate?.value || "").toString()).trim(),
@@ -9320,15 +8859,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
         etiqueta: ((phaseEditEtiqueta?.value || "").toString()).trim(),
         novoPedido: ((phaseEditNovoPedido?.value || "").toString()).trim(),
         rastreio: ((phaseEditRastreio?.value || "").toString()).trim(),
-        sizeFrom: ((phaseEditSizeFrom?.value || "").toString()).trim(),
-        sizeTo: ((phaseEditSizeTo?.value || "").toString()).trim(),
+        sizeFrom: resolveSizeValue(phaseEditSizeFrom, phaseEditSizeFromCustom),
+        sizeTo: resolveSizeValue(phaseEditSizeTo, phaseEditSizeToCustom),
         status: ((phaseEditStatus?.value || "").toString()).trim(),
         attention: Boolean(phaseEditAttention && phaseEditAttention.checked),
         attentionNote: Boolean(phaseEditAttention && phaseEditAttention.checked)
           ? ((phaseEditAttentionNote?.value || "").toString()).trim()
           : "",
       };
-
       const existingPhase = (phaseEditMode === "edit" && Array.isArray(t.obs))
         ? (t.obs[phaseEditIndex] || {})
         : {};
@@ -9336,7 +8874,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const phaseAuthorName = (existingPhase.created_by_username || currentUser?.display_name || currentUser?.username || "").toString().trim();
       if(phaseAuthorId) next.created_by_user_id = phaseAuthorId;
       if(phaseAuthorName) next.created_by_username = phaseAuthorName;
-
       clearFieldErrors([
         phaseEditText,
         phaseEditDate,
@@ -9346,11 +8883,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
         phaseEditNovoPedido,
         phaseEditSizeFrom,
         phaseEditSizeTo,
+        phaseEditSizeFromCustom,
+        phaseEditSizeToCustom,
         phaseEditRastreio
       ]);
-
       let isOk = true;
-
       const minPhaseText = 5;
       if(phaseEditMode === "add"){
         if(!next.text){
@@ -9380,18 +8917,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
           setFieldError(phaseEditRastreio, "Preencha o rastreio.");
           isOk = false;
         }
-        if(phaseEditSizeWrap && phaseEditSizeWrap.style.display !== "none"){
-          if(!next.sizeFrom){
-            setFieldError(phaseEditSizeFrom, "Selecione o tamanho original.");
-            isOk = false;
-          }
-          if(!next.sizeTo){
-            setFieldError(phaseEditSizeTo, "Selecione o tamanho da troca.");
-            isOk = false;
-          }
+      }
+      if(phaseEditSizeWrap && phaseEditSizeWrap.style.display !== "none"){
+        const sizeFromNorm = (next.sizeFrom || "").toString().trim().toLowerCase();
+        const sizeToNorm = (next.sizeTo || "").toString().trim().toLowerCase();
+        if(sizeFromNorm && sizeToNorm && sizeFromNorm === sizeToNorm){
+          setFieldError(phaseEditSizeFrom, "Os tamanhos da troca n\u00e3o podem ser iguais.");
+          setFieldError(phaseEditSizeTo, "Os tamanhos da troca n\u00e3o podem ser iguais.");
+          isOk = false;
         }
       }
-
       if(next.date && !isValidDateInput(next.date)){
         setFieldError(phaseEditDate, "Data invalida.");
         isOk = false;
@@ -9419,7 +8954,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           isOk = false;
         }
       }
-
       if(phaseEditMode !== "add"){
         if(next.text && next.text.length < minPhaseText){
           setFieldError(phaseEditText, "Descricao muito curta.");
@@ -9431,11 +8965,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
           isOk = false;
         }
       }
-
       if(!isOk) return false;
-
       if(!Array.isArray(t.obs)) t.obs = [];
-
       if(next.status === PHASE_STATE_DONE){
         pendingPhaseSave = {
           taskId: id,
@@ -9449,11 +8980,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
         openCloseTaskModal(id);
         return true;
       }
-
       applyPhaseToTaskData(t, next, phaseEditMode, phaseEditIndex);
       t.assunto = getEffectivePhaseStatus(t) || "";
       t.updatedAt = new Date().toISOString();
-
       if(usingDraft){
         tasks = tasks || [];
         tasks.unshift(t);
@@ -9466,14 +8995,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
         closeTaskModal();
         return true;
       }
-
       saveTasks(tasks);
       upsertCalendarFromTask(t);
       renderTasks();
       closePhaseEditor();
       return true;
     }
-
     async function deletePhaseEditor(){
       const id = (phaseEditTaskId || "").trim();
       if(!id) return;
@@ -9489,9 +9016,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       const ok = await showConfirm(`Excluir a fase ${phaseEditIndex + 1}?`);
       if(!ok) return;
-
       t.obs.splice(phaseEditIndex, 1);
-
       t.proxEtapa = getEffectivePhaseDate(t) || "";
       saveTasks(tasks);
       upsertCalendarFromTask(t);
@@ -9519,12 +9044,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
             state: (o?.state || "").toString().trim(),
           }))
         : [];
-
       const cleaned = phases.filter(o => o.text || o.date || o.prazo || o.prazoHora || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.sizeFrom || o.sizeTo || o.status || o.attention || o.attentionNote || o.state);
       if(!cleaned.length) return "";
-
       const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-
       const lastIdx = cleaned.length ? cleaned[cleaned.length - 1]._idx : -1;
       const etiquetaUrl = buildNuvemEnvioUrl(loja);
       const renderPhaseItem = (o) => {
@@ -9539,7 +9061,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const etiquetaCopyBtn = `<button type="button" class="btn small copyBtn" data-copy-etiqueta="${escapeHtml(o.etiqueta)}" data-etiqueta-url="${escapeHtml(etiquetaUrl)}" title="Copiar etiqueta reversa" aria-label="Copiar etiqueta reversa" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIcon}</button>`;
           parts.push(`Etiqueta Reversa: ${etiquetaLink} ${etiquetaCopyBtn}`);
         }
-
         if(o.novoPedido){
           const pedidoUrl = getNuvemshopOrderUrl(loja, o.novoPedido);
           const pedidoLink = pedidoUrl
@@ -9550,26 +9071,22 @@ function getNuvemshopSupportBaseUrl(lojaText){
             `<button type="button" class="btn small copyBtn" data-copy-novopedido="${escapeHtml(o.novoPedido)}" title="Copiar novo pedido" aria-label="Copiar novo pedido" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIcon}</button>`
           );
         }
-
         if(o.sizeFrom || o.sizeTo){
           const from = o.sizeFrom || "-";
           const to = o.sizeTo || "-";
           parts.push(`Tamanhos da troca: <b>${escapeHtml(from)}</b> -> <b>${escapeHtml(to)}</b>`);
         }
-
         if(o.rastreio){
           parts.push(
             `Rastreio: <a href="#" data-track-code="${escapeHtml(o.rastreio)}" style="font-weight:800; text-decoration:underline;">${escapeHtml(o.rastreio)}</a> ` +
             `<button type="button" class="btn small copyBtn" data-copy-phaserastreio="${escapeHtml(o.rastreio)}" title="Copiar rastreio" aria-label="Copiar rastreio" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIcon}</button>`
           );
         }
-
         const metaHtml = parts.length
           ? `<div class="note" style="margin:16px 0 10px 0; font-size:13px; display:flex; flex-direction:column; gap:8px;">` +
             parts.map(p => `<div>${p}</div>`).join("") +
             `</div>`
           : "";
-
         const safeTaskId = (taskId || "").toString();
       const canEdit = !!safeTaskId;
       const phaseBtns = canEdit
@@ -9589,7 +9106,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
              </svg>
            </button>`
         : "";
-
         const textRaw = (o.text || "").toString();
         const textSafe = escapeHtml(textRaw);
         const textWrapped = textSafe.replace(/([^\s]{20})/g, "$1&#8203;");
@@ -9623,7 +9139,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
              </button>`
           : "";
         const calendarBtn = (o._idx === lastIdx)
-          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calend¯rio" aria-label="Calend¯rio">
+          ? `<button type="button" class="btn small iconBtn" data-task-phase-calendar="${escapeHtml(safeTaskId)}" data-phase-idx="${escapeHtml(String(o._idx))}" title="Calendrio" aria-label="Calendrio">
                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                  <rect x="3" y="4" width="18" height="17" rx="2"></rect>
                  <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -9646,7 +9162,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
                </svg>
              </button>`
           : "";
-
         return `
           <div class="phaseItem" data-phase-idx="${escapeHtml(String(o._idx))}">
             <div class="phaseRow">
@@ -9666,7 +9181,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           </div>
         `;
       };
-
       const activePhase = cleaned.find(o => (o.state || "").trim() === PHASE_STATE_ACTIVE);
       const currentPhase = activePhase || cleaned[cleaned.length - 1];
       const currentHtml = renderPhaseItem(currentPhase);
@@ -9682,13 +9196,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
         </div>
       `;
     }
-
-
     function clearTasksForm(){
       tasksEditId = null;
       pendingTaskDraft = null;
       setTasksModeLabel();
-
       tData.value = "";
       tCliente.value = "";
       if(tWhatsapp) tWhatsapp.value = "";
@@ -9699,17 +9210,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(tRastreio) tRastreio.value = "";
       setDescPhasesToUI([]);
       clearFieldErrors([tData, tCliente, tWhatsapp, tLoja, tPedido]);
-
       if(tFonte && FONTE_OPTIONS.length) tFonte.value = FONTE_OPTIONS[0];
       if(tStatus && STATUS_OPTIONS.length) tStatus.value = STATUS_OPTIONS[0].value;
-
       if(tProxEtapa) tProxEtapa.value = "";
     }
-
     function validateTasksForm(){
       clearFieldErrors([tData, tCliente, tWhatsapp, tLoja, tPedido]);
       let ok = true;
-
       const data = (tData ? (tData.value||"") : "").trim();
       if(!data){
         setFieldError(tData, "Preencha a data inicial.");
@@ -9753,7 +9260,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       return ok;
     }
-
     function buildTaskPayloadFromForm(options){
       const obs = Array.isArray(options?.obs) ? options.obs : getDescPhasesFromUI();
       const fallbackUserId = String(currentUser?.id || "");
@@ -9778,7 +9284,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         updatedAt: new Date().toISOString(),
       };
     }
-
     function startTaskPhaseFlow(){
       if(!validateTasksForm()) return;
       if(tasksEditId){
@@ -9794,13 +9299,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(taskOverlay) taskOverlay.classList.remove("show");
       openPhaseEditor({ taskId: payload.id, mode:"add", index:-1 });
     }
-
     function saveTask(){
       if(!validateTasksForm()) return;
-
       const payload = buildTaskPayloadFromForm({});
       const next = tasks.slice();
-
       if(!tasksEditId){
         payload.createdAt = new Date().toISOString();
         next.unshift(payload);
@@ -9817,22 +9319,17 @@ function getNuvemshopSupportBaseUrl(lojaText){
           next.unshift(payload);
         }
       }
-
       // atualiza hist\u00f3rico do calend\u00e1rio com base na Pr\u00f3xima Etapa
       upsertCalendarFromTask(payload);
-
       saveTasks(next);
       clearTasksForm();
       closeTaskModal();
     }
-
     function editTask(id){
       const t = tasks.find(x => x.id === id);
       if(!t) return false;
-
       tasksEditId = id;
       setTasksModeLabel();
-
       tData.value = t.data || "";
       tCliente.value = t.cliente || "";
       if(tWhatsapp) tWhatsapp.value = t.whatsapp || "";
@@ -9845,15 +9342,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(tProxEtapa) tProxEtapa.value = t.proxEtapa || "";
       if(tRastreio) tRastreio.value = t.rastreio || "";
       setDescPhasesToUI(t.obs);
-
       scrollToTop();
       openTaskModal();
     }
-
     async function removeTask(id){
       const t = tasks.find(x => x.id === id);
       if(!t) return false;
-
       const result = await openPopup({
         title: "Remover tarefa",
             message: "Voc\u00ea quer deletar esta tarefa ou apenas marc\u00e1-la como conclu\u00edda?",
@@ -9863,7 +9357,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         centerMessage: true,
       });
       if(!result && popupActionSource !== "ok" && popupActionSource !== "cancel") return;
-
       if(popupActionSource === "cancel"){
         if(t.isExtra){
           await closeExtraTask(id);
@@ -9874,19 +9367,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
         renderCalendarDayDetails(calSelectedISO);
         return;
       }
-
       if(t.isExtra){
         calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== String(id));
         saveCalendarHistory(calendarHistory);
       }else{
         markCalendarClosed(t);
       }
-
       const next = tasks.filter(x => x.id !== id);
       saveTasks(next);
       if(tasksEditId === id) clearTasksForm();
     }
-
     function matchesPeriod(dateStr, period){
       if(!period || period === "ALL") return true;
       const s = (dateStr || "").toString().trim();
@@ -9923,7 +9413,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       return true;
     }
-
     function getTasksPeriodLabel(){
       const period = (tasksSearchPeriodValue || "").trim() || "ALL";
       if(period === "ALL") return "Per\u00edodo: Todos";
@@ -9943,19 +9432,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       return "Per\u00edodo: -";
     }
-
     function isTaskVisibleToCurrentUser(t){
       if(!isSecondaryUser()) return true;
       const createdId = (t?.created_by_user_id || "").toString();
       return createdId !== "" && createdId === String(currentUser?.id || "");
     }
-
     function getVisibleTasksList(list){
       const base = Array.isArray(list) ? list : [];
       if(!isSecondaryUser()) return base.slice();
       return base.filter(isTaskVisibleToCurrentUser);
     }
-
     function getVisibleCalendarHistoryList(list){
       const base = Array.isArray(list) ? list : [];
       if(!isSecondaryUser()) return base.slice();
@@ -9964,7 +9450,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         return createdId !== "" && createdId === String(currentUser?.id || "");
       });
     }
-
     function getFilteredTasks(){
       const q = (tasksSearchQuery || "").trim().toLowerCase();
       const storeFilter = (tasksSearchStoreValue || "").trim();
@@ -10006,7 +9491,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         return aa.localeCompare(bb);
       });
     }
-
     function updateTaskCountBadges(){
       const list = getVisibleTasksList(tasks);
       const normalCount = list.filter(t => !t.isExtra).length;
@@ -10021,21 +9505,17 @@ function getNuvemshopSupportBaseUrl(lojaText){
         tasksExtraCountBadge.style.display = isCollapsed ? "none" : "inline-flex";
       }
     }
-
     function renderTasks(){
       if(currentView !== "tasks") return;
-
       updateTaskCountBadges();
       syncOverdueCalendarEntries();
       const filtered = getFilteredTasks();
-
       tasksCount.textContent = `${filtered.length} item(ns)`;
       if(tasksPeriodLabel){
         const label = getTasksPeriodLabel();
         tasksPeriodLabel.textContent = label;
         tasksPeriodLabel.style.display = label ? "block" : "none";
       }
-
       if(!filtered.length){
         tasksList.innerHTML = `<div class="note">Nenhuma tarefa encontrada.</div>`;
         if(tasksNextBtn) tasksNextBtn.style.display = "none";
@@ -10044,11 +9524,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
         renderMiniCalendar();
         return;
       }
-
       // garante \u00cdndice v\u00e1lido
       if(tasksSingleIndex < 0) tasksSingleIndex = 0;
       if(tasksSingleIndex >= filtered.length) tasksSingleIndex = 0;
-
       const show = tasksShowAll ? filtered : [filtered[tasksSingleIndex]];
       if(tasksShowAll){
         if(tasksNextBtn) tasksNextBtn.style.display = "none";
@@ -10061,7 +9539,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       const today = todayISO();
       const repeatIconSvg = `<svg class="iconStroke" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.3-6.3"></path><polyline points="21 3 21 9 15 9"></polyline><path d="M21 12a9 9 0 0 1-15.3 6.3"></path><polyline points="3 21 3 15 9 15"></polyline></svg>`;
-
       tasksList.innerHTML = show.map(t => {
         const isExtra = Boolean(t.isExtra);
         const repeatLabel = (t.repeat || "").toString().trim();
@@ -10072,7 +9549,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const isOverdue = isTaskOverdue(t);
         const dueToday = (effDate && effDate === today);
         const colors = statusColors(t.status);
-
         const statusStyle = `background: linear-gradient(90deg, ${colors.a}, ${colors.b});`;
         const fonteText = (t.fonte || "-");
         const statusText = (t.status || "-");
@@ -10081,7 +9557,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const timeLabel = (startTime || endTime) ? `${startTime || "--:--"} - ${endTime || "--:--"}` : "-";
         const prox = isExtra ? timeLabel : formatDateBR(effDate);
         const data = formatDateBR(t.data || "");
-
         const lojaTextRaw = (t.loja || "").toString().trim();
         const lojaText = isExtra ? lojaTextRaw : (lojaTextRaw || "Di\u00e1rio Nerdify");
         const lojaLogoUrl = lojaText
@@ -10091,17 +9566,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
           : "";
         const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
         const assuntoRaw = (t.assunto || "").trim();
-
         const statusTitle = getEffectivePhaseStatus(t) || assuntoRaw;
         const title = isExtra ? (assuntoRaw || "Tarefa extra") : (statusTitle || "Caso");
         const pedidoUrl = getNuvemshopOrderUrl(lojaText, pedidoEfetivo);
-
         const pedidoNumHtml = pedidoEfetivo
           ? (pedidoUrl
             ? `<a class="pedidoNum" href="${pedidoUrl}" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline;">${escapeHtml(pedidoEfetivo)}</a>`
             : `<span class="pedidoNum" style="font-weight:600;">${escapeHtml(pedidoEfetivo)}</span>`)
           : "";
-
         const pedidoHtml = pedidoEfetivo
           ? `Pedido: ${pedidoNumHtml} <button type="button" class="btn small copyBtn" data-copy-pedido="${escapeHtml(pedidoEfetivo)}" title="Copiar n\u00famero do pedido" aria-label="Copiar n\u00famero do pedido" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">` +
             `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
@@ -10109,7 +9581,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
             `<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>` +
             `</svg></button>`
           : "";
-
         const clienteRaw = (t.cliente || "").trim();
         const clienteHtml = clienteRaw
           ? `Cliente: <span class="pedidoNum" style="font-weight:600;">${escapeHtml(clienteRaw)}</span> <button type="button" class="btn small copyBtn" data-copy-cliente="${escapeHtml(clienteRaw)}" title="Copiar nome do cliente" aria-label="Copiar nome do cliente" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">` +
@@ -10118,7 +9589,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
             `<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>` +
             `</svg></button>`
           : "";
-
         const extraText = (t.extraText || "").toString().trim();
         const subtitleParts = isExtra ? [] : [pedidoHtml, clienteHtml].filter(Boolean);
         const subtitleHtml = isExtra
@@ -10129,14 +9599,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const logoHtml = lojaLogoUrl
           ? `<img src="${escapeHtml(lojaLogoUrl)}" alt="${escapeHtml(lojaText)}" style="height:22px; width:auto; display:block;" />`
           : "";
-
         const rastEfetivo = (getEffectiveRastreioFromTask(t) || "").trim();
         const repeatTitle = repeatLabel ? `Repeti\u00e7\u00e3o: ${repeatLabel}` : "Definir repeti\u00e7\u00e3o";
         const authorLabel = (t.created_by_username || "").toString().trim();
         const closedByLabel = (t.closed_by_username || "").toString().trim();
         const showAuthor = Boolean(authorLabel);
         const showClosedBy = Boolean(closedByLabel);
-
         return `
           <div class="taskCard ${dueToday ? "taskDueToday" : ""} ${isOverdue ? "taskOverdue" : ""} ${isExtra ? "taskExtra" : ""}" data-task-id="${escapeHtml(t.id)}">
             <div class="taskTopRow">
@@ -10148,14 +9616,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
               </div>
               ${logoHtml ? `<div class="taskLogoWrap">${logoHtml}</div>` : ""}
             </div>
-
             <div class="taskMeta">
               ${lojaText ? `<span class="pillMini">Loja: ${escapeHtml(lojaText)}</span>` : ""}
               <span class="pillMini">${isExtra ? "Hor\u00e1rio" : "Pr\u00f3xima Etapa"}: <b>${escapeHtml(prox)}</b></span>
               <span class="pillMini">Data inicial: <b>${escapeHtml(data)}</b></span>
               ${showAuthor ? `<span class="pillMini">Usu\u00e1rio: <b>${escapeHtml(authorLabel)}</b></span>` : ""}
             </div>
-
             <div class="taskActions">
               ${isExtra ? `<button class="btn small iconBtn" data-task-extra-calendar="${escapeHtml(t.id)}" title="Ver no calend\u00e1rio" aria-label="Ver no calend\u00e1rio">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
@@ -10208,12 +9674,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
                 </svg>
               </button>
             </div>
-
             ${renderDescBlock(t.obs, lojaText, t.id)}
           </div>
         `;
       }).join("");
-
       tasksList.querySelectorAll("[data-task-edit]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const id = (btn.getAttribute("data-task-edit") || "").trim();
@@ -10252,7 +9716,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
         });
       });
-
       // copiar nome do cliente
       tasksList.querySelectorAll("[data-copy-cliente]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
@@ -10264,7 +9727,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
         });
       });
-
       // copiar rastreio (no card)
       tasksList.querySelectorAll("[data-copy-rastreio]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
@@ -10276,7 +9738,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
         });
       });
-
       // rastreio clic\u00e1vel (abre conforme regra)
       tasksList.querySelectorAll("[data-track-code]").forEach(a=>{
         a.addEventListener("click", (ev)=>{
@@ -10285,7 +9746,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           handleTrackingButton(code);
         });
       });
-
       // copiar dados de fases (novo pedido / rastreio)
       tasksList.querySelectorAll("[data-copy-novopedido]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
@@ -10324,7 +9784,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             setTimeout(()=>{ el.style.opacity = "1"; }, 450);
             openUrl();
           }).catch(()=>{
-            showAlert("NÊo foi poss¦vel copiar.");
+            showAlert("No foi possvel copiar.");
             openUrl();
           });
         });
@@ -10372,12 +9832,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasks || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa nÃoo encontrada.");
+            showAlert("Tarefa noo encontrada.");
             return;
           }
           const date = getPhaseDateByIndex(ref, phaseIdx) || getEffectivePhaseDate(ref);
           if(!date){
-            showAlert("Esta fase nÃoo possui data.");
+            showAlert("Esta fase noo possui data.");
             return;
           }
           const parts = date.split("-");
@@ -10454,7 +9914,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         });
         tasksList.dataset.supportBound = "1";
       }
-
       // editar/excluir fase espec\u00edfica (bot\u00f5es dentro de cada fase)
       tasksList.querySelectorAll("[data-task-phase-editone]").forEach(btn=>{
         btn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation();
@@ -10528,18 +9987,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
       });
       renderMiniCalendar();
     }
-
     function renderDoneTasks(){
       if(currentView !== "done") return;
       if(!doneTasksList || !doneTasksCount) return;
-
       let list = getVisibleTasksList(tasksDone);
       list.sort((a, b) => {
         const ta = new Date(a.closedAt || a.updatedAt || a.createdAt || 0).getTime();
         const tb = new Date(b.closedAt || b.updatedAt || b.createdAt || 0).getTime();
         return tb - ta;
       });
-
       const q = (doneSearchQuery || "").trim().toLowerCase();
       const storeFilter = (doneSearchStoreValue || "").trim();
       const periodFilter = (doneSearchPeriodValue || "").trim();
@@ -10564,14 +10020,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const assunto = (t.assunto || t.extraText || "").toString().toLowerCase();
         return cliente.includes(q) || pedidoBase.includes(q) || pedidoEfetivo.includes(q) || assunto.includes(q);
       });
-
       doneTasksCount.textContent = `${list.length} item(ns)`;
-
       if(!list.length){
         doneTasksList.innerHTML = `<div class="note">Nenhuma tarefa encerrada.</div>`;
         return;
       }
-
       doneTasksList.innerHTML = list.map(t => {
         const isExtra = Boolean(t.isExtra);
         const title = (t.assunto || "").trim() || (isExtra ? "Tarefa extra" : "Caso");
@@ -10588,11 +10041,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const closedByLabel = (t.closed_by_username || "").toString().trim();
         const showAuthor = Boolean(authorLabel);
         const showClosedBy = Boolean(closedByLabel);
-
         const extraText = (t.extraText || "").toString().trim();
         const pedidoEfetivo = (getEffectivePedidoFromTask(t) || "").trim();
         const cliente = (t.cliente || "").toString().trim();
-
         const copyIconSmall = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
         const trashIcon = `<svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><rect x="6" y="6" width="12" height="14" rx="2"></rect><path d="M10 10v6"></path><path d="M14 10v6"></path></svg>`;
         const summaryBtn = (!isExtra && Array.isArray(t.obs) && t.obs.length)
@@ -10615,16 +10066,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
                  <polyline points="21 20 21 12 13 12"></polyline>
                </svg>
              </button>`;
-
         const detailItems = [];
         if(isExtra && extraText) detailItems.push(escapeHtml(extraText));
         if(!isExtra && pedidoEfetivo) detailItems.push(`Pedido: <span style="font-weight:600;">${escapeHtml(pedidoEfetivo)}</span> <button type="button" class="btn small copyBtn" data-copy-done-pedido="${escapeHtml(pedidoEfetivo)}" title="Copiar pedido" aria-label="Copiar pedido" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIconSmall}</button>`);
         if(!isExtra && cliente) detailItems.push(`Cliente: <span style="font-weight:600;">${escapeHtml(cliente)}</span> <button type="button" class="btn small copyBtn" data-copy-done-cliente="${escapeHtml(cliente)}" title="Copiar cliente" aria-label="Copiar cliente" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIconSmall}</button>`);
-
         const detailsHtml = detailItems.length
           ? `<div class="doneTaskDetail" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-word;">${detailItems.map(v => `<span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;">${v}</span>`).join("")}</div>`
           : "";
-
         return `
           <div class="doneTaskCard ${isExtra ? "doneTaskExtra" : ""}" style="padding:16px;border-radius:14px;border:1px solid color-mix(in srgb, var(--line) 70%, transparent);background:color-mix(in srgb, var(--card) 80%, transparent);box-shadow:var(--shadow);">
             <div class="doneTaskStack">
@@ -10637,6 +10085,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
               </div>
             </div>
             <div class="doneMetaRow" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:16px;">
+              ${isExtra
+                ? `<span class="pillMini donePill donePillExtra" style="background:rgba(255,146,43,0.3);border-color:rgba(255,146,43,0.7);color:#ffd8a8;">Tarefa extra</span>`
+                : `<span class="pillMini donePill donePillNormal" style="background:rgba(15,143,95,0.28);border-color:rgba(15,143,95,0.7);color:#d3f9d8;">Tarefas di\u00e1rias</span>`}
               ${lojaText ? `<span class="pillMini donePill">Loja: ${escapeHtml(lojaText)}</span>` : ""}              <span class="pillMini donePill">Data inicial: <b>${escapeHtml(data)}</b></span>
               <span class="pillMini donePill">Encerrada em: <b>${escapeHtml(closedAt)}</b></span>
               ${showAuthor ? `<span class="pillMini donePill">Autor da tarefa: <b>${escapeHtml(authorLabel)}</b></span>` : ""}
@@ -10657,7 +10108,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
         });
       });
-
       doneTasksList.querySelectorAll("[data-copy-done-cliente]").forEach(btn=>{
         btn.addEventListener("click", ()=>{
           const v = (btn.getAttribute("data-copy-done-cliente") || "").trim();
@@ -10667,7 +10117,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
             setTimeout(()=>{ btn.style.opacity = "1"; }, 450);
           }).catch(()=> showAlert("N\u00e3o foi poss\u00edvel copiar."));
         });
-
       });
       doneTasksList.querySelectorAll("[data-done-summary]").forEach(btn=>{
         btn.addEventListener("click", (e)=>{
@@ -10691,7 +10140,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!id) return;
           const ref = (tasksDone || []).find(t => String(t.id || "") === id);
           if(!ref){
-            showAlert("Tarefa não encontrada.");
+            showAlert("Tarefa no encontrada.");
             return;
           }
           const ok = await showConfirm("Reativar esta tarefa?");
@@ -10716,7 +10165,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           renderCalendarDayDetails(calSelectedISO);
         });
       });
-
       doneTasksList.querySelectorAll("[data-done-del]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const id = (btn.getAttribute("data-done-del") || "").trim();
@@ -10737,11 +10185,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
         });
       });
     }
-
     function getUserStoreLabel(u){
       return (u?.store || u?.loja || u?.store_name || u?.storeName || "").toString().trim();
     }
-
     function getUserPresenceInfo(u){
       const isBlocked = String(u?.access_blocked || "") === "1";
       const isPending = String(u?.access_pending || "") === "1";
@@ -10753,7 +10199,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       let presenceKey = "deslogado";
       if(isBlocked && isPending){
         presenceClass = "presencePending";
-        presenceLabel = "Aguardando liberação";
+        presenceLabel = "Aguardando liberao";
         presenceKey = "aguardando";
       }else if(isBlocked){
         presenceClass = "presenceBlocked";
@@ -10781,7 +10227,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       return { presenceClass, presenceLabel, presenceKey };
     }
-
     function updateUsersStoreFilterOptions(){
       if(!usersSearchStoreSelect) return;
       const names = getStoreNames();
@@ -10790,7 +10235,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       usersSearchStoreSelect.innerHTML = options.join("");
       usersSearchStoreSelect.value = (usersSearchStore || "").trim() || "ALL";
     }
-
     function updateUsersStatusFilterOptions(){
       if(!usersSearchStatusSelect) return;
       const adminOnlyOptions = usersSearchStatusSelect.querySelectorAll("[data-admin-only]");
@@ -10802,7 +10246,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         usersSearchStatusSelect.value = "";
       }
     }
-
     function updateUsersFilterButtonState(){
       if(!searchFilterBtn) return;
       const active = Boolean((usersSearchName || "").trim())
@@ -10810,13 +10253,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
         || Boolean((usersSearchStatus || "").trim());
       searchFilterBtn.classList.toggle("isActive", active);
     }
-
     function renderUsersView(){
       if(currentView !== "users") return;
       if(!usersCards || !usersCount) return;
-
       const formatUsersCount = (count) => `${count} ${count === 1 ? "Usu\u00e1rio" : "Usu\u00e1rios"}`;
-
       if(!canAccessUsersView()){
         usersCount.textContent = formatUsersCount(0);
         usersCards.innerHTML = `<div class="muted">Acesso restrito.</div>`;
@@ -10827,7 +10267,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         usersCards.innerHTML = `<div class="muted">${escapeHtml(usersError)}</div>`;
         return;
       }
-
       const list = Array.isArray(usersCache) ? usersCache.slice() : [];
       const nameFilter = normalizeLabelText(usersSearchName || "");
       const storeFilter = (usersSearchStore || "").trim();
@@ -10847,13 +10286,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         return true;
       });
-
       usersCount.textContent = formatUsersCount(filtered.length);
       if(!filtered.length){
         usersCards.innerHTML = `<div class="muted">Nenhum usu&aacute;rio encontrado.</div>`;
         return;
       }
-
       const canBlockUsers = isAdminUser();
       usersCards.innerHTML = filtered.map(u => {
         const username = (u?.username || "").toString();
@@ -10945,7 +10382,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           </div>
         `;
       }).join("");
-
       usersCards.querySelectorAll("[data-user-activity]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const userId = (btn.getAttribute("data-user-activity") || "").trim();
@@ -10954,7 +10390,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           await openUserActivity(userId, userName);
         });
       });
-
       usersCards.querySelectorAll("[data-user-action]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const userId = (btn.getAttribute("data-user-action") || "").trim();
@@ -10963,7 +10398,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(!userId) return;
           const action = isBlocked ? "unblock" : "block";
           const ok = await showConfirm(
-            `${isBlocked ? "Desbloquear" : "Bloquear"} o acesso do usuário ${userName || ""}?`,
+            `${isBlocked ? "Desbloquear" : "Bloquear"} o acesso do usuÃ¡rio ${userName || ""}?`,
             isBlocked ? "Desbloquear acesso" : "Bloquear acesso"
           );
           if(!ok) return;
@@ -10975,7 +10410,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
           }
         });
       });
-
       usersCards.querySelectorAll("[data-user-delete]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const userId = (btn.getAttribute("data-user-delete") || "").trim();
@@ -10995,13 +10429,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
         });
       });
     }
-
     async function openUserActivity(userId, userName){
       const usePage = Boolean(viewUserActivity && userActivityViewSummary && userActivityViewList);
       const titleText = `Atividade: ${userName || "Usu\u00e1rio"}`;
       const summaryEl = usePage ? userActivityViewSummary : userActivitySummary;
       const listEl = usePage ? userActivityViewList : userActivityList;
-
       if(!summaryEl || !listEl) return;
       if(usePage){
         if(userActivityViewTitle) userActivityViewTitle.textContent = titleText;
@@ -11012,7 +10444,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(userActivityTitle) userActivityTitle.textContent = titleText;
         userActivityOverlay.classList.add("show");
       }
-
       summaryEl.textContent = "Carregando...";
       listEl.innerHTML = "";
       try{
@@ -11023,10 +10454,24 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const lastActive = formatDateTimeFromTs(summary.last_active_at);
         const lastLogout = formatDateTimeFromTs(summary.last_logout_at);
         summaryEl.innerHTML = `
-          <div><strong>Primeira atividade:</strong> ${escapeHtml(firstSeen)}</div>
-          <div><strong>\u00daltima atividade:</strong> ${escapeHtml(lastSeen)}</div>
-          <div><strong>\u00daltimo ping:</strong> ${escapeHtml(lastActive)}</div>
-          <div><strong>\u00daltimo logout:</strong> ${escapeHtml(lastLogout)}</div>
+          <div class="activitySummaryGrid">
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">Primeira atividade</div>
+              <div class="activitySummaryValue">${escapeHtml(firstSeen)}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">\u00daltima atividade</div>
+              <div class="activitySummaryValue">${escapeHtml(lastSeen)}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">\u00daltimo acesso</div>
+              <div class="activitySummaryValue">${escapeHtml(lastActive)}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">\u00daltimo logout</div>
+              <div class="activitySummaryValue">${escapeHtml(lastLogout)}</div>
+            </div>
+          </div>
         `;
         const activePeriods = Array.isArray(data?.active_periods) ? data.active_periods : [];
         const inactivePeriods = Array.isArray(data?.inactive_periods) ? data.inactive_periods : [];
@@ -11034,13 +10479,17 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const start = formatDateTimeFromTs(p.start);
           const end = formatDateTimeFromTs(p.end);
           const duration = formatDuration(p.duration_sec);
-          const ongoing = p.ongoing ? " (em andamento)" : "";
+          const ongoing = p.ongoing ? " (\u00faltimo se\u00e7\u00e3o)" : "";
           return `
             <div class="activityItem">
-              <div class="activityBadge">Ativo${ongoing}</div>
-              <div class="activityRow"><span class="activityRowLabel">In\u00edcio</span><span>${escapeHtml(start)}</span></div>
-              <div class="activityRow"><span class="activityRowLabel">Fim</span><span>${escapeHtml(end)}</span></div>
-              <div class="activityRow"><span class="activityRowLabel">Dura\u00e7\u00e3o</span><span>${escapeHtml(duration)}</span></div>
+              <div class="activityItemHead">
+                <div class="activityBadge">Ativo${ongoing}</div>
+                <div class="activityDuration">${escapeHtml(duration)}</div>
+              </div>
+              <div class="activityMetaGrid">
+                <div class="activityMetaItem"><span class="activityRowLabel">In\u00edcio</span><span>${escapeHtml(start)}</span></div>
+                <div class="activityMetaItem"><span class="activityRowLabel">Fim</span><span>${escapeHtml(end)}</span></div>
+              </div>
             </div>
           `;
         }).join("") : `<div class="activityItem"><div class="activityRow">Nenhum per\u00edodo ativo registrado.</div></div>`;
@@ -11069,18 +10518,21 @@ function getNuvemshopSupportBaseUrl(lojaText){
             });
           }
         });
-
         const inactiveHtml = inactiveSegments.length ? inactiveSegments.map(seg => {
           const start = formatDateTimeFromTs(seg.start);
           const end = formatDateTimeFromTs(seg.end);
           const duration = formatDuration(seg.end - seg.start);
-          const ongoing = seg.ongoing ? " (em andamento)" : "";
+          const ongoing = seg.ongoing ? " (\u00faltimo se\u00e7\u00e3o)" : "";
           return `
             <div class="activityItem">
-              <div class="activityBadge">${escapeHtml(seg.label)}${ongoing}</div>
-              <div class="activityRow"><span class="activityRowLabel">In\u00edcio</span><span>${escapeHtml(start)}</span></div>
-              <div class="activityRow"><span class="activityRowLabel">Fim</span><span>${escapeHtml(end)}</span></div>
-              <div class="activityRow"><span class="activityRowLabel">Dura\u00e7\u00e3o</span><span>${escapeHtml(duration)}</span></div>
+              <div class="activityItemHead">
+                <div class="activityBadge">${escapeHtml(seg.label)}${ongoing}</div>
+                <div class="activityDuration">${escapeHtml(duration)}</div>
+              </div>
+              <div class="activityMetaGrid">
+                <div class="activityMetaItem"><span class="activityRowLabel">In\u00edcio</span><span>${escapeHtml(start)}</span></div>
+                <div class="activityMetaItem"><span class="activityRowLabel">Fim</span><span>${escapeHtml(end)}</span></div>
+              </div>
             </div>
           `;
         }).join("") : `<div class="activityItem"><div class="activityRow">Nenhum per\u00edodo inativo registrado.</div></div>`;
@@ -11090,7 +10542,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             ${activeHtml}
           </div>
           <div class="activitySection">
-            <div class="activitySectionTitle">Per\u00edodos inativos (gap &gt; 15 min)</div>
+            <div class="activitySectionTitle">Per\u00edodos inativos (Mais de 15 min)</div>
             ${inactiveHtml}
           </div>
         `;
@@ -11098,7 +10550,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         summaryEl.textContent = "N\u00e3o foi poss\u00edvel carregar a atividade.";
       }
     }
-
     function closeUserActivity(){
       if(currentView === "userActivity"){
         setView("users");
@@ -11122,7 +10573,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         return false;
       }
     }
-
     /***********************
      * EVENTS
      ***********************/
@@ -11175,6 +10625,47 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(tasksFiltersOverlay) tasksFiltersOverlay.classList.add("show");
           return;
         }
+        if(currentView === "personalizations"){
+          if(searchInput) searchInput.placeholder = "Personaliza\u00e7\u00f5es";
+          if(searchInput) searchInput.value = "";
+          navToggleViewBtn.textContent = "Tarefas";
+          navToggleViewBtn.classList.remove("primary");
+          if(viewTitleText) viewTitleText.textContent = "Personaliza\u00e7\u00f5es";
+          if(goToSearchBtn){
+            goToSearchBtn.classList.remove("isSearchView");
+            goToSearchBtn.setAttribute("title", "Ir para o buscador");
+            goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
+          }
+          if(goToTasksBtn){
+            goToTasksBtn.classList.remove("isTasksView");
+            goToTasksBtn.setAttribute("title", "Tarefas");
+            goToTasksBtn.setAttribute("aria-label", "Tarefas");
+          }
+          if(goToTasksExtraBtn){
+            goToTasksExtraBtn.classList.remove("isTasksView");
+            goToTasksExtraBtn.setAttribute("title", "Tarefas extras");
+            goToTasksExtraBtn.setAttribute("aria-label", "Tarefas extras");
+          }
+          if(goToDoneTasksBtn){
+            goToDoneTasksBtn.classList.remove("isDoneView");
+            goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
+            goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
+          }
+          if(goToUsersBtn){
+            goToUsersBtn.classList.remove("isUsersView");
+            goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
+            goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
+          }
+          if(goToPersonalizationsBtn){
+            goToPersonalizationsBtn.classList.add("isPersonalizationsView");
+            goToPersonalizationsBtn.setAttribute("title", "Personaliza\u00e7\u00f5es");
+            goToPersonalizationsBtn.setAttribute("aria-label", "Personaliza\u00e7\u00f5es");
+          }
+          renderPersonalizations();
+          scrollToTop();
+          updateFilterButtonsState();
+          return;
+        }
         if(currentView === "done"){
           if(doneSearchPeriodCustom && doneSearchPeriod){
             const val = (doneSearchPeriod.value || "").trim();
@@ -11216,7 +10707,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         updateFilterButtonsState();
       });
     }
-
     if(addSearchTagBtn){
       addSearchTagBtn.addEventListener("click", (e)=>{
         e.preventDefault();
@@ -11249,22 +10739,17 @@ function getNuvemshopSupportBaseUrl(lojaText){
         if(addSearchTagBtn) addSearchTagBtn.click();
       });
     }
-
     qInput.addEventListener("input", updateQCount);
-
     addStepBtn.addEventListener("click", ()=> addStepUI(null));
     addQuestionLinkBtn.addEventListener("click", addQuestionLinkRow);
-
     saveBtn.addEventListener("click", handleSave);
     exportBtn.addEventListener("click", exportFile);
-
     // IMPORT: pede senha
     importBtn.addEventListener("click", async ()=>{
       if(!await requirePassword("importar arquivo")) return;
       filePicker.value = "";
       filePicker.click();
     });
-
     filePicker.addEventListener("change", ()=>{
       const file = filePicker.files && filePicker.files[0];
       if(file){
@@ -11272,7 +10757,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         importFile(file);
       }
     });
-
     // imagens (m\u00faltiplas)
     qPickImgsBtn.addEventListener("click", ()=> qImgsFile.click());
     qImgsFile.addEventListener("change", async ()=>{
@@ -11293,7 +10777,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     		setQuestionImagesUI(qImages.concat(uploaded));
     	}
     	if(hadError){
-    		showAlert("NÊo foi poss¦vel enviar uma das imagens.");
+    		showAlert("No foi possvel enviar uma das imagens.");
     	}
     });
     qClearImgsBtn.addEventListener("click", ()=>{
@@ -11306,7 +10790,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         queueImageDeletes(removed);
       }
     });
-
     // remover imagem espec\u00edfica (pr\u00e9via)
     qImgsPreviewGrid.addEventListener("click", (e)=>{
       const btn = e.target.closest("[data-qimg-remove]");
@@ -11323,7 +10806,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         queueImageDeletes(removed);
       }
     });
-
     if(openQuestionModalBtn){
       openQuestionModalBtn.addEventListener("click", (e)=>{
         e.preventDefault();
@@ -11336,7 +10818,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       questionOverlay.addEventListener("click", (e)=>{ if(e.target === questionOverlay) closeQuestionModal(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && questionOverlay.classList.contains("show")) closeQuestionModal(); });
     }
-
     if(openTaskModalBtn){
       openTaskModalBtn.addEventListener("click", (e)=>{
         e.preventDefault();
@@ -11355,16 +10836,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       taskOverlay.addEventListener("click", (e)=>{ if(e.target === taskOverlay) closeTaskModal(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && taskOverlay.classList.contains("show")) closeTaskModal(); });
     }
-
-
     if(closeModalBtn) closeModalBtn.addEventListener("click", closeModal);
     okModalBtn.addEventListener("click", closeModal);
     nextStepBtn.addEventListener("click", nextStep);
     prevStepBtn.addEventListener("click", prevStep);
-
     overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeModal(); });
     document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && overlay.classList.contains("show")) closeModal(); });
-
     if(popupOkBtn) popupOkBtn.addEventListener("click", ()=>{
       popupActionSource = "ok";
       closePopup(true);
@@ -11569,7 +11046,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         closePopup(false);
       }
     });
-
     // drawer
     if(openDrawerBtn) openDrawerBtn.addEventListener("click", openDrawer);
     if(openDrawerBtnMobile) openDrawerBtnMobile.addEventListener("click", openDrawer);
@@ -11803,7 +11279,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
     document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && productManageOverlay && productManageOverlay.classList.contains("show")) closeProductManage(); });
     document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && sizeTableUploadOverlay && sizeTableUploadOverlay.classList.contains("show")) closeSizeTableUpload(); });
     document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && productsOverlay && productsOverlay.classList.contains("show")) closeProducts(); });
-
     if(productsOverlay){
       productsOverlay.addEventListener("click", async (e)=>{
         const addBtn = e.target.closest("[data-product-add]");
@@ -11848,13 +11323,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
         });
       });
     }
-
     if(productDetailsCloseBtn) productDetailsCloseBtn.addEventListener("click", closeProductDetails);
     if(productDetailsOverlay){
       productDetailsOverlay.addEventListener("click", (e)=>{ if(e.target === productDetailsOverlay) closeProductDetails(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && productDetailsOverlay.classList.contains("show")) closeProductDetails(); });
     }
-
     if(copyProductSpecsBtn){
       copyProductSpecsBtn.addEventListener("click", async ()=>{
         const text = buildProductSpecsText(currentProductPrice, currentProductDetails);
@@ -11870,17 +11343,15 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(copyProductTableBtn){
       copyProductTableBtn.addEventListener("click", async ()=>{
         if(!currentProductTableUrl){
-          showAlert("Tabela nÊo dispon¦vel para este produto.");
+          showAlert("Tabela no disponvel para este produto.");
           return;
         }
         await copyImageToClipboard(currentProductTableUrl, copyProductTableBtn, "Copiar imagem");
       });
     }
-
     if(productVideoWhatsapp){
       productVideoWhatsapp.addEventListener("input", ()=>{ clearFieldError(productVideoWhatsapp); });
     }
-
     if(productVideoSendBtn){
       productVideoSendBtn.addEventListener("click", ()=>{
         if(!productVideoWhatsapp){
@@ -11896,7 +11367,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         const phone = `55${phoneCheck.digits}`;
         if(!currentProductVideoUrl || !currentProductVideoText){
-          showAlert("V¦deo nÊo dispon¦vel para este produto.");
+          showAlert("Vdeo no disponvel para este produto.");
           return;
         }
         const message = `${currentProductVideoText}\n\n${currentProductVideoUrl}`;
@@ -11904,7 +11375,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         window.open(url, "_blank");
       });
     }
-
     drawerPrev.addEventListener("click", ()=>{
       drawerPage = Math.max(1, drawerPage - 1);
       renderDrawer();
@@ -11914,17 +11384,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
       drawerPage = Math.min(totalPages, drawerPage + 1);
       renderDrawer();
     });
-
     if(newMenuBtnIconFile) handleMenuIconUpload(newMenuBtnIconFile, newMenuBtnIcon);
     if(menuEditIconFile) handleMenuIconUpload(menuEditIconFile, menuEditIcon);
-
     addMenuBtn.addEventListener("click", addCustomMenuButton);
-
     // menu edit modal events
     closeMenuEditBtn.addEventListener("click", closeMenuEdit);
     menuEditOverlay.addEventListener("click", (e)=>{ if(e.target === menuEditOverlay) closeMenuEdit(); });
     document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && menuEditOverlay.classList.contains("show")) closeMenuEdit(); });
-
     menuEditAddLink.addEventListener("click", ()=>{
       editingMenuLinks.push({ name:"", url:"" });
       renderMenuEditLinks();
@@ -11935,7 +11401,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       removeMenuButton(editingMenuGlobalIndex);
       closeMenuEdit();
     });
-
     // modal: fase (card)
     if(closePhaseEditBtn) closePhaseEditBtn.addEventListener("click", closePhaseEditor);
     if(phaseEditCancelBtn) phaseEditCancelBtn.addEventListener("click", closePhaseEditor);
@@ -11951,6 +11416,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(phaseEditDeleteBtn) phaseEditDeleteBtn.addEventListener("click", deletePhaseEditor);
     if(phaseEditAttention) phaseEditAttention.addEventListener("change", togglePhaseEditAttention);
     if(phaseEditStatus) phaseEditStatus.addEventListener("change", togglePhaseSizeFields);
+    if(phaseEditSizeFrom) phaseEditSizeFrom.addEventListener("change", ()=> toggleCustomSizeInput(phaseEditSizeFrom, phaseEditSizeFromCustom));
+    if(phaseEditSizeTo) phaseEditSizeTo.addEventListener("change", ()=> toggleCustomSizeInput(phaseEditSizeTo, phaseEditSizeToCustom));
     const phaseEditFields = [phaseEditText, phaseEditDate, phaseEditPrazo, phaseEditPrazoHora, phaseEditStatus, phaseEditNovoPedido, phaseEditSizeFrom, phaseEditSizeTo, phaseEditRastreio];
     phaseEditFields.forEach(field=>{
       if(!field) return;
@@ -11961,9 +11428,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       phaseEditOverlay.addEventListener("click", (e)=>{ if(e.target === phaseEditOverlay) closePhaseEditor(); });
       document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && phaseEditOverlay.classList.contains("show")) closePhaseEditor(); });
     }
-
     // scroll
-
     // theme
     themeToggleBtn.addEventListener("click", toggleTheme);
     if(sideMenuToggle){
@@ -11972,19 +11437,17 @@ function getNuvemshopSupportBaseUrl(lojaText){
         setSideMenuCollapsed(!isCollapsed);
       });
     }
-
     // fechar app (PWA)
     function tryCloseApp(){
       allowAppClose = true;
       window.close();
       setTimeout(() => {
         if(!window.closed){
-          showAlert("NÊo foi poss¦vel fechar a aba automaticamente. Feche manualmente.");
+          showAlert("No foi possvel fechar a aba automaticamente. Feche manualmente.");
         }
         allowAppClose = false;
       }, 200);
     }
-
     function openCloseAppModal(){
       if(!closeAppOverlay) return;
       closeAppOverlay.classList.add("show");
@@ -11993,7 +11456,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(!closeAppOverlay) return;
       closeAppOverlay.classList.remove("show");
     }
-
     if(appCloseBtn){
       appCloseBtn.addEventListener("click", openCloseAppModal);
     }
@@ -12016,6 +11478,20 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(closeTaskDoneBtn){
       closeTaskDoneBtn.addEventListener("click", () => {
         const id = pendingCloseTaskId;
+        const task = tasks.find(t => t.id === id);
+        const pendingPhase = (pendingPhaseSave && pendingPhaseSave.taskId === id)
+          ? (pendingPhaseSave.phase || {})
+          : null;
+        const lastPhase = task && Array.isArray(task.obs) && task.obs.length
+          ? (task.obs[task.obs.length - 1] || {})
+          : {};
+        const lastStatusRaw = (pendingPhase?.status ?? lastPhase.status ?? getEffectivePhaseStatus(task) ?? "")
+          .toString()
+          .trim();
+        if(lastStatusRaw.toLowerCase() !== PHASE_STATE_DONE.toLowerCase()){
+          showAlert("Voc\u00ea precisa inserir a \u00faltima fase da tarefa, explicando como se deu o encerramento e escolhendo o status de Conclu\u00edda.");
+          return;
+        }
         closeCloseTaskModal({ skipPending:true });
         closeTaskAsDone(id);
       });
@@ -12065,6 +11541,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
         handleDrawerReturnAfterClose(settingsOverlay, [settingsCloseBtn]);
       });
     }
+    if(openUserProfileSettingsBtn){
+      openUserProfileSettingsBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        if(settingsOverlay) settingsOverlay.classList.remove("show");
+        clearDrawerReturnState(settingsOverlay, [settingsCloseBtn]);
+        openUserProfileOverlay({ required:false });
+      });
+    }
     if(openStoresConfigBtn){
       openStoresConfigBtn.addEventListener("click", (e)=>{
         e.preventDefault();
@@ -12102,7 +11586,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       storesConfigAddBtn.addEventListener("click", (e)=>{
         e.preventDefault();
         if(storesDraft.length >= MAX_STORES) return;
-        storesDraft.push({ name:"", logoUrl:"", siteUrl:"", stampsUrl:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailList: [] });
+        storesDraft.push({ name:"", personalizacaoId:"", logoUrl:"", siteUrl:"", stampsUrl:"", whatsappPhone:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailList: [] });
         renderStoresConfig();
         requestAnimationFrame(()=>{
           if(!storesConfigHost) return;
@@ -12161,6 +11645,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     if(storesConfigHost){
       storesConfigHost.addEventListener("click", async (e)=>{
+        const copyBtn = e.target.closest("[data-personal-link-copy]");
+        if(copyBtn){
+          const card = copyBtn.closest("[data-store-index]");
+          if(!card) return;
+          updatePersonalizacaoLinkForCard(card);
+          const linkInput = card.querySelector("[data-store-personal-link]");
+          if(!linkInput) return;
+          await copyTextToClipboard(linkInput.value || "", copyBtn, "Copiado!");
+          return;
+        }
         const addBtn = e.target.closest("[data-social-extra-add]");
         if(addBtn){
           const idx = Number(addBtn.getAttribute("data-social-extra-add"));
@@ -12237,6 +11731,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const input = e.target;
         if(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement){
           clearFieldError(input);
+          if(input.getAttribute("data-store-field") === "name" || input.getAttribute("data-store-field") === "personalizacaoId"){
+            const card = input.closest("[data-store-index]");
+            if(card) updatePersonalizacaoLinkForCard(card);
+          }
         }
       });
       storesConfigHost.addEventListener("change", (e)=>{
@@ -12581,7 +12079,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         });
       });
     }
-
     // ===== Calend\u00e1rio (visualiza\u00e7\u00e3o) =====
     if(openCalendarBtn){
       openCalendarBtn.addEventListener("click", openCalendar);
@@ -12739,8 +12236,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       openCustomerWhatsappPopup(raw, taskId);
     });
-
-
     // ===== Buscar pedido (Nuvemshop) =====
     function openOrderLookup(){
       if(!orderLookupOverlay) return;
@@ -12757,7 +12252,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(!orderLookupOverlay) return;
       orderLookupOverlay.classList.remove("show");
     }
-
     const ORDER_LINKS = {
       "Di\u00e1rio Nerdify": {
         produtos: "https://diarionerdify.lojavirtualnuvem.com.br/admin/v2/products?page=1",
@@ -12774,7 +12268,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         novo: "https://shop802.lojavirtualnuvem.com.br/admin/v2/draft-orders/new",
       }
     };
-
     function showOrderLookupMenu(){
       if(orderLookupMenu) orderLookupMenu.style.display = "grid";
       if(orderLookupFormWrap) orderLookupFormWrap.style.display = "none";
@@ -12783,7 +12276,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(orderLookupStore) orderLookupStore.value = "";
       if(orderLookupDetails) orderLookupDetails.style.display = "none";
     }
-
     function showOrderLookupSearch(store){
       if(orderLookupMenu) orderLookupMenu.style.display = "none";
       if(orderLookupFormWrap) orderLookupFormWrap.style.display = "block";
@@ -12842,7 +12334,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       closeOrderLookup();
       clearDrawerReturnState(orderLookupOverlay, [orderLookupCancelBtn]);
     }
-
     if(closeOrderLookupBtn){
       closeOrderLookupBtn.addEventListener("click", showOrderLookupMenu);
     }
@@ -12864,7 +12355,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
       closeOrderLookup();
       handleDrawerReturnAfterClose(orderLookupOverlay, [orderLookupCancelBtn]);
     });
-
     if(orderLookupStore){
       orderLookupStore.addEventListener("change", ()=>{
         if(!orderLookupDetails) return;
@@ -12912,14 +12402,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
       });
     }
-
-
     // nav drawer (2 bot\u00f5es)
 navAtalhosBtn.addEventListener("click", ()=>{
   // sempre volta para o buscador
   setView("search");
   closeDrawer();
-
   // depois rola at\u00e9 os atalhos
   setTimeout(() => {
     drawerBd.scrollTo({
@@ -12929,7 +12416,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
   }, 150);
 });
     
-
     navToggleViewBtn.addEventListener("click", ()=>{
       tasksTypeFilter = "normal";
       setView("tasks");
@@ -12939,6 +12425,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
       navTasksExtraBtn.addEventListener("click", ()=>{
         tasksTypeFilter = "extra";
         setView("tasks");
+        closeDrawer();
+      });
+    }
+    if(navPersonalizationsBtn){
+      navPersonalizationsBtn.addEventListener("click", ()=>{
+        setView("personalizations");
         closeDrawer();
       });
     }
@@ -12970,13 +12462,41 @@ navAtalhosBtn.addEventListener("click", ()=>{
         setView("done");
       });
     }
+    if(goToPersonalizationsBtn){
+      goToPersonalizationsBtn.addEventListener("click", ()=>{
+        setView("personalizations");
+      });
+    }
     if(goToUsersBtn){
       goToUsersBtn.addEventListener("click", ()=>{
         setView("users");
       });
     }
-
-
+    if(personalizationsNotifyBtn){
+      personalizationsNotifyBtn.addEventListener("click", ()=>{
+        setView("personalizations");
+      });
+    }
+    if(personalizationCloseBtn){
+      personalizationCloseBtn.addEventListener("click", closePersonalizationOverlay);
+    }
+    if(personalizationOverlay){
+      personalizationOverlay.addEventListener("click", (e)=>{
+        if(e.target === personalizationOverlay) closePersonalizationOverlay();
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key === "Escape" && personalizationOverlay.classList.contains("show")) closePersonalizationOverlay();
+      });
+    }
+    if(personalizationFinalSaveBtn){
+      personalizationFinalSaveBtn.addEventListener("click", handlePersonalizationFinalUpload);
+    }
+    if(personalizationCompleteBtn){
+      personalizationCompleteBtn.addEventListener("click", completePersonalization);
+    }
+    if(personalizationDeleteBtn){
+      personalizationDeleteBtn.addEventListener("click", deletePersonalization);
+    }
     // tasks events (sem senha)
     tasksSaveBtn.addEventListener("click", startTaskPhaseFlow);
     tasksClearBtn.addEventListener("click", clearTasksForm);
@@ -12984,7 +12504,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
     if(tCliente) tCliente.addEventListener("input", ()=>{ clearFieldError(tCliente); });
     if(tLoja) tLoja.addEventListener("change", ()=>{ clearFieldError(tLoja); });
     if(tPedido) tPedido.addEventListener("input", ()=>{ clearFieldError(tPedido); });
-
     // WhatsApp Cliente
     if(tWhatsapp){
       tWhatsapp.addEventListener("input", ()=>{ clearFieldError(tWhatsapp); updateWhatsappPreview(); });
@@ -12996,13 +12515,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
         openCustomerWhatsapp(tWhatsapp ? tWhatsapp.value : "");
       });
     }
-
     // descri\u00e7\u00e3o (fases) - adicionar/excluir via delega\u00e7\u00e3o
     if(obsList){
       obsList.addEventListener("click", (e)=>{
         const t = e.target;
         if(!(t instanceof Element)) return;
-
         const add = t.closest("[data-obs-add]");
         if(add){
           e.preventDefault();
@@ -13029,7 +12546,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
           if(last) last.focus();
           return;
         }
-
         const del = t.closest("[data-obs-del]");
         if(del){
           e.preventDefault();
@@ -13044,7 +12560,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         }
       });
     }
-
     // busca + pagina\u00e7\u00e3o da lista de chamados
     if(tasksSearch){
       tasksSearch.addEventListener("input", ()=>{
@@ -13515,7 +13030,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         openStoresConfig();
       });
     }
-
     function hasOpenOverlay(){
       const overlays = [
         taskOverlay,
@@ -13528,21 +13042,17 @@ navAtalhosBtn.addEventListener("click", ()=>{
       ].filter(Boolean);
       return overlays.some(el => el.classList.contains("show"));
     }
-
     window.addEventListener("beforeunload", (e) => {
       if(allowAppClose) return;
       if(!hasOpenOverlay()) return;
       e.preventDefault();
       e.returnValue = "";
     });
-
-
     /***********************
      * AUTH / STORAGE BOOTSTRAP
      ***********************/
     let authResolver = null;
     let authRegisterFromApp = false;
-
     function showAuthOverlay(mode, hint){
       if(!authOverlay) return;
       authMode = (mode === "register") ? "register" : (mode === "setup" ? "setup" : (mode === "reset_request" ? "reset_request" : (mode === "reset_password" ? "reset_password" : "login")));
@@ -13610,13 +13120,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
       authOverlay.classList.add("show");
       authOverlay.setAttribute("aria-hidden", "false");
     }
-
     function hideAuthOverlay(){
       if(!authOverlay) return;
       authOverlay.classList.remove("show");
       authOverlay.setAttribute("aria-hidden", "true");
     }
-
     function setAuthError(message, options){
       if(!authError) return;
       const msg = message || "Falha na autenticacao.";
@@ -13627,11 +13135,9 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }
       authError.style.display = "block";
     }
-
     async function loadSetupCaptcha(){
       return;
     }
-
     function getFieldErrorEl(field){
       if(!field) return null;
       const fieldId = field.getAttribute("id");
@@ -13639,7 +13145,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
       const scope = field.closest(".formGrid") || field.closest(".productDetailsSection") || field.closest(".mb") || document;
       return scope.querySelector(`.fieldError[data-error-for="${fieldId}"]`);
     }
-
     function setFieldError(field, message){
       const el = getFieldErrorEl(field);
       if(!el) return;
@@ -13651,16 +13156,13 @@ navAtalhosBtn.addEventListener("click", ()=>{
         el.style.display = "none";
       }
     }
-
     function clearFieldError(field){
       setFieldError(field, "");
     }
-
     function clearFieldErrors(fields){
       if(!Array.isArray(fields)) return;
       fields.forEach(clearFieldError);
     }
-
     function validateBrazilWhatsapp(raw){
       let digits = (raw || "").toString().trim().replace(/\D+/g, "");
       if(!digits) return { ok:false, message:"Informe o WhatsApp com DDD." };
@@ -13677,7 +13179,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(!email) return false;
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     }
-
     function isValidUrl(value, options){
       const raw = (value || "").toString().trim();
       if(!raw) return false;
@@ -13689,20 +13190,17 @@ navAtalhosBtn.addEventListener("click", ()=>{
         return false;
       }
     }
-
     function isValidDateInput(value){
       const v = (value || "").toString().trim();
       if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v)) return false;
       const dt = new Date(`${v}T00:00:00`);
       return !Number.isNaN(dt.getTime());
     }
-
     function isValidTimeInput(value){
       const v = (value || "").toString().trim();
       if(!v) return true;
       return /^[0-9]{2}:[0-9]{2}$/.test(v);
     }
-
     function validatePedido(value){
       const raw = (value || "").toString().trim();
       if(!raw) return { ok:false, message:"Preencha o pedido." };
@@ -13711,8 +13209,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(digits.length < 3) return { ok:false, message:"Pedido muito curto." };
       return { ok:true };
     }
-
-
     function fillUserProfileForm(data){
       if(userProfileName) userProfileName.value = data.name || "";
       if(userProfileDoc) userProfileDoc.value = data.doc || "";
@@ -13722,7 +13218,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
       userProfileAvatarPrev = data.avatar || "";
       setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, data.name, data.avatar);
     }
-
         function openUserProfileOverlay(options){
       if(!userProfileOverlay) return;
       userProfileRequired = Boolean(options?.required);
@@ -13739,20 +13234,16 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(userProfileNextBtn) userProfileNextBtn.style.display = secondaryRequired ? "none" : (userProfileRequired ? "inline-flex" : "none");
       userProfileOverlay.classList.add("show");
     }
-
     function closeUserProfileOverlay(){
       if(userProfileRequired) return;
       if(userProfileOverlay) userProfileOverlay.classList.remove("show");
     }
-
     async function handleUserProfileSave(){
       const name = (userProfileName?.value || "").trim();
       const doc = (userProfileDoc?.value || "").trim();
       const whatsapp = (userProfileWhatsapp?.value || "").trim();
       const email = (userProfileEmail?.value || "").trim();
-
       clearFieldErrors([userProfileName, userProfileDoc, userProfileWhatsapp, userProfileEmail]);
-
       let ok = true;
       if(!name){
         setFieldError(userProfileName, "Preencha o nome.");
@@ -13796,7 +13287,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         ok = false;
       }
       if(!ok) return;
-
       const avatar = (userProfileAvatarPending || "").trim();
       if(userProfileAvatarPrev && userProfileAvatarPrev !== avatar){
         void apiDeleteImage(userProfileAvatarPrev);
@@ -13814,7 +13304,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         }
       }
     }
-
     async function handleUserProfileLogout(){
       try{
         await apiRequest(`${API_BASE}/logout.php`);
@@ -13830,7 +13319,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(userProfileOverlay) userProfileOverlay.classList.remove("show");
       showAuthOverlay("login");
     }
-
     async function handleLoginSubmit(e){
       e.preventDefault();
       const username = (loginUsername?.value || "").trim();
@@ -13867,7 +13355,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         }
       }
     }
-
     async function handleSetupSubmit(e){
       e.preventDefault();
       const username = (setupUsername?.value || "").trim();
@@ -13916,7 +13403,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         }
       }
     }
-
     async function handleResetRequestSubmit(e){
       e.preventDefault();
       const identifier = (resetIdentifier?.value || "").trim();
@@ -13940,7 +13426,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         }
       }
     }
-
     async function handleResetPasswordSubmit(e){
       e.preventDefault();
       const token = (resetTokenInput?.value || "").trim();
@@ -13974,7 +13459,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         }
       }
     }
-
     function getResetTokenFromUrl(){
       try{
         const params = new URLSearchParams(window.location.search || "");
@@ -13984,7 +13468,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         return "";
       }
     }
-
     async function ensureAuthenticated(){
       const session = await apiSession().catch(() => ({}));
       if(session && session.authenticated){
@@ -14001,12 +13484,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
       }else{
         showAuthOverlay(needsSetupFlag ? "setup" : "login");
       }
-
       await new Promise((resolve) => {
         authResolver = resolve;
       });
     }
-
     async function bootstrapStorage(){
       try{
         const result = await apiStorageGetAll();
@@ -14023,7 +13504,6 @@ navAtalhosBtn.addEventListener("click", ()=>{
         throw err;
       }
     }
-
     /***********************
      * INIT
      ***********************/
@@ -14031,15 +13511,347 @@ navAtalhosBtn.addEventListener("click", ()=>{
       fillSelectOptions(tFonte, FONTE_OPTIONS);
       fillStatusOptions();
       clearTasksForm();
-
       // default datas
       const today = todayISO();
       if(!tData.value) tData.value = today;
     }
-
+    function normalizePersonalizations(list){
+      const raw = Array.isArray(list) ? list : [];
+      return raw.map(p => ({
+        id: (p?.id || uid()).toString(),
+        store_id: (p?.store_id || "").toString(),
+        store_name: (p?.store_name || "").toString(),
+        model: (p?.model || "").toString(),
+        color: (p?.color || "").toString(),
+        mockup_source: (p?.mockup_source || "").toString(),
+        mockup_file: (p?.mockup_file || "").toString(),
+        stamp_file: (p?.stamp_file || "").toString(),
+        preview_file: (p?.preview_file || "").toString(),
+        final_file: (p?.final_file || "").toString(),
+        area_w: Number.parseInt(p?.area_w ?? 0, 10) || 0,
+        area_h: Number.parseInt(p?.area_h ?? 0, 10) || 0,
+        area_x: Number.parseInt(p?.area_x ?? 0, 10) || 0,
+        area_y: Number.parseInt(p?.area_y ?? 0, 10) || 0,
+        stamp_x: Number.parseInt(p?.stamp_x ?? 0, 10) || 0,
+        stamp_y: Number.parseInt(p?.stamp_y ?? 0, 10) || 0,
+        stamp_w: Number.parseInt(p?.stamp_w ?? 0, 10) || 0,
+        stamp_h: Number.parseInt(p?.stamp_h ?? 0, 10) || 0,
+        customer_name: (p?.customer_name || "").toString(),
+        customer_email: (p?.customer_email || "").toString(),
+        customer_phone: (p?.customer_phone || "").toString(),
+        customer_notes: (p?.customer_notes || "").toString(),
+        viewed: Boolean(p?.viewed),
+        status: ((p?.status || "").toString() || "aberta"),
+        created_at: (p?.created_at || "").toString(),
+        updated_at: (p?.updated_at || "").toString(),
+      }));
+    }
+    function loadPersonalizations(){
+      const raw = storageGet(STORAGE_KEY_PERSONALIZACOES);
+      const parsed = safeJsonParse(raw);
+      if(Array.isArray(parsed)) return normalizePersonalizations(parsed);
+      return [];
+    }
+    async function refreshPersonalizationsFromServer(){
+      try{
+        const result = await apiRequest(`${API_BASE}/storage.php`, {
+          action: "get",
+          keys: [STORAGE_KEY_PERSONALIZACOES]
+        });
+        if(result?.data && Object.prototype.hasOwnProperty.call(result.data, STORAGE_KEY_PERSONALIZACOES)){
+          const nextValue = (result.data[STORAGE_KEY_PERSONALIZACOES] ?? "").toString();
+          storageCache[STORAGE_KEY_PERSONALIZACOES] = nextValue;
+        }
+        personalizations = loadPersonalizations();
+        updatePersonalizationsBadges();
+        renderPersonalizations();
+      }catch(e){
+        // Mantem a lista atual se falhar o refresh.
+      }
+    }
+    async function refreshTasksFromServer(){
+      try{
+        const result = await apiRequest(`${API_BASE}/storage.php`, {
+          action: "get",
+          keys: [STORAGE_KEY_TASKS, STORAGE_KEY_TASKS_DONE]
+        });
+        if(result?.data && typeof result.data === "object"){
+          if(Object.prototype.hasOwnProperty.call(result.data, STORAGE_KEY_TASKS)){
+            const nextTasks = (result.data[STORAGE_KEY_TASKS] ?? "").toString();
+            storageCache[STORAGE_KEY_TASKS] = nextTasks;
+          }
+          if(Object.prototype.hasOwnProperty.call(result.data, STORAGE_KEY_TASKS_DONE)){
+            const nextDone = (result.data[STORAGE_KEY_TASKS_DONE] ?? "").toString();
+            storageCache[STORAGE_KEY_TASKS_DONE] = nextDone;
+          }
+        }
+        tasks = loadTasks();
+        tasksDone = loadTasksDone();
+        updateTaskCountBadges();
+        if(currentView === "tasks") renderTasks();
+        if(currentView === "done") renderDoneTasks();
+      }catch(e){
+        // Mantem a lista atual se falhar o refresh.
+      }
+    }
+    function savePersonalizations(next){
+      personalizations = normalizePersonalizations(next);
+      storageSet(STORAGE_KEY_PERSONALIZACOES, JSON.stringify(personalizations));
+      updatePersonalizationsBadges();
+      renderPersonalizations();
+    }
+    function updatePersonalizationsBadges(){
+      const count = (personalizations || []).length;
+      if(personalizationsCountBadge){
+        personalizationsCountBadge.textContent = String(count);
+        personalizationsCountBadge.style.display = count ? "inline-flex" : "none";
+      }
+      if(personalizationsNotifyBadge){
+        personalizationsNotifyBadge.textContent = String(count);
+        personalizationsNotifyBadge.style.display = count ? "inline-flex" : "none";
+      }
+    }
+    function getPersonalizationById(id){
+      const key = (id || "").toString();
+      return (personalizations || []).find(p => String(p.id || "") === key) || null;
+    }
+    function markPersonalizationViewed(id){
+      const key = (id || "").toString();
+      const list = (personalizations || []).slice();
+      const idx = list.findIndex(p => String(p.id || "") === key);
+      if(idx < 0) return;
+      if(list[idx].viewed) return;
+      list[idx] = { ...list[idx], viewed: true, updated_at: new Date().toISOString() };
+      savePersonalizations(list);
+    }
+    function getPersonalizationDateLabel(p){
+      const raw = (p?.created_at || "").toString().trim();
+      return formatDateTimeBR(raw || "-");
+    }
+    function getPersonalizationModelLabel(model){
+      const v = (model || "").toString().trim();
+      if(v === "masculino") return "Masculino";
+      if(v === "feminino") return "Feminino";
+      if(v === "proprio") return "Mockup pr\u00f3prio";
+      return "-";
+    }
+    function buildPersonalizationCopyText(p){
+      const lines = [];
+      lines.push(`Nome: ${p.customer_name || "-"}`);
+      lines.push(`E-mail: ${p.customer_email || "-"}`);
+      lines.push(`Telefone: ${p.customer_phone || "-"}`);
+      lines.push(`Loja: ${p.store_name || "-"}`);
+      if(p.color) lines.push(`Cor: ${p.color}`);
+      lines.push(`Enviado em: ${getPersonalizationDateLabel(p)}`);
+      lines.push(`Observa\u00e7\u00f5es: ${p.customer_notes || "-"}`);
+      return lines.join("\n");
+    }
+    function renderPersonalizations(){
+      if(!personalizationsList) return;
+      const list = Array.isArray(personalizations) ? personalizations : [];
+      if(personalizationsCount) personalizationsCount.textContent = `${list.length} item(ns)`;
+      if(!list.length){
+        personalizationsList.innerHTML = `<div class="note">Nenhuma personaliza\u00e7\u00e3o encontrada.</div>`;
+        return;
+      }
+      personalizationsList.innerHTML = list.map((p, idx) => {
+        const dateLabel = getPersonalizationDateLabel(p);
+        const storeLabel = (p.store_name || "-").toString().trim() || "-";
+        const colorLabel = (p.color || "").toString().trim();
+        const isNew = !p.viewed;
+        const badge = isNew ? `<span class="personalizationBadge">Nova</span>` : "";
+        const colorText = colorLabel ? ` | Cor: ${escapeHtml(colorLabel)}` : "";
+        return `
+            <div class="personalizationCard ${isNew ? "isNew" : ""}" data-personalization-id="${escapeHtml(p.id)}">
+              <div class="personalizationHeader">
+                <div class="personalizationTitle">${escapeHtml(p.customer_name || "Personaliza\u00e7\u00e3o")}</div>
+                ${badge}
+              </div>
+              <div class="personalizationMeta">Loja: ${escapeHtml(storeLabel)}${colorText} | Enviado: ${escapeHtml(dateLabel)}</div>
+              <div class="personalizationActions">
+                <button class="btn small" data-personalization-view="${escapeHtml(p.id)}">Ver detalhes</button>
+              </div>
+            </div>
+            ${idx < list.length - 1 ? `<div class="personalizationDivider"></div>` : ""}
+          `;
+      }).join("");
+      if(personalizationsList.dataset.bound !== "1"){
+        personalizationsList.addEventListener("click", (e)=>{
+          const btn = e.target.closest("[data-personalization-view]");
+          if(btn){
+            const id = (btn.getAttribute("data-personalization-view") || "").toString().trim();
+            if(id) openPersonalizationOverlay(id);
+          }
+        });
+        personalizationsList.dataset.bound = "1";
+      }
+    }
+    function openPersonalizationOverlay(id){
+      if(!personalizationOverlay) return;
+      const p = getPersonalizationById(id);
+      if(!p) return;
+      personalizationSelectedId = String(p.id || "");
+      const modelLabel = getPersonalizationModelLabel(p.model);
+      const colorLabel = (p.color || "").toString().trim();
+      const dateLabel = getPersonalizationDateLabel(p);
+      const storeLabel = (p.store_name || "-").toString().trim() || "-";
+      if(personalizationDetails){
+        const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+        const nameRaw = (p.customer_name || "").toString().trim();
+        const emailRaw = (p.customer_email || "").toString().trim();
+        const phoneRaw = (p.customer_phone || "").toString().trim();
+        const storeRaw = (storeLabel || "").toString().trim();
+        const notesRaw = (p.customer_notes || "").toString().trim();
+        const copyBtn = (value, label)=> value
+          ? `<button type="button" class="copyIconBtn" data-copy-text="${escapeHtml(value)}" title="Copiar ${label}" aria-label="Copiar ${label}">${copyIcon}</button>`
+          : `<button type="button" class="copyIconBtn" disabled title="Sem ${label}" aria-label="Sem ${label}">${copyIcon}</button>`;
+        personalizationDetails.innerHTML = `
+          <div class="personalizationDetailRow">
+            <span class="detailLabel">Cliente:</span>
+            <span class="detailValue">${escapeHtml(nameRaw || "-")}</span>
+            ${copyBtn(nameRaw, "cliente")}
+          </div>
+          <div class="personalizationDetailRow">
+            <span class="detailLabel">E-mail:</span>
+            <span class="detailValue">${escapeHtml(emailRaw || "-")}</span>
+            ${copyBtn(emailRaw, "e-mail")}
+          </div>
+          <div class="personalizationDetailRow">
+            <span class="detailLabel">Telefone:</span>
+            <span class="detailValue">
+              <button type="button" class="personalizationPhone" data-customer-whatsapp="${escapeHtml(phoneRaw)}">${escapeHtml(phoneRaw || "-")}</button>
+            </span>
+            ${copyBtn(phoneRaw, "telefone")}
+          </div>
+          <div class="personalizationDetailRow">
+            <span class="detailLabel">Loja:</span>
+            <span class="detailValue">${escapeHtml(storeRaw || "-")}</span>
+            ${copyBtn(storeRaw, "loja")}
+          </div>
+          <div class="personalizationDetailRow">
+            <span class="detailLabel">Enviado em:</span>
+            <span class="detailValue">${escapeHtml(dateLabel || "-")}</span>
+            ${copyBtn(dateLabel, "envio")}
+          </div>
+          <div class="personalizationDetailRow">
+            <span class="detailLabel">Observa\u00e7\u00f5es:</span>
+            <span class="detailValue">${escapeHtml(notesRaw || "-")}</span>
+            ${copyBtn(notesRaw, "observa\u00e7\u00f5es")}
+          </div>
+        `;
+        personalizationDetails.querySelectorAll("[data-copy-text]").forEach(btn=>{
+          btn.addEventListener("click", async ()=>{
+            const val = (btn.getAttribute("data-copy-text") || "").toString();
+            if(!val) return;
+            await copyTextToClipboard(val, btn, "Copiado!");
+          });
+        });
+      }
+      if(personalizationPreviewImg){
+        const src = buildImagePath(p.preview_file, "app/personalizacoes");
+        if(src){
+          personalizationPreviewImg.src = src;
+          personalizationPreviewImg.style.display = "block";
+        }else{
+          personalizationPreviewImg.removeAttribute("src");
+          personalizationPreviewImg.style.display = "none";
+        }
+      }
+      if(personalizationStampDownload){
+        const href = buildImagePath(p.stamp_file, "app/personalizacoes");
+        personalizationStampDownload.href = href || "#";
+        personalizationStampDownload.style.display = href ? "inline-flex" : "none";
+      }
+      if(personalizationMockupDownload){
+        const href = buildImagePath(p.preview_file, "app/personalizacoes");
+        personalizationMockupDownload.href = href || "#";
+        personalizationMockupDownload.style.display = href ? "inline-flex" : "none";
+      }
+      if(personalizationFinalDownload){
+        const href = buildImagePath(p.final_file, "app/personalizacoes");
+        personalizationFinalDownload.href = href || "#";
+        personalizationFinalDownload.style.display = href ? "inline-flex" : "none";
+      }
+      if(personalizationWhatsappBtn){
+        const phone = (p.customer_phone || "").toString().trim();
+        personalizationWhatsappBtn.setAttribute("data-customer-whatsapp", phone);
+        personalizationWhatsappBtn.style.display = phone ? "inline-flex" : "none";
+        if(phone){
+          personalizationWhatsappBtn.setAttribute("aria-label", `WhatsApp ${phone}`);
+          personalizationWhatsappBtn.setAttribute("title", `WhatsApp ${phone}`);
+        }
+      }
+      if(personalizationFinalInput){
+        personalizationFinalInput.value = "";
+      }
+      markPersonalizationViewed(p.id);
+      personalizationOverlay.classList.add("show");
+    }
+    function closePersonalizationOverlay(){
+      if(!personalizationOverlay) return;
+      personalizationOverlay.classList.remove("show");
+      personalizationSelectedId = "";
+    }
+    async function deletePersonalizationFiles(p, includeFinal){
+      if(!p) return;
+      const files = [p.stamp_file, p.preview_file, p.mockup_file];
+      if(includeFinal) files.push(p.final_file);
+      for(const file of files){
+        const name = (file || "").toString().trim();
+        if(!name) continue;
+        try{ await apiDeleteImage(name); }catch(e){ /* ignore */ }
+      }
+    }
+    async function handlePersonalizationFinalUpload(){
+      if(!personalizationSelectedId) return;
+      const p = getPersonalizationById(personalizationSelectedId);
+      if(!p) return;
+      if(!personalizationFinalInput || !personalizationFinalInput.files || !personalizationFinalInput.files[0]){
+        showAlert("Selecione a estampa finalizada.");
+        return;
+      }
+      const file = personalizationFinalInput.files[0];
+      try{
+        const filename = await apiUploadImage(file, "app/personalizacoes");
+        const list = (personalizations || []).slice();
+        const idx = list.findIndex(item => String(item.id || "") === String(p.id || ""));
+        if(idx >= 0){
+          list[idx] = { ...list[idx], final_file: filename, updated_at: new Date().toISOString() };
+          savePersonalizations(list);
+          openPersonalizationOverlay(p.id);
+        }
+      }catch(err){
+        showAlert("Falha ao enviar a estampa finalizada.");
+      }
+    }
+    async function completePersonalization(){
+      if(!personalizationSelectedId) return;
+      const p = getPersonalizationById(personalizationSelectedId);
+      if(!p) return;
+      const ok = await showConfirm("Concluir esta personaliza\u00e7\u00e3o?");
+      if(!ok) return;
+      await deletePersonalizationFiles(p, false);
+      const list = (personalizations || []).slice();
+      const idx = list.findIndex(item => String(item.id || "") === String(p.id || ""));
+      if(idx >= 0){
+        list[idx] = { ...list[idx], status: "concluida", stamp_file: "", preview_file: "", mockup_file: "", updated_at: new Date().toISOString() };
+        savePersonalizations(list);
+      }
+      openPersonalizationOverlay(p.id);
+    }
+    async function deletePersonalization(){
+      if(!personalizationSelectedId) return;
+      const p = getPersonalizationById(personalizationSelectedId);
+      if(!p) return;
+      const ok = await showConfirm("Excluir esta personaliza\u00e7\u00e3o?");
+      if(!ok) return;
+      await deletePersonalizationFiles(p, true);
+      const list = (personalizations || []).filter(item => String(item.id || "") !== String(p.id || ""));
+      savePersonalizations(list);
+      closePersonalizationOverlay();
+    }
     async function refreshAppDataForUser(){
       await bootstrapStorage();
-
       items = loadBase();
       menuButtons = loadMenuButtons();
       quickLinks = loadQuickLinks();
@@ -14052,9 +13864,9 @@ navAtalhosBtn.addEventListener("click", ()=>{
       tasks = loadTasks();
       tasksDone = loadTasksDone();
       calendarHistory = loadCalendarHistory();
+      personalizations = loadPersonalizations();
       seedTransportadorasLinks();
       userProfile = loadUserProfile();
-
       initTheme();
       initSideMenu();
       // mantem o calendario consistente na inicializacao
@@ -14074,8 +13886,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
       updateTaskCountBadges();
       initTasksUI();
       const savedView = (storageGet(STORAGE_KEY_VIEW) || "").toString().trim();
-      const allowedViews = ["search", "tasks", "done", "users", "userActivity"];
+      const allowedViews = ["search", "tasks", "personalizations", "done", "users", "userActivity"];
+      const queryView = new URLSearchParams(window.location.search).get("view");
       let initialView = allowedViews.includes(savedView) ? savedView : "search";
+      if(queryView && allowedViews.includes(queryView)){
+        initialView = queryView;
+      }
       if((initialView === "users" || initialView === "userActivity") && !canAccessUsersView()){
         initialView = "search";
       }
@@ -14083,7 +13899,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       ensureMiniCalendarNavPlacement();
       startActivityTracking();
       startUsersAutoRefresh();
-
+      startPersonalizationsAutoRefresh();
       if(!isUserProfileComplete(userProfile)){
         openUserProfileOverlay({ required:true });
         return;
@@ -14093,60 +13909,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
         return;
       }
     }
-
 async function bootstrapApp(){
       await ensureAuthenticated();
       await refreshAppDataForUser();
     }
-
     bootstrapApp();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
