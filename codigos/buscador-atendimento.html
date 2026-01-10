@@ -860,14 +860,35 @@
         <section class="card usersCard">
           <div class="hd">
             <div class="row userActivityHeaderRow">
-              <h2 id="userActivityViewTitle">Resumo de atividades</h2>
+              <div class="userActivityTitleBlock">
+                <h2 id="userActivityViewTitle">Resumo de atividades</h2>
+                <div class="count" id="userActivityViewMeta"></div>
+              </div>
+              <div class="userActivityDateTop">
+                <div class="userActivityRangeLabel">Personalizado</div>
+                <input id="userActivityDate" type="date" />
+              </div>
               <button class="btn small" id="userActivityBackBtn">Voltar</button>
             </div>
-            <div class="count" id="userActivityViewMeta"></div>
           </div>
           <div class="bd">
             <div class="userActivitySummary" id="userActivityViewSummary"></div>
             <div class="userActivityList" id="userActivityViewList"></div>
+            <div class="userActivityPager">
+              <div class="userActivityRangeLabel">Dia</div>
+              <div class="userActivityRangeControls">
+                <button class="btn small iconBtn" id="userActivityPrevDay" type="button" aria-label="Dia anterior">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <button class="btn small iconBtn" id="userActivityNextDay" type="button" aria-label="Proximo dia">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -1719,12 +1740,33 @@
   <div class="miniOverlay" id="userActivityOverlay">
     <div class="miniModal userActivityModal">
       <div class="mh">
-        <h3 id="userActivityTitle">Atividade do usu&aacute;rio</h3>
+        <div class="userActivityTitleBlock mini">
+          <h3 id="userActivityTitle">Atividade do usu&aacute;rio</h3>
+          <div class="userActivityDateOnly">
+            <div class="userActivityRangeLabel">Personalizado</div>
+            <input id="userActivityDateModal" type="date" />
+          </div>
+        </div>
         <button class="btn small" id="userActivityCloseBtn">Fechar</button>
       </div>
       <div class="mb">
         <div class="userActivitySummary" id="userActivitySummary"></div>
         <div class="userActivityList" id="userActivityList"></div>
+        <div class="userActivityPager">
+          <div class="userActivityRangeLabel">Dia</div>
+          <div class="userActivityRangeControls">
+            <button class="btn small iconBtn" id="userActivityPrevDayModal" type="button" aria-label="Dia anterior">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <button class="btn small iconBtn" id="userActivityNextDayModal" type="button" aria-label="Proximo dia">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

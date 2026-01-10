@@ -12,13 +12,13 @@ if (!$current) {
   respond(["ok" => false, "error" => "forbidden"], 403);
 }
 
-$targetId = isset($_GET["user_id"]) ? (int)$_GET["user_id"] : 0;
-if ($targetId <= 0) {
+$targetUserId = isset($_GET["user_id"]) ? (int)$_GET["user_id"] : 0;
+if ($targetUserId <= 0) {
   respond(["ok" => false, "error" => "missing_user_id"], 400);
 }
 
 $stmt = db()->prepare("SELECT id, username, role, owner_user_id FROM users WHERE id = :id LIMIT 1");
-$stmt->execute([":id" => $targetId]);
+$stmt->execute([":id" => $targetUserId]);
 $target = $stmt->fetch();
 if (!$target) {
   respond(["ok" => false, "error" => "user_not_found"], 404);
@@ -26,8 +26,8 @@ if (!$target) {
 
 $isAdmin = is_admin_user($current);
 if (!$isAdmin) {
-  $targetId = (int)$target["id"];
-  if ($targetId === (int)$current["id"]) {
+  $targetUserId = (int)$target["id"];
+  if ($targetUserId === (int)$current["id"]) {
     // ok
   } elseif (can_manage_secondary($current, $target)) {
     // ok
@@ -39,13 +39,36 @@ if (!$isAdmin) {
 $storageStmt = db()->prepare(
   "SELECT storage_key, storage_value
    FROM user_storage
-   WHERE user_id = :uid AND storage_key IN ('activity_log','last_active_at','last_logout_at')"
+   WHERE user_id = :uid AND storage_key IN ('activity_log','activity_actions','last_active_at','last_logout_at')"
 );
-$storageStmt->execute([":uid" => $targetId]);
+$storageStmt->execute([":uid" => $targetUserId]);
 $storage = [];
 while ($row = $storageStmt->fetch()) {
   $storage[$row["storage_key"]] = $row["storage_value"];
 }
+
+$now = time();
+$dayParam = isset($_GET["day"]) ? (string)$_GET["day"] : "";
+$tzOffset = isset($_GET["tz_offset"]) ? (int)$_GET["tz_offset"] : 0;
+$dayTs = 0;
+try {
+  $baseDay = $dayParam !== "" ? $dayParam : date("Y-m-d", $now);
+  if (preg_match("/^\\d{2}\\/\\d{2}\\/\\d{4}$/", $baseDay)) {
+    $dt = DateTime::createFromFormat("d/m/Y H:i:s", $baseDay . " 00:00:00", new DateTimeZone("UTC"));
+    if (!$dt) {
+      throw new Exception("invalid_date");
+    }
+  } else {
+    $dt = new DateTime($baseDay . " 00:00:00", new DateTimeZone("UTC"));
+  }
+  $dayTs = $dt->getTimestamp();
+} catch (Exception $e) {
+  $dayTs = strtotime(date("Y-m-d", $now) . " 00:00:00");
+}
+$dayStart = $dayTs + ($tzOffset * 60);
+$dayEnd = $dayStart + 86399;
+$filterStart = $dayStart;
+$filterEnd = $dayEnd;
 
 $rawLog = isset($storage["activity_log"]) ? (string)$storage["activity_log"] : "[]";
 $decoded = json_decode($rawLog, true);
@@ -58,9 +81,84 @@ if (is_array($decoded)) {
     }
   }
 }
+$cutoff = $now - (90 * 86400);
+$events = array_values(array_filter($events, function($ts) use ($cutoff) {
+  return $ts >= $cutoff;
+}));
 sort($events, SORT_NUMERIC);
-
-$now = time();
+if (json_encode($events) !== $rawLog) {
+  set_user_storage_value($targetUserId, "activity_log", json_encode($events));
+}
+$eventsInDay = array_values(array_filter($events, function($ts) use ($filterStart, $filterEnd) {
+  return $ts >= $filterStart && $ts <= $filterEnd;
+}));
+if (!$eventsInDay && $tzOffset !== 0 && $events) {
+  $altStart = $dayTs - ($tzOffset * 60);
+  $altEnd = $altStart + 86399;
+  $altEvents = array_values(array_filter($events, function($ts) use ($altStart, $altEnd) {
+    return $ts >= $altStart && $ts <= $altEnd;
+  }));
+  if ($altEvents) {
+    $filterStart = $altStart;
+    $filterEnd = $altEnd;
+    $eventsInDay = $altEvents;
+    $dayStart = $altStart;
+    $dayEnd = $altEnd;
+  }
+}
+$events = $eventsInDay;
+$rawActions = isset($storage["activity_actions"]) ? (string)$storage["activity_actions"] : "[]";
+$decodedActions = json_decode($rawActions, true);
+$actions = [];
+if (is_array($decodedActions)) {
+  foreach ($decodedActions as $item) {
+    if (!is_array($item)) {
+      continue;
+    }
+    $ts = isset($item["ts"]) ? (int)$item["ts"] : 0;
+    $label = isset($item["label"]) ? (string)$item["label"] : "";
+    $action = isset($item["action"]) ? (string)$item["action"] : "";
+    $detail = isset($item["detail"]) ? (string)$item["detail"] : "";
+    $actionTargetId = isset($item["target_id"]) ? (string)$item["target_id"] : "";
+    $targetType = isset($item["target_type"]) ? (string)$item["target_type"] : "";
+    $isExtra = !empty($item["is_extra"]);
+    if ($ts <= 0 || $label === "") {
+      continue;
+    }
+    $entry = [
+      "ts" => $ts,
+      "label" => $label,
+      "action" => $action,
+      "detail" => $detail,
+    ];
+    if ($actionTargetId !== "") {
+      $entry["target_id"] = $actionTargetId;
+    }
+    if ($targetType !== "") {
+      $entry["target_type"] = $targetType;
+    }
+    if ($isExtra) {
+      $entry["is_extra"] = true;
+    }
+    $actions[] = $entry;
+  }
+}
+$actions = array_values(array_filter($actions, function($item) use ($cutoff) {
+  return ((int)$item["ts"]) >= $cutoff;
+}));
+if (json_encode($actions) !== $rawActions) {
+  set_user_storage_value($targetUserId, "activity_actions", json_encode($actions));
+}
+$actions = array_values(array_filter($actions, function($item) use ($filterStart, $filterEnd) {
+  $ts = (int)$item["ts"];
+  return $ts >= $filterStart && $ts <= $filterEnd;
+}));
+usort($actions, function($a, $b) {
+  return ($a["ts"] ?? 0) <=> ($b["ts"] ?? 0);
+});
+$events = array_values(array_filter($events, function($ts) use ($filterStart, $filterEnd) {
+  return $ts >= $filterStart && $ts <= $filterEnd;
+}));
 $active = [];
 $inactive = [];
 
@@ -125,7 +223,9 @@ respond([
     "last_active_at" => isset($storage["last_active_at"]) ? (int)$storage["last_active_at"] : null,
     "last_logout_at" => isset($storage["last_logout_at"]) ? (int)$storage["last_logout_at"] : null,
     "generated_at" => $now,
+    "day" => date("Y-m-d", $filterStart),
   ],
   "active_periods" => $active,
   "inactive_periods" => $inactive,
+  "actions" => $actions,
 ]);

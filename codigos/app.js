@@ -203,15 +203,29 @@
       }
       return data;
     }
-    async function apiUserActivity(userId){
+    async function apiUserActivity(userId, dayIso){
       const id = String(userId || "").trim();
-      const response = await fetch(`${API_BASE}/user_activity.php?user_id=${encodeURIComponent(id)}`, { credentials: "include" });
+      const params = new URLSearchParams({ user_id: id });
+      if(dayIso){
+        params.set("day", String(dayIso));
+      }
+      params.set("tz_offset", String(new Date().getTimezoneOffset()));
+      const response = await fetch(`${API_BASE}/user_activity.php?${params.toString()}`, { credentials: "include" });
       const data = await response.json().catch(() => ({}));
       if(!response.ok){
         const msg = data?.error || "request_failed";
         throw new Error(msg);
       }
       return data;
+    }
+    async function apiUserActivityAction(action, detail, meta){
+      const payload = { action, detail: detail || "" };
+      if(meta && meta.target_id){
+        payload.target_id = meta.target_id;
+        payload.target_type = meta.target_type || "task";
+        payload.is_extra = Boolean(meta.is_extra);
+      }
+      return apiRequest(`${API_BASE}/user_activity_action.php`, payload);
     }
     async function apiAdminUserAction(action, userId){
       return apiRequest(`${API_BASE}/admin_user_action.php`, { action, user_id: userId });
@@ -1678,6 +1692,7 @@
       if(!storesConfigHost) return false;
       const cards = Array.from(storesConfigHost.querySelectorAll("[data-store-index]"));
       if(!cards.length) return false;
+      beginValidation();
       let ok = true;
       cards.forEach(card => {
         const inputs = Array.from(card.querySelectorAll("input, textarea, select"));
@@ -1777,6 +1792,7 @@
           }
         });
       });
+      endValidation(ok);
       return ok;
     }    function updateStoresUI(){
       const list = stores || [];
@@ -2621,6 +2637,12 @@ function renderPopupImages(){
     const userActivityViewSummary = document.getElementById("userActivityViewSummary");
     const userActivityViewList = document.getElementById("userActivityViewList");
     const userActivityBackBtn = document.getElementById("userActivityBackBtn");
+    const userActivityDate = document.getElementById("userActivityDate");
+    const userActivityPrevDay = document.getElementById("userActivityPrevDay");
+    const userActivityNextDay = document.getElementById("userActivityNextDay");
+    const userActivityDateModal = document.getElementById("userActivityDateModal");
+    const userActivityPrevDayModal = document.getElementById("userActivityPrevDayModal");
+    const userActivityNextDayModal = document.getElementById("userActivityNextDayModal");
     const tasksCountBadge = document.getElementById("tasksCountBadge");
     const tasksExtraCountBadge = document.getElementById("tasksExtraCountBadge");
     const personalizationsCountBadge = document.getElementById("personalizationsCountBadge");
@@ -4194,6 +4216,10 @@ function renderPopupImages(){
       }
       tasksSingleIndex = 0;
       saveTasks(list);
+      if(!editingId){
+        const detail = loja ? `Loja: ${loja}` : "";
+        logUserAction("task_extra_create", detail, { target_id: entryId, is_extra: true });
+      }
       closeSimpleTaskModal();
     }
     async function closeExtraTask(taskId){
@@ -4207,6 +4233,8 @@ function renderPopupImages(){
       addTaskToDone(t, { closedAt: nowIso, closedById: (currentUser?.id || "").toString(), closedByName: (currentUser?.display_name || currentUser?.username || "").toString().trim(), isExtra: true });
       tasks = (tasks || []).filter(x => String(x.id || "") !== id);
       saveTasks(tasks);
+      const detail = t.loja ? `Loja: ${t.loja}` : "";
+      logUserAction("task_extra_close", detail, { target_id: id, is_extra: true });
       const prev = (calendarHistory || []).find(e => String(e.id || "") === id);
       if(prev){
         const next = (calendarHistory || []).filter(e => String(e.id || "") !== id);
@@ -4507,6 +4535,9 @@ function renderPopupImages(){
         const dataInicial = formatDateBR(p?.date || "");
         const prazo = formatDateBR(p?.prazo || "");
         const texto = (p?.text || "").toString().trim() || "-";
+        const sizeFrom = (p?.sizeFrom || "").toString().trim();
+        const sizeTo = (p?.sizeTo || "").toString().trim();
+        const sizeLine = (sizeFrom || sizeTo) ? `${sizeFrom || "-"} -> ${sizeTo || "-"}` : "";
         const author = (p?.created_by_username || ref?.created_by_username || "").toString().trim();
         return `
           <div class="summaryPhase">
@@ -4519,6 +4550,7 @@ function renderPopupImages(){
               <div class="summaryMetaItem"><span class="popupSummaryLabel">Cliente</span> ${escapeHtml(cliente)}</div>
               <div class="summaryMetaItem"><span class="popupSummaryLabel">Data inicial</span> ${escapeHtml(dataInicial)}</div>
               <div class="summaryMetaItem"><span class="popupSummaryLabel">Prazo de resolu&ccedil;&atilde;o</span> ${escapeHtml(prazo)}</div>
+              ${sizeLine ? `<div class="summaryMetaItem"><span class="popupSummaryLabel">Tamanhos da troca</span> ${escapeHtml(sizeLine)}</div>` : ""}
               ${author ? `<div class="summaryMetaItem"><span class="popupSummaryLabel">Autor</span> ${escapeHtml(author)}</div>` : ""}
             </div>
             <div class="summaryNote">${escapeHtml(texto)}</div>
@@ -4739,6 +4771,7 @@ function renderPopupImages(){
         const customerWhatsappRaw = (e.whatsapp || (taskRef?.whatsapp || "")).toString().trim();
         const customerPhone = normalizeWhatsappNumber(customerWhatsappRaw);
         const customerWhatsappUrl = buildCustomerWhatsappUrl(customerWhatsappRaw);
+        const storeWhatsappUrl = getStoreWhatsappUrl(loja);
         const doneTask = (!e.open && Array.isArray(tasksDone))
           ? tasksDone.find(t => String(t.id || "") === String(e.id || ""))
           : null;
@@ -4869,10 +4902,17 @@ function renderPopupImages(){
                   <circle class="nuvemRight" cx="30.5" cy="22.5" r="12.5"></circle>
                 </svg>
               </button>` : ""}
-              ${customerWhatsappUrl ? `<button class="btn small iconBtn" type="button" data-customer-whatsapp="${escapeHtml(customerWhatsappRaw)}" title="WhatsApp Cliente" aria-label="WhatsApp Cliente">
+              ${customerWhatsappUrl ? `<button class="btn small iconBtn waIconBtn" type="button" data-customer-whatsapp="${escapeHtml(customerWhatsappRaw)}" title="WhatsApp Cliente" aria-label="WhatsApp Cliente">
                 <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
                   <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
                 </svg>
+                <span class="waIconLetter">C</span>
+              </button>` : ""}
+              ${storeWhatsappUrl ? `<button class="btn small iconBtn waIconBtn" type="button" data-store-whatsapp="${escapeHtml(loja)}" title="WhatsApp Atendimento" aria-label="WhatsApp Atendimento">
+                <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
+                  <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
+                </svg>
+                <span class="waIconLetter">S</span>
               </button>` : ""}
               <button class="btn small iconBtn" data-cal-item-add="${escapeHtml(String(e.id || ""))}" title="Adicionar" aria-label="Adicionar">
                 <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
@@ -5166,13 +5206,16 @@ function renderPopupImages(){
           tasksDone = (tasksDone || []).filter(t => String(t.id || "") !== id);
           saveTasksDone(tasksDone);
           tasks = tasks || [];
-          const revived = { ...fromDone };
+          const revived = stripTrailingDonePhases({ ...fromDone });
           delete revived.closedAt;
+          revived.assunto = getEffectivePhaseStatus(revived) || revived.assunto || "";
           tasks.unshift(revived);
           saveTasks(tasks);
-          const reopenedDate = (getEffectivePhaseDate(fromDone) || (fromDone.proxEtapa || "")).toString().trim();
+          const detail = revived.loja ? `Loja: ${revived.loja}` : "";
+          logUserAction("task_reopen", detail, { target_id: id, is_extra: false });
+          const reopenedDate = (getEffectivePhaseDate(revived) || (revived.proxEtapa || "")).toString().trim();
           if(reopenedDate){
-            upsertCalendarFromTask(fromDone);
+            upsertCalendarFromTask(revived);
           }else{
             calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
             saveCalendarHistory(calendarHistory);
@@ -5313,6 +5356,23 @@ function renderPopupImages(){
       if(h > 0) return `${h}h ${m}m`;
       if(m > 0) return `${m}m ${s}s`;
       return `${s}s`;
+    }
+    const actionLogCache = new Map();
+    function logUserAction(action, detail, meta){
+      if(!currentUser || !action) return;
+      const targetId = meta && meta.target_id ? String(meta.target_id) : "";
+      const key = `${action}|${detail || ""}|${targetId}`;
+      const now = Date.now();
+      const last = actionLogCache.get(key) || 0;
+      if(now - last < 30000) return;
+      actionLogCache.set(key, now);
+      const payload = { action, detail: detail || "" };
+      if(targetId){
+        payload.target_id = targetId;
+        payload.target_type = "task";
+        payload.is_extra = Boolean(meta && meta.is_extra);
+      }
+      apiUserActivityAction(payload.action, payload.detail, payload).catch(()=>{});
     }
     function stopActivityTracking(){
       if(activityPingTimer){
@@ -5493,13 +5553,17 @@ function renderPopupImages(){
       if(found) return { a: found.colorA, b: found.colorB };
       return { a: "#7c8cff", b: "#38d9a9" };
     }
+    let currentUserActivityId = "";
+    let currentUserActivityName = "";
+    let currentUserActivityDay = "";
     /***********************
      * VIEW SWITCH
      ***********************/
     function setView(view){
       const prevView = currentView;
       const allowedViews = ["search", "tasks", "personalizations", "done", "users", "userActivity"];
-      currentView = allowedViews.includes(view) ? view : "search";
+      const desired = allowedViews.includes(view) ? view : "search";
+      currentView = (desired === "userActivity" && !currentUserActivityId) ? "users" : desired;
       storageSet(STORAGE_KEY_VIEW, currentView);
       const toTasks = currentView === "tasks";
       const toPersonalizations = currentView === "personalizations";
@@ -6111,6 +6175,8 @@ function fillAssuntoSelect(){
               etiqueta: (o?.etiqueta ?? o?.etiquetaReversa ?? "").toString(),
               novoPedido: (o?.novoPedido ?? "").toString(),
               rastreio: (o?.rastreio ?? "").toString(),
+              sizeFrom: (o?.sizeFrom ?? "").toString(),
+              sizeTo: (o?.sizeTo ?? "").toString(),
               status: (o?.status ?? "").toString(),
               attention: Boolean(o?.attention),
               attentionNote: (o?.attentionNote ?? "").toString(),
@@ -6126,6 +6192,8 @@ function fillAssuntoSelect(){
               etiqueta: "",
               novoPedido: "",
               rastreio: "",
+              sizeFrom: "",
+              sizeTo: "",
               status: "",
               attention: false,
               attentionNote: "",
@@ -6133,7 +6201,7 @@ function fillAssuntoSelect(){
             }));
           }
         }else if(typeof rawObs === "string" && rawObs.trim().length){
-          obsArr = [{ text: rawObs.toString(), date: "", prazo: "", prazoHora: "", chamado: "", etiqueta: "", novoPedido: "", rastreio: "", status: "", attention: false, attentionNote: "", state: "" }];
+          obsArr = [{ text: rawObs.toString(), date: "", prazo: "", prazoHora: "", chamado: "", etiqueta: "", novoPedido: "", rastreio: "", sizeFrom: "", sizeTo: "", status: "", attention: false, attentionNote: "", state: "" }];
         }
         // limpa objetos vazios
         obsArr = obsArr
@@ -6146,6 +6214,8 @@ function fillAssuntoSelect(){
             etiqueta: (o.etiqueta||o.etiquetaReversa||"").toString(),
             novoPedido: (o.novoPedido||"").toString(),
             rastreio: (o.rastreio||"").toString(),
+            sizeFrom: (o.sizeFrom||"").toString(),
+            sizeTo: (o.sizeTo||"").toString(),
             status: (o.status||"").toString(),
             attention: Boolean(o.attention),
             attentionNote: (o.attentionNote||"").toString(),
@@ -6160,6 +6230,8 @@ function fillAssuntoSelect(){
             (o.etiqueta||"").trim() ||
             (o.novoPedido||"").trim() ||
             (o.rastreio||"").trim() ||
+            (o.sizeFrom||"").trim() ||
+            (o.sizeTo||"").trim() ||
             (o.status||"").trim() ||
             (o.attentionNote||"").trim() ||
             o.attention ||
@@ -8037,6 +8109,8 @@ function fillAssuntoSelect(){
         const statusEl = b.querySelector("select.obsStatus");
         const attentionEl = b.querySelector("input.obsAttention");
         const attentionNoteEl = b.querySelector("textarea.obsAttentionNote");
+        const sizeFrom = ((b.dataset.sizeFrom || "").toString()).trim();
+        const sizeTo = ((b.dataset.sizeTo || "").toString()).trim();
         return {
           text: ((textEl?.value || "").toString()).trim(),
           date: ((dateEl?.value || "").toString()).trim(),
@@ -8046,6 +8120,8 @@ function fillAssuntoSelect(){
           etiqueta: ((etiquetaEl?.value || "").toString()).trim(),
           novoPedido: ((novoEl?.value || "").toString()).trim(),
           rastreio: ((rastEl?.value || "").toString()).trim(),
+          sizeFrom,
+          sizeTo,
           status: ((statusEl?.value || "").toString()).trim(),
           attention: Boolean(attentionEl && attentionEl.checked),
           attentionNote: Boolean(attentionEl && attentionEl.checked)
@@ -8057,8 +8133,8 @@ function fillAssuntoSelect(){
       });
       // remove totalmente vazias
       const cleaned = out
-        .map(o => ({ text:o.text, date:o.date, prazo:o.prazo, prazoHora:o.prazoHora, chamado:o.chamado, etiqueta:o.etiqueta, novoPedido:o.novoPedido, rastreio:o.rastreio, status:o.status, attention:o.attention, attentionNote:o.attentionNote, state:o.state }))
-        .filter(o => o.text || o.date || o.prazo || o.prazoHora || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.status || o.attention || o.attentionNote || o.state);
+        .map(o => ({ text:o.text, date:o.date, prazo:o.prazo, prazoHora:o.prazoHora, chamado:o.chamado, etiqueta:o.etiqueta, novoPedido:o.novoPedido, rastreio:o.rastreio, sizeFrom:o.sizeFrom, sizeTo:o.sizeTo, status:o.status, attention:o.attention, attentionNote:o.attentionNote, state:o.state }))
+        .filter(o => o.text || o.date || o.prazo || o.prazoHora || o.chamado || o.etiqueta || o.novoPedido || o.rastreio || o.sizeFrom || o.sizeTo || o.status || o.attention || o.attentionNote || o.state);
       return cleaned;
     }
     function createDescPhaseBlock(idx, data){
@@ -8081,6 +8157,8 @@ function fillAssuntoSelect(){
       wrap.className = "descPhase";
       wrap.dataset.index = String(idx);
       wrap.dataset.state = (d.state || "").toString();
+      wrap.dataset.sizeFrom = (d.sizeFrom || "").toString();
+      wrap.dataset.sizeTo = (d.sizeTo || "").toString();
       wrap.style.display = "flex";
       wrap.style.flexDirection = "column";
       wrap.style.gap = "8px";
@@ -8414,6 +8492,24 @@ function fillAssuntoSelect(){
       }
       return "";
     }
+    function stripTrailingDonePhases(task){
+      if(!task || !Array.isArray(task.obs)) return task;
+      const cleaned = task.obs.slice();
+      while(cleaned.length){
+        const last = cleaned[cleaned.length - 1] || {};
+        const status = (last.status || "").toString().trim().toLowerCase();
+        if(status && status === PHASE_STATE_DONE.toLowerCase()){
+          cleaned.pop();
+          continue;
+        }
+        break;
+      }
+      if(cleaned.length){
+        cleaned[cleaned.length - 1].state = PHASE_STATE_ACTIVE;
+      }
+      task.obs = cleaned;
+      return task;
+    }
     function getPhaseAttentionByIndex(t, idx){
       const phases = Array.isArray(t?.obs) ? t.obs : [];
       if(!Number.isFinite(idx) || idx < 0 || idx >= phases.length) return { has:false, note:"" };
@@ -8530,6 +8626,19 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(l === "Shop 80") return "https://api.whatsapp.com/send?phone=551140207216";
       return "https://api.whatsapp.com/send?phone=551150395895"; // Di\u00e1rio Nerdify (padr\u00e3o)
     }
+    function getStoreWhatsappUrl(lojaText){
+      const l = (lojaText || "").trim();
+      const store = getStoreByName(l);
+      return ((store?.whatsappUrl || store?.supportWhatsapp || "")).toString().trim();
+    }
+    function openStoreWhatsapp(lojaText){
+      const url = getStoreWhatsappUrl(lojaText);
+      if(!url){
+        showAlert("Nenhum WhatsApp de atendimento informado para a loja.");
+        return;
+      }
+      window.open(url, "_blank", "noopener");
+    }
     function getStorePublicUrl(lojaText){
       const l = (lojaText || "").trim();
       if(l === "Shop 80") return "https://shop80.com.br/";
@@ -8625,8 +8734,22 @@ function getNuvemshopSupportBaseUrl(lojaText){
       addTaskToDone(t, { closedAt, closedById, closedByName, isExtra: false });
       tasks.splice(idx, 1);
       saveTasks(tasks);
+      const detail = t.loja ? `Loja: ${t.loja}` : "";
+      logUserAction("task_close", detail, { target_id: id, is_extra: false });
       if(tasksEditId === id) clearTasksForm();
       renderTasks();
+      setView("done");
+      renderDoneTasks();
+      requestAnimationFrame(()=>{
+        if(!doneTasksList) return;
+        const card = doneTasksList.querySelector(`[data-done-id="${CSS.escape(id)}"]`);
+        if(card){
+          card.scrollIntoView({ behavior:"smooth", block:"center" });
+        }
+      });
+      if(calendarOverlay && calendarOverlay.classList.contains("show")){
+        closeCalendar();
+      }
     }
     function addTaskToDone(task, options){
       if(!task) return;
@@ -8887,6 +9010,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         phaseEditSizeToCustom,
         phaseEditRastreio
       ]);
+      beginValidation();
       let isOk = true;
       const minPhaseText = 5;
       if(phaseEditMode === "add"){
@@ -8965,9 +9089,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
           isOk = false;
         }
       }
-      if(!isOk) return false;
+      if(!isOk){
+        endValidation(false);
+        return false;
+      }
       if(!Array.isArray(t.obs)) t.obs = [];
       if(next.status === PHASE_STATE_DONE){
+        endValidation(true);
         pendingPhaseSave = {
           taskId: id,
           mode: phaseEditMode,
@@ -8980,6 +9108,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         openCloseTaskModal(id);
         return true;
       }
+      endValidation(true);
       applyPhaseToTaskData(t, next, phaseEditMode, phaseEditIndex);
       t.assunto = getEffectivePhaseStatus(t) || "";
       t.updatedAt = new Date().toISOString();
@@ -8989,8 +9118,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
         saveTasks(tasks);
         upsertCalendarFromTask(t);
         renderTasks();
+        if(calendarOverlay && calendarOverlay.classList.contains("show")){
+          const newDate = getTaskDisplayDate(t) || (t.proxEtapa || "").trim();
+          if(newDate) calSelectedISO = newDate;
+          renderCalendar();
+          renderCalendarDayDetails(calSelectedISO);
+        }
         pendingTaskDraft = null;
         clearTasksForm();
+        const detail = t.loja ? `Loja: ${t.loja}` : "";
+        logUserAction("task_create", detail, { target_id: t.id, is_extra: false });
         closePhaseEditor();
         closeTaskModal();
         return true;
@@ -8998,6 +9135,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       saveTasks(tasks);
       upsertCalendarFromTask(t);
       renderTasks();
+      if(calendarOverlay && calendarOverlay.classList.contains("show")){
+        const newDate = getTaskDisplayDate(t) || (t.proxEtapa || "").trim();
+        if(newDate) calSelectedISO = newDate;
+        renderCalendar();
+        renderCalendarDayDetails(calSelectedISO);
+      }
       closePhaseEditor();
       return true;
     }
@@ -9216,6 +9359,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     function validateTasksForm(){
       clearFieldErrors([tData, tCliente, tWhatsapp, tLoja, tPedido]);
+      beginValidation();
       let ok = true;
       const data = (tData ? (tData.value||"") : "").trim();
       if(!data){
@@ -9258,6 +9402,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         setFieldError(tPedido, pedidoCheck.message);
         ok = false;
       }
+      endValidation(ok);
       return ok;
     }
     function buildTaskPayloadFromForm(options){
@@ -9322,6 +9467,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
       // atualiza hist\u00f3rico do calend\u00e1rio com base na Pr\u00f3xima Etapa
       upsertCalendarFromTask(payload);
       saveTasks(next);
+      if(!tasksEditId){
+        const detail = payload.loja ? `Loja: ${payload.loja}` : "";
+        logUserAction("task_create", detail, { target_id: payload.id, is_extra: false });
+      }
       clearTasksForm();
       closeTaskModal();
     }
@@ -9375,6 +9524,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       const next = tasks.filter(x => x.id !== id);
       saveTasks(next);
+      const detail = t.loja ? `Loja: ${t.loja}` : "";
+      logUserAction(t.isExtra ? "task_extra_delete" : "task_delete", detail, { target_id: id, is_extra: Boolean(t.isExtra) });
       if(tasksEditId === id) clearTasksForm();
     }
     function matchesPeriod(dateStr, period){
@@ -10074,7 +10225,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           ? `<div class="doneTaskDetail" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-word;">${detailItems.map(v => `<span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;">${v}</span>`).join("")}</div>`
           : "";
         return `
-          <div class="doneTaskCard ${isExtra ? "doneTaskExtra" : ""}" style="padding:16px;border-radius:14px;border:1px solid color-mix(in srgb, var(--line) 70%, transparent);background:color-mix(in srgb, var(--card) 80%, transparent);box-shadow:var(--shadow);">
+          <div class="doneTaskCard ${isExtra ? "doneTaskExtra" : ""}" data-done-id="${escapeHtml(String(t.id || ""))}" style="padding:16px;border-radius:14px;border:1px solid color-mix(in srgb, var(--line) 70%, transparent);background:color-mix(in srgb, var(--card) 80%, transparent);box-shadow:var(--shadow);">
             <div class="doneTaskStack">
             <div class="doneTaskHeader" style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
               <div class="doneTaskTitle" style="margin-bottom:16px;">${escapeHtml(title)}</div>
@@ -10148,13 +10299,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
           tasksDone = (tasksDone || []).filter(t => String(t.id || "") !== id);
           saveTasksDone(tasksDone);
           tasks = tasks || [];
-          const revived = { ...ref };
+          const revived = stripTrailingDonePhases({ ...ref });
           delete revived.closedAt;
+          revived.assunto = getEffectivePhaseStatus(revived) || revived.assunto || "";
           tasks.unshift(revived);
           saveTasks(tasks);
-          const reopenedDate = (getEffectivePhaseDate(ref) || (ref.proxEtapa || "")).toString().trim();
+          const reopenedDate = (getEffectivePhaseDate(revived) || (revived.proxEtapa || "")).toString().trim();
           if(reopenedDate){
-            upsertCalendarFromTask(ref);
+            upsertCalendarFromTask(revived);
           }else{
             calendarHistory = (calendarHistory || []).filter(e => String(e.id || "") !== id);
             saveCalendarHistory(calendarHistory);
@@ -10429,15 +10581,100 @@ function getNuvemshopSupportBaseUrl(lojaText){
         });
       });
     }
+    function getIsoDayValue(usePage){
+      const inputEl = usePage ? userActivityDate : userActivityDateModal;
+      const raw = (inputEl?.value || "").toString().trim();
+      return raw;
+    }
+    function clampActivityDay(iso){
+      const today = todayISO();
+      const min = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 90);
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      })();
+      if(!iso) return today;
+      if(iso > today) return today;
+      if(iso < min) return min;
+      return iso;
+    }
+    function openTaskFromActivity(id, isExtraTask){
+      const taskId = (id || "").toString().trim();
+      if(!taskId) return;
+      tasksSearchQuery = "";
+      tasksSearchStoreValue = "";
+      tasksSearchPeriodValue = "ALL";
+      tasksSearchPeriodFromValue = "";
+      tasksSearchPeriodToValue = "";
+      tasksSearchStatusValue = "";
+      if(tasksSearch) tasksSearch.value = "";
+      if(tasksSearchStore) tasksSearchStore.value = "";
+      if(tasksSearchPeriod) tasksSearchPeriod.value = "ALL";
+      if(tasksSearchPeriodCustom) tasksSearchPeriodCustom.style.display = "none";
+      if(tasksSearchPeriodFrom) tasksSearchPeriodFrom.value = "";
+      if(tasksSearchPeriodTo) tasksSearchPeriodTo.value = "";
+      if(tasksSearchStatus) tasksSearchStatus.value = "";
+      tasksTypeFilter = isExtraTask ? "extra" : "normal";
+      const filtered = getFilteredTasks();
+      const idx = filtered.findIndex(t => String(t.id || "") === taskId);
+      tasksShowAll = false;
+      tasksSingleIndex = idx >= 0 ? idx : 0;
+      setView("tasks");
+      renderTasks();
+      requestAnimationFrame(()=> {
+        if(!tasksList) return;
+        const card = tasksList.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`);
+        if(!card){
+          showAlert(isExtraTask ? "Tarefa extra não encontrada na lista." : "Tarefa não encontrada na lista.");
+          return;
+        }
+        card.scrollIntoView({ behavior:"smooth", block:"center" });
+        if(!isExtraTask){
+          const phasesWrap = card.querySelector(`.linksBlock[data-task-phases="${CSS.escape(taskId)}"]`);
+          if(phasesWrap){
+            phasesWrap.classList.add("isExpanded");
+          }
+        }
+      });
+    }
+    function syncActivityDateInputs(value){
+      if(userActivityDate) userActivityDate.value = value;
+      if(userActivityDateModal) userActivityDateModal.value = value;
+      const today = todayISO();
+      const min = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 90);
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      })();
+      if(userActivityDate){
+        userActivityDate.min = min;
+        userActivityDate.max = today;
+      }
+      if(userActivityDateModal){
+        userActivityDateModal.min = min;
+        userActivityDateModal.max = today;
+      }
+      const disablePrev = value <= min;
+      const disableNext = value >= today;
+      if(userActivityPrevDay) userActivityPrevDay.disabled = disablePrev;
+      if(userActivityPrevDayModal) userActivityPrevDayModal.disabled = disablePrev;
+      if(userActivityNextDay) userActivityNextDay.disabled = disableNext;
+      if(userActivityNextDayModal) userActivityNextDayModal.disabled = disableNext;
+    }
     async function openUserActivity(userId, userName){
       const usePage = Boolean(viewUserActivity && userActivityViewSummary && userActivityViewList);
       const titleText = `Atividade: ${userName || "Usu\u00e1rio"}`;
       const summaryEl = usePage ? userActivityViewSummary : userActivitySummary;
       const listEl = usePage ? userActivityViewList : userActivityList;
       if(!summaryEl || !listEl) return;
+      const selectedDay = clampActivityDay(getIsoDayValue(usePage) || todayISO());
+      currentUserActivityId = String(userId || "");
+      currentUserActivityName = String(userName || "");
+      currentUserActivityDay = selectedDay;
+      syncActivityDateInputs(selectedDay);
       if(usePage){
         if(userActivityViewTitle) userActivityViewTitle.textContent = titleText;
-        if(userActivityViewMeta) userActivityViewMeta.textContent = "";
+        if(userActivityViewMeta) userActivityViewMeta.textContent = `Dia: ${formatDateBR(selectedDay)}`;
         setView("userActivity");
       }else{
         if(!userActivityOverlay) return;
@@ -10447,7 +10684,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       summaryEl.textContent = "Carregando...";
       listEl.innerHTML = "";
       try{
-        const data = await apiUserActivity(userId);
+        const data = await apiUserActivity(userId, selectedDay);
         const summary = data?.summary || {};
         const firstSeen = formatDateTimeFromTs(summary.first_seen);
         const lastSeen = formatDateTimeFromTs(summary.last_seen);
@@ -10536,7 +10773,41 @@ function getNuvemshopSupportBaseUrl(lojaText){
             </div>
           `;
         }).join("") : `<div class="activityItem"><div class="activityRow">Nenhum per\u00edodo inativo registrado.</div></div>`;
+        const actions = Array.isArray(data?.actions) ? data.actions : [];
+        const actionsHtml = actions.length ? actions.map(item => {
+          const label = (item?.label || "Atividade").toString();
+          const detail = (item?.detail || "").toString().trim();
+          const time = formatDateTimeFromTs(item?.ts || 0);
+          const targetId = (item?.target_id || "").toString().trim();
+          const targetType = (item?.target_type || "").toString().trim();
+          const isExtra = Boolean(item?.is_extra);
+          const canOpenTask = targetId && targetType === "task";
+          const eyeBtn = canOpenTask ? `
+            <button class="btn small iconBtn activityActionBtn" type="button" data-activity-task-id="${escapeHtml(targetId)}" data-activity-is-extra="${isExtra ? "1" : "0"}" title="Ver tarefa" aria-label="Ver tarefa">
+              <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
+              </svg>
+            </button>
+          ` : "";
+          return `
+            <div class="activityActionItem">
+              <div>
+                <span class="activityActionLabel">${escapeHtml(label)}</span>
+                ${detail ? `<span class="activityActionDetail"> - ${escapeHtml(detail)}</span>` : ""}
+              </div>
+              <div class="activityActionMeta">
+                <div class="activityActionTime">${escapeHtml(time)}</div>
+                ${eyeBtn}
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="activityItem"><div class="activityRow">Nenhuma atividade registrada no dia.</div></div>`;
         listEl.innerHTML = `
+          <div class="activitySection">
+            <div class="activitySectionTitle">Atividades do dia</div>
+            ${actionsHtml}
+          </div>
           <div class="activitySection">
             <div class="activitySectionTitle">Per\u00edodos ativos</div>
             ${activeHtml}
@@ -10546,6 +10817,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
             ${inactiveHtml}
           </div>
         `;
+        listEl.querySelectorAll("[data-activity-task-id]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const taskId = (btn.getAttribute("data-activity-task-id") || "").toString().trim();
+            const isExtra = (btn.getAttribute("data-activity-is-extra") || "") === "1";
+            openTaskFromActivity(taskId, isExtra);
+          });
+        });
       }catch(err){
         summaryEl.textContent = "N\u00e3o foi poss\u00edvel carregar a atividade.";
       }
@@ -10577,6 +10855,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
      * EVENTS
      ***********************/
     initActivityListeners();
+    let searchActionTimer = null;
+    let lastSearchActionQuery = "";
     searchInput.addEventListener("input", ()=>{
       if(currentView === "tasks"){
         tasksSearchQuery = (searchInput.value || "");
@@ -10595,6 +10875,18 @@ function getNuvemshopSupportBaseUrl(lojaText){
         renderUsersView();
         updateUsersFilterButtonState();
         return;
+      }
+      if(currentView === "search"){
+        if(searchActionTimer){
+          clearTimeout(searchActionTimer);
+        }
+        searchActionTimer = setTimeout(()=>{
+          const q = (searchInput.value || "").toString().trim();
+          if(q.length >= 2 && q !== lastSearchActionQuery){
+            lastSearchActionQuery = q;
+            logUserAction("search", q);
+          }
+        }, 1200);
       }
       render();
     });
@@ -11633,6 +11925,73 @@ function getNuvemshopSupportBaseUrl(lojaText){
         closeStoresConfig();
       });
     }
+    function getTopVisibleOverlay(){
+      const list = Array.from(document.querySelectorAll(".miniOverlay.show"));
+      if(!list.length) return null;
+      let top = null;
+      let topZ = -Infinity;
+      list.forEach(el => {
+        const z = Number.parseInt(window.getComputedStyle(el).zIndex || "0", 10);
+        if(z > topZ || (z === topZ && el.compareDocumentPosition(top) & Node.DOCUMENT_POSITION_FOLLOWING)){
+          top = el;
+          topZ = z;
+        }
+      });
+      return top;
+    }
+    const overlayCloseHandlers = {
+      popupOverlay: () => closePopup(false),
+      phaseEditOverlay: () => closePhaseEditor(),
+      taskOverlay: () => closeTaskModal(),
+      simpleTaskOverlay: () => closeSimpleTaskModal(),
+      recurrenceOverlay: () => closeRecurrenceModal(),
+      questionOverlay: () => closeQuestionModal(),
+      calendarOverlay: () => closeCalendar(),
+      closeTaskOverlay: () => closeCloseTaskModal(),
+      closeAppOverlay: () => closeCloseAppModal(),
+      settingsOverlay: () => {
+        if(settingsOverlay) settingsOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(settingsOverlay, [settingsCloseBtn]);
+      },
+      backupOverlay: () => {
+        if(backupOverlay) backupOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(backupOverlay, [backupCloseBtn]);
+      },
+      quickLinkOverlay: () => {
+        closeQuickLinkModal();
+        handleDrawerReturnAfterClose(quickLinkOverlay, [quickLinkCancelBtn]);
+      },
+      quickLinksListOverlay: () => {
+        closeQuickLinksListModal();
+        handleDrawerReturnAfterClose(quickLinksListOverlay, [quickLinksListCloseBtn]);
+      },
+      storesConfigOverlay: () => closeStoresConfig(),
+      menuEditOverlay: () => closeMenuEdit(),
+      sizeTablesOverlay: () => closeSizeTables(),
+      sizeTableUploadOverlay: () => closeSizeTableUpload(),
+      productsOverlay: () => closeProducts(),
+      productManageOverlay: () => closeProductManage(),
+      productDetailsOverlay: () => closeProductDetails(),
+      nuvemLinksOverlay: () => closeNuvemLinksModal(),
+      nuvemEditOverlay: () => closeNuvemEditModal(),
+      orderLookupOverlay: () => closeOrderLookup(),
+      personalizationOverlay: () => closePersonalizationOverlay(),
+      userProfileOverlay: () => closeUserProfileOverlay(),
+      userActivityOverlay: () => closeUserActivity(),
+      storeLinksOverlay: () => storeLinksOverlay && storeLinksOverlay.classList.remove("show"),
+      metaInboxOverlay: () => metaInboxOverlay && metaInboxOverlay.classList.remove("show"),
+      emailMenuOverlay: () => emailMenuOverlay && emailMenuOverlay.classList.remove("show"),
+    };
+    document.addEventListener("keydown", (e)=>{
+      if(e.key !== "Escape") return;
+      const top = getTopVisibleOverlay();
+      if(!top) return;
+      const handler = overlayCloseHandlers[top.id];
+      if(!handler) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      handler();
+    }, true);
     if(storesConfigCloseBtn){
       storesConfigCloseBtn.addEventListener("click", (e)=>{
         e.preventDefault();
@@ -12219,6 +12578,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
           taskId = card ? (card.getAttribute("data-task-id") || "").trim() : "";
         }
         openNuvemshopSupportPopup(storeName, taskId);
+        return;
+      }
+      const storeWhatsappBtn = e.target.closest("[data-store-whatsapp]");
+      if(storeWhatsappBtn){
+        e.preventDefault();
+        e.stopPropagation();
+        const storeName = (storeWhatsappBtn.getAttribute("data-store-whatsapp") || "").toString().trim();
+        openStoreWhatsapp(storeName);
         return;
       }
       const customerBtn = e.target.closest("[data-customer-whatsapp]");
@@ -12960,6 +13327,48 @@ navAtalhosBtn.addEventListener("click", ()=>{
         closeUserActivity();
       });
     }
+    function shiftActivityDay(delta){
+      if(!currentUserActivityId) return;
+      const base = clampActivityDay(currentUserActivityDay || todayISO());
+      const ref = new Date(`${base}T00:00:00`);
+      ref.setDate(ref.getDate() + delta);
+      const next = `${ref.getFullYear()}-${pad2(ref.getMonth() + 1)}-${pad2(ref.getDate())}`;
+      currentUserActivityDay = clampActivityDay(next);
+      syncActivityDateInputs(currentUserActivityDay);
+      openUserActivity(currentUserActivityId, currentUserActivityName);
+    }
+    if(userActivityDate){
+      userActivityDate.addEventListener("change", ()=>{
+        if(currentUserActivityId){
+          const next = clampActivityDay(userActivityDate.value || "");
+          currentUserActivityDay = next;
+          syncActivityDateInputs(next);
+          openUserActivity(currentUserActivityId, currentUserActivityName);
+        }
+      });
+    }
+    if(userActivityDateModal){
+      userActivityDateModal.addEventListener("change", ()=>{
+        if(currentUserActivityId){
+          const next = clampActivityDay(userActivityDateModal.value || "");
+          currentUserActivityDay = next;
+          syncActivityDateInputs(next);
+          openUserActivity(currentUserActivityId, currentUserActivityName);
+        }
+      });
+    }
+    if(userActivityPrevDay){
+      userActivityPrevDay.addEventListener("click", ()=> shiftActivityDay(-1));
+    }
+    if(userActivityPrevDayModal){
+      userActivityPrevDayModal.addEventListener("click", ()=> shiftActivityDay(-1));
+    }
+    if(userActivityNextDay){
+      userActivityNextDay.addEventListener("click", ()=> shiftActivityDay(1));
+    }
+    if(userActivityNextDayModal){
+      userActivityNextDayModal.addEventListener("click", ()=> shiftActivityDay(1));
+    }
     if(userProfileAvatarBtn && userProfileAvatarFile){
       userProfileAvatarBtn.addEventListener("click", (e)=>{
         e.preventDefault();
@@ -13145,12 +13554,31 @@ navAtalhosBtn.addEventListener("click", ()=>{
       const scope = field.closest(".formGrid") || field.closest(".productDetailsSection") || field.closest(".mb") || document;
       return scope.querySelector(`.fieldError[data-error-for="${fieldId}"]`);
     }
+    let validationActive = false;
+    let validationFirstErrorField = null;
+    function beginValidation(){
+      validationActive = true;
+      validationFirstErrorField = null;
+    }
+    function endValidation(ok){
+      if(!ok && validationFirstErrorField){
+        validationFirstErrorField.scrollIntoView({ behavior:"smooth", block:"center" });
+        if(typeof validationFirstErrorField.focus === "function"){
+          validationFirstErrorField.focus({ preventScroll:true });
+        }
+      }
+      validationActive = false;
+      validationFirstErrorField = null;
+    }
     function setFieldError(field, message){
       const el = getFieldErrorEl(field);
       if(!el) return;
       if(message){
         el.textContent = message;
         el.style.display = "block";
+        if(validationActive && field && !validationFirstErrorField){
+          validationFirstErrorField = field;
+        }
       }else{
         el.textContent = "";
         el.style.display = "none";
@@ -13244,6 +13672,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       const whatsapp = (userProfileWhatsapp?.value || "").trim();
       const email = (userProfileEmail?.value || "").trim();
       clearFieldErrors([userProfileName, userProfileDoc, userProfileWhatsapp, userProfileEmail]);
+      beginValidation();
       let ok = true;
       if(!name){
         setFieldError(userProfileName, "Preencha o nome.");
@@ -13286,7 +13715,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
         setFieldError(userProfileEmail, "E-mail invalido.");
         ok = false;
       }
-      if(!ok) return;
+      if(!ok){
+        endValidation(false);
+        return;
+      }
+      endValidation(true);
       const avatar = (userProfileAvatarPending || "").trim();
       if(userProfileAvatarPrev && userProfileAvatarPrev !== avatar){
         void apiDeleteImage(userProfileAvatarPrev);

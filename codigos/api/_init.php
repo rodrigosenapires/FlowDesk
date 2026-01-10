@@ -807,6 +807,10 @@ function update_last_active(): void {
   if ($last !== $now) {
     $log[] = $now;
   }
+  $cutoff = $now - (90 * 86400);
+  $log = array_values(array_filter($log, function($ts) use ($cutoff) {
+    return ((int)$ts) >= $cutoff;
+  }));
   if (count($log) > 1000) {
     $log = array_slice($log, -1000);
   }
