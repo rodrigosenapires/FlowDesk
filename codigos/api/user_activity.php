@@ -30,7 +30,12 @@ if (!$isAdmin) {
   if ($targetUserId === (int)$current["id"]) {
     // ok
   } elseif (can_manage_secondary($current, $target)) {
-    // ok
+    // ok (principal)
+  } elseif (!is_principal_user($current) && !empty($current["can_manage_users"])) {
+    $ownerId = (int)($current["owner_user_id"] ?? 0);
+    if ((int)($target["owner_user_id"] ?? 0) !== $ownerId || normalize_user_role($target["role"] ?? null) !== "secundario") {
+      respond(["ok" => false, "error" => "forbidden"], 403);
+    }
   } else {
     respond(["ok" => false, "error" => "forbidden"], 403);
   }

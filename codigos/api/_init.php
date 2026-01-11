@@ -224,6 +224,9 @@ function ensure_users_schema(): void {
   if (!column_exists("users", "access_pending")) {
     $updates[] = "ADD COLUMN access_pending TINYINT(1) NOT NULL DEFAULT 0";
   }
+  if (!column_exists("users", "can_manage_users")) {
+    $updates[] = "ADD COLUMN can_manage_users TINYINT(1) NOT NULL DEFAULT 0";
+  }
   if (!column_exists("users", "password_reset_token")) {
     $updates[] = "ADD COLUMN password_reset_token VARCHAR(64) DEFAULT NULL";
   }
@@ -405,28 +408,27 @@ function send_via_smtp(string $from, string $to, string $data): bool {
 function send_verification_email(string $email, string $token): bool {
   $base = get_app_base_url();
   $link = $base ? ($base . "/confirm_email.php?token=" . urlencode($token)) : "";
-  $logo = $base ? ($base . "/Extras/logo/logo-fundo-claro.png") : "";
-  $hostRaw = $_SERVER["HTTP_HOST"] ?? "localhost";
+    $hostRaw = $_SERVER["HTTP_HOST"] ?? "localhost";
   $host = preg_replace("/:\\d+$/", "", $hostRaw);
   $from = defined("APP_MAIL_FROM") && APP_MAIL_FROM ? APP_MAIL_FROM : ("no-reply@" . $host);
   $fromName = defined("APP_MAIL_FROM_NAME") && APP_MAIL_FROM_NAME ? APP_MAIL_FROM_NAME : "FlowDesk";
   $subjectRaw = "Confirme seu e-mail para acessar o FlowDesk";
   $subject = encode_mail_header($subjectRaw);
-  $plain = "Ola!\n\nRecebemos seu cadastro no FlowDesk.\n\nConfirme seu e-mail para liberar o acesso:\n" . $link . "\n\nSe voce nao solicitou este cadastro, ignore esta mensagem.\n\nEquipe FlowDesk";
+  $plain = "Olá!\n\nRecebemos seu cadastro no FlowDesk.\n\nConfirme seu e-mail para liberar o acesso:\n" . $link . "\n\nSe você não solicitou este cadastro, ignore esta mensagem.\n\nEquipe FlowDesk";
 
   $html = '<!doctype html><html lang="pt-br"><head><meta charset="utf-8" />'
     . '<meta name="viewport" content="width=device-width, initial-scale=1" />'
-    . '<title>Confirmacao de e-mail</title></head>'
+    . '<title>Confirma&ccedil;&atilde;o de e-mail</title></head>'
     . '<body style="margin:0;padding:0;background:#0b1220;color:#e9eef7;font-family:Arial,sans-serif;">'
     . '<div style="max-width:560px;margin:0 auto;padding:32px 20px;">'
     . '<div style="background:#0f1b2e;border:1px solid #20324f;border-radius:16px;padding:28px 24px;">'
-    . ($logo ? '<div style="text-align:center;margin-bottom:18px;"><img src="' . htmlspecialchars($logo, ENT_QUOTES, "UTF-8") . '" alt="FlowDesk" style="max-width:160px;height:auto;" /></div>' : '')
+    . '<div style="text-align:center;margin-bottom:18px;font-size:22px;font-weight:700;color:#ffffff;">FlowDesk</div>'
     . '<h2 style="margin:0 0 10px;font-size:20px;">Confirme seu e-mail</h2>'
     . '<p style="margin:0 0 16px;line-height:1.5;color:#c5d2e8;">Recebemos seu cadastro no FlowDesk. Para liberar o acesso, confirme seu e-mail.</p>'
     . '<div style="text-align:center;margin:22px 0;">'
     . '<a href="' . htmlspecialchars($link, ENT_QUOTES, "UTF-8") . '" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#7c8cff;color:#0b1220;text-decoration:none;font-weight:bold;">Confirmar e-mail</a>'
     . '</div>'
-    . '<p style="margin:0;color:#9fb0c8;font-size:12px;line-height:1.4;">Se voce nao solicitou este cadastro, ignore esta mensagem.</p>'
+    . '<p style="margin:0;color:#9fb0c8;font-size:12px;line-height:1.4;">Se voc&ecirc; n&atilde;o solicitou este cadastro, ignore esta mensagem.</p>'
     . '</div>'
     . '<div style="text-align:center;color:#7b8aa6;font-size:12px;margin-top:12px;">Equipe FlowDesk</div>'
     . '</div></body></html>';
@@ -487,15 +489,14 @@ function send_verification_email(string $email, string $token): bool {
 function send_password_reset_email(string $email, string $token): bool {
   $base = get_app_base_url();
   $link = $base ? ($base . "/?reset=" . urlencode($token)) : "";
-  $logo = $base ? ($base . "/Extras/logo/logo-fundo-claro.png") : "";
-  $hostRaw = $_SERVER["HTTP_HOST"] ?? "localhost";
+    $hostRaw = $_SERVER["HTTP_HOST"] ?? "localhost";
   $host = preg_replace("/:\\d+$/", "", $hostRaw);
   $from = defined("APP_MAIL_FROM") && APP_MAIL_FROM ? APP_MAIL_FROM : ("no-reply@" . $host);
   $fromName = defined("APP_MAIL_FROM_NAME") && APP_MAIL_FROM_NAME ? APP_MAIL_FROM_NAME : "FlowDesk";
   $subjectRaw = "Redefinir senha do FlowDesk";
   $subject = encode_mail_header($subjectRaw);
-  $plain = "Ola!\n\nRecebemos um pedido para redefinir sua senha.\n\nClique no link para criar uma nova senha:\n"
-    . $link . "\n\nSe voce nao solicitou, ignore este e-mail.\n\nEquipe FlowDesk";
+  $plain = "Olá!\n\nRecebemos um pedido para redefinir sua senha.\n\nClique no link para criar uma nova senha:\n"
+    . $link . "\n\nSe você não solicitou, ignore este e-mail.\n\nEquipe FlowDesk";
 
   $html = '<!doctype html><html lang="pt-br"><head><meta charset="utf-8" />'
     . '<meta name="viewport" content="width=device-width, initial-scale=1" />'
@@ -503,13 +504,13 @@ function send_password_reset_email(string $email, string $token): bool {
     . '<body style="margin:0;padding:0;background:#0b1220;color:#e9eef7;font-family:Arial,sans-serif;">'
     . '<div style="max-width:560px;margin:0 auto;padding:32px 20px;">'
     . '<div style="background:#0f1b2e;border:1px solid #20324f;border-radius:16px;padding:28px 24px;">'
-    . ($logo ? '<div style="text-align:center;margin-bottom:18px;"><img src="' . htmlspecialchars($logo, ENT_QUOTES, "UTF-8") . '" alt="FlowDesk" style="max-width:160px;height:auto;" /></div>' : '')
+    . '<div style="text-align:center;margin-bottom:18px;font-size:22px;font-weight:700;color:#ffffff;">FlowDesk</div>'
     . '<h2 style="margin:0 0 10px;font-size:20px;">Redefinir senha</h2>'
     . '<p style="margin:0 0 16px;line-height:1.5;color:#c5d2e8;">Recebemos um pedido para redefinir sua senha.</p>'
     . '<div style="text-align:center;margin:22px 0;">'
     . '<a href="' . htmlspecialchars($link, ENT_QUOTES, "UTF-8") . '" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#7c8cff;color:#0b1220;text-decoration:none;font-weight:bold;">Criar nova senha</a>'
     . '</div>'
-    . '<p style="margin:0;color:#9fb0c8;font-size:12px;line-height:1.4;">Se voce nao solicitou, ignore este e-mail.</p>'
+    . '<p style="margin:0;color:#9fb0c8;font-size:12px;line-height:1.4;">Se voc&ecirc; n&atilde;o solicitou, ignore este e-mail.</p>'
     . '</div>'
     . '<div style="text-align:center;color:#7b8aa6;font-size:12px;margin-top:12px;">Equipe FlowDesk</div>'
     . '</div></body></html>';
@@ -579,27 +580,27 @@ function send_personalizacao_notification(string $email, array $payload): bool {
   $host = preg_replace("/:\\d+$/", "", $hostRaw);
   $from = defined("APP_MAIL_FROM") && APP_MAIL_FROM ? APP_MAIL_FROM : ("no-reply@" . $host);
   $fromName = defined("APP_MAIL_FROM_NAME") && APP_MAIL_FROM_NAME ? APP_MAIL_FROM_NAME : "FlowDesk";
-  $subjectRaw = "Nova personalizacao recebida";
+  $subjectRaw = "Nova personalização recebida";
   if ($storeName !== "") {
     $subjectRaw .= " - " . $storeName;
   }
   $subject = encode_mail_header($subjectRaw);
 
-  $plain = "Ola!\n\nChegou uma nova personalizacao no FlowDesk.\n";
+  $plain = "Olá!\n\nChegou uma nova personalização no FlowDesk.\n";
   if ($storeName !== "") $plain .= "Loja: " . $storeName . "\n";
   if ($customerName !== "") $plain .= "Cliente: " . $customerName . "\n";
   if ($sentAt !== "") $plain .= "Enviado em: " . $sentAt . "\n";
-  if ($link !== "") $plain .= "\nAbrir personalizacoes: " . $link . "\n";
+  if ($link !== "") $plain .= "\nAbrir personalizações: " . $link . "\n";
   $plain .= "\nEquipe FlowDesk";
 
   $html = '<!doctype html><html lang="pt-br"><head><meta charset="utf-8" />'
     . '<meta name="viewport" content="width=device-width, initial-scale=1" />'
-    . '<title>Nova personalizacao</title></head>'
+    . '<title>Nova personalização</title></head>'
     . '<body style="margin:0;padding:0;background:#0b1220;color:#e9eef7;font-family:Arial,sans-serif;">'
     . '<div style="max-width:560px;margin:0 auto;padding:32px 20px;">'
     . '<div style="background:#0f1b2e;border:1px solid #20324f;border-radius:16px;padding:28px 24px;">'
-    . '<h2 style="margin:0 0 10px;font-size:20px;">Nova personalizacao recebida</h2>'
-    . '<p style="margin:0 0 16px;line-height:1.5;color:#c5d2e8;">Chegou uma nova personalizacao no FlowDesk.</p>';
+    . '<h2 style="margin:0 0 10px;font-size:20px;">Nova personalização recebida</h2>'
+    . '<p style="margin:0 0 16px;line-height:1.5;color:#c5d2e8;">Chegou uma nova personalização no FlowDesk.</p>';
   if ($storeName !== "") {
     $html .= '<p style="margin:0 0 8px;line-height:1.5;color:#c5d2e8;"><b>Loja:</b> ' . htmlspecialchars($storeName, ENT_QUOTES, "UTF-8") . '</p>';
   }
@@ -611,7 +612,7 @@ function send_personalizacao_notification(string $email, array $payload): bool {
   }
   if ($link !== "") {
     $html .= '<div style="text-align:center;margin:22px 0;">'
-      . '<a href="' . htmlspecialchars($link, ENT_QUOTES, "UTF-8") . '" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#7c8cff;color:#0b1220;text-decoration:none;font-weight:bold;">Abrir personalizacoes</a>'
+      . '<a href="' . htmlspecialchars($link, ENT_QUOTES, "UTF-8") . '" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#7c8cff;color:#0b1220;text-decoration:none;font-weight:bold;">Abrir personalizações</a>'
       . '</div>';
   }
   $html .= '</div>'
@@ -687,10 +688,27 @@ function require_login(): int {
 }
 
 function fetch_user(int $user_id): ?array {
-  $stmt = db()->prepare("SELECT id, username, display_name, role, owner_user_id FROM users WHERE id = :id LIMIT 1");
+  $columns = "id, username, display_name, role, owner_user_id";
+  if (users_has_can_manage_users_column()) {
+    $columns .= ", can_manage_users";
+  }
+  $stmt = db()->prepare("SELECT {$columns} FROM users WHERE id = :id LIMIT 1");
   $stmt->execute([":id" => $user_id]);
   $row = $stmt->fetch();
-  return $row ? $row : null;
+  if (!$row) return null;
+  if (!users_has_can_manage_users_column()) {
+    $stored = get_user_storage_value($user_id, "can_manage_users");
+    $row["can_manage_users"] = (int)($stored ?? 0);
+  }
+  return $row;
+}
+
+function users_has_can_manage_users_column(): bool {
+  static $hasColumn = null;
+  if ($hasColumn === null) {
+    $hasColumn = column_exists("users", "can_manage_users");
+  }
+  return $hasColumn;
 }
 
 function normalize_user_role(?string $role): string {
@@ -723,6 +741,13 @@ function is_admin_user(?array $user): bool {
 function is_principal_user(?array $user): bool {
   if (!$user) return false;
   return normalize_user_role($user["role"] ?? null) !== "secundario";
+}
+
+function can_view_users(?array $user): bool {
+  if (!$user) return false;
+  if (is_admin_user($user)) return true;
+  if (is_principal_user($user)) return true;
+  return !empty($user["can_manage_users"]);
 }
 
 function get_account_owner_id(?array $user): int {
@@ -819,5 +844,3 @@ function update_last_active(): void {
 }
 
 update_last_active();
-
-

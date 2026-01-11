@@ -62,6 +62,9 @@
     let usersAutoRefreshTimer = null;
     let usersRefreshStatusTimer = null;
     let lastActivityPing = 0;
+    let currentPauseState = "";
+    let currentPauseSince = 0;
+    let pauseAlertTimer = null;
     let personalizationsRefreshTimer = null;
     function storageGet(key){
       return Object.prototype.hasOwnProperty.call(storageCache, key) ? storageCache[key] : null;
@@ -226,6 +229,18 @@
         payload.is_extra = Boolean(meta.is_extra);
       }
       return apiRequest(`${API_BASE}/user_activity_action.php`, payload);
+    }
+    async function apiUserPause(state){
+      return apiRequest(`${API_BASE}/user_pause.php`, { state });
+    }
+    async function apiUserPauseStatus(){
+      const response = await fetch(`${API_BASE}/user_pause.php`, { credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok){
+        const msg = data?.error || "request_failed";
+        throw new Error(msg);
+      }
+      return data;
     }
     async function apiAdminUserAction(action, userId){
       return apiRequest(`${API_BASE}/admin_user_action.php`, { action, user_id: userId });
@@ -2097,6 +2112,14 @@
     const openUserProfileBtn = document.getElementById("openUserProfileBtn");
     const personalizationsNotifyBtn = document.getElementById("personalizationsNotifyBtn");
     const personalizationsNotifyBadge = document.getElementById("personalizationsNotifyBadge");
+    const userPauseBtn = document.getElementById("userPauseBtn");
+    const userPauseWrap = document.getElementById("userPauseWrap");
+    const pauseOverlay = document.getElementById("pauseOverlay");
+    const pauseCloseBtn = document.getElementById("pauseCloseBtn");
+    const pauseGeneralBtn = document.getElementById("pauseGeneralBtn");
+    const pauseLunchBtn = document.getElementById("pauseLunchBtn");
+    const pauseAlertOverlay = document.getElementById("pauseAlertOverlay");
+    const pauseAlertResumeBtn = document.getElementById("pauseAlertResumeBtn");
     const userAvatarImg = document.getElementById("userAvatarImg");
     const userAvatarFallback = document.getElementById("userAvatarFallback");
     const userNameLabel = document.getElementById("userName");
@@ -2693,6 +2716,7 @@ function renderPopupImages(){
     const authTitle = document.getElementById("authTitle");
     const authError = document.getElementById("authError");
     const authHint = document.getElementById("authHint");
+    const authProgress = document.getElementById("authProgress");
     const authOr = document.getElementById("authOr");
     const authGoogleBtn = document.getElementById("authGoogleBtn");
     const authPartner = document.getElementById("authPartner");
@@ -4217,7 +4241,7 @@ function renderPopupImages(){
       tasksSingleIndex = 0;
       saveTasks(list);
       if(!editingId){
-        const detail = loja ? `Loja: ${loja}` : "";
+        const detail = buildTaskActionDetail("", loja);
         logUserAction("task_extra_create", detail, { target_id: entryId, is_extra: true });
       }
       closeSimpleTaskModal();
@@ -4233,7 +4257,7 @@ function renderPopupImages(){
       addTaskToDone(t, { closedAt: nowIso, closedById: (currentUser?.id || "").toString(), closedByName: (currentUser?.display_name || currentUser?.username || "").toString().trim(), isExtra: true });
       tasks = (tasks || []).filter(x => String(x.id || "") !== id);
       saveTasks(tasks);
-      const detail = t.loja ? `Loja: ${t.loja}` : "";
+      const detail = buildTaskActionDetail("", t.loja);
       logUserAction("task_extra_close", detail, { target_id: id, is_extra: true });
       const prev = (calendarHistory || []).find(e => String(e.id || "") === id);
       if(prev){
@@ -5211,7 +5235,8 @@ function renderPopupImages(){
           revived.assunto = getEffectivePhaseStatus(revived) || revived.assunto || "";
           tasks.unshift(revived);
           saveTasks(tasks);
-          const detail = revived.loja ? `Loja: ${revived.loja}` : "";
+          const status = getEffectivePhaseStatus(revived) || revived.status || "";
+          const detail = buildTaskActionDetail(status, revived.loja);
           logUserAction("task_reopen", detail, { target_id: id, is_extra: false });
           const reopenedDate = (getEffectivePhaseDate(revived) || (revived.proxEtapa || "")).toString().trim();
           if(reopenedDate){
@@ -5358,6 +5383,86 @@ function renderPopupImages(){
       return `${s}s`;
     }
     const actionLogCache = new Map();
+    function buildTaskActionDetail(status, loja){
+      const parts = [];
+      const statusText = (status || "").toString().trim();
+      const storeText = (loja || "").toString().trim();
+      if(statusText) parts.push(`Status: ${statusText}`);
+      if(storeText) parts.push(`Loja: ${storeText}`);
+      return parts.join(" - ");
+    }
+    function getPauseLabel(state){
+      if(state === "general") return "Pausa geral";
+      if(state === "lunch") return "Pausa almoço";
+      return "";
+    }
+    function getPauseLimitSeconds(state){
+      if(state === "general") return 15 * 60;
+      if(state === "lunch") return 75 * 60;
+      return 0;
+    }
+    function closePauseAlertOverlay(){
+      if(!pauseAlertOverlay) return;
+      pauseAlertOverlay.classList.remove("show");
+      pauseAlertOverlay.setAttribute("aria-hidden", "true");
+    }
+    function openPauseAlertOverlay(){
+      if(!pauseAlertOverlay) return;
+      pauseAlertOverlay.classList.add("show");
+      pauseAlertOverlay.setAttribute("aria-hidden", "false");
+      if(pauseAlertResumeBtn) pauseAlertResumeBtn.focus();
+    }
+    function checkPauseAlert(){
+      if(!currentPauseState){
+        closePauseAlertOverlay();
+        return;
+      }
+      const limit = getPauseLimitSeconds(currentPauseState);
+      if(!limit) return;
+      const since = Number(currentPauseSince || 0);
+      const now = Math.floor(Date.now() / 1000);
+      const start = since > 0 ? since : now;
+      const elapsed = Math.max(0, now - start);
+      if(elapsed >= limit){
+        openPauseAlertOverlay();
+      }
+    }
+    function ensurePauseAlertTimer(){
+      if(pauseAlertTimer) return;
+      pauseAlertTimer = setInterval(checkPauseAlert, 30000);
+    }
+    function stopPauseAlertTimer(){
+      if(!pauseAlertTimer) return;
+      clearInterval(pauseAlertTimer);
+      pauseAlertTimer = null;
+    }
+    function setPauseState(state, since){
+      currentPauseState = (state || "").toString().trim();
+      currentPauseSince = Number(since || 0);
+      if(userPauseBtn){
+        const label = getPauseLabel(currentPauseState);
+        const isPaused = Boolean(label);
+        userPauseBtn.classList.toggle("isPaused", isPaused);
+        userPauseBtn.title = isPaused ? "Retomar atividade" : "Pausar";
+        userPauseBtn.setAttribute("aria-label", isPaused ? "Retomar atividade" : "Pausar");
+      }
+      if(!currentPauseState){
+        closePauseAlertOverlay();
+        stopPauseAlertTimer();
+      }else{
+        ensurePauseAlertTimer();
+        checkPauseAlert();
+      }
+    }
+    async function loadPauseState(){
+      if(!currentUser) return;
+      try{
+        const data = await apiUserPauseStatus();
+        setPauseState(data?.pause_state || "", data?.pause_since || 0);
+      }catch(e){
+        setPauseState("", 0);
+      }
+    }
     function logUserAction(action, detail, meta){
       if(!currentUser || !action) return;
       const targetId = meta && meta.target_id ? String(meta.target_id) : "";
@@ -5525,7 +5630,12 @@ function renderPopupImages(){
       return normalizeUserRole(currentUser.role) === "principal";
     }
     function canAccessUsersView(){
-      return isAdminUser() || isPrincipalUser();
+      if(isAdminUser() || isPrincipalUser()) return true;
+      return Boolean(currentUser && currentUser.can_manage_users);
+    }
+    function canManageQuestions(){
+      if(isAdminUser() || isPrincipalUser()) return true;
+      return Boolean(currentUser && currentUser.can_manage_users);
     }
     function getAccountOwnerId(){
       if(!currentUser) return 0;
@@ -7660,6 +7770,10 @@ function fillAssuntoSelect(){
       return (raw || "").split(",").map(s => s.trim()).filter(Boolean);
     }
     function handleSave(){
+      if(!canManageQuestions()){
+        showAlert("Você não tem privilégio de acesso para essa ação.");
+        return;
+      }
       const q = (qInput.value || "").trim();
       const r = (rInput.value || "").trim();
       if(!q){ showAlert("Informe a Pergunta."); return; }
@@ -7698,6 +7812,10 @@ function fillAssuntoSelect(){
       closeQuestionModal();
     }
     async function startEdit(idx){
+      if(!canManageQuestions()){
+        showAlert("Você não tem privilégio de acesso para essa ação.");
+        return;
+      }
       if(!await requirePassword("editar")) return;
       const it = items[idx];
       if(!it) return;
@@ -7718,6 +7836,10 @@ function fillAssuntoSelect(){
       openQuestionModal("edit");
     }
     async function deleteItem(idx){
+      if(!canManageQuestions()){
+        showAlert("Você não tem privilégio de acesso para essa ação.");
+        return;
+      }
       if(!await requirePassword("excluir")) return;
       const it = items[idx];
       if(!it) return;
@@ -8734,7 +8856,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       addTaskToDone(t, { closedAt, closedById, closedByName, isExtra: false });
       tasks.splice(idx, 1);
       saveTasks(tasks);
-      const detail = t.loja ? `Loja: ${t.loja}` : "";
+      const status = getEffectivePhaseStatus(t) || t.status || "";
+      const detail = buildTaskActionDetail(status, t.loja);
       logUserAction("task_close", detail, { target_id: id, is_extra: false });
       if(tasksEditId === id) clearTasksForm();
       renderTasks();
@@ -9126,7 +9249,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         pendingTaskDraft = null;
         clearTasksForm();
-        const detail = t.loja ? `Loja: ${t.loja}` : "";
+        const status = getEffectivePhaseStatus(t) || t.status || "";
+        const detail = buildTaskActionDetail(status, t.loja);
         logUserAction("task_create", detail, { target_id: t.id, is_extra: false });
         closePhaseEditor();
         closeTaskModal();
@@ -9468,7 +9592,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       upsertCalendarFromTask(payload);
       saveTasks(next);
       if(!tasksEditId){
-        const detail = payload.loja ? `Loja: ${payload.loja}` : "";
+        const status = getEffectivePhaseStatus(payload) || payload.status || "";
+        const detail = buildTaskActionDetail(status, payload.loja);
         logUserAction("task_create", detail, { target_id: payload.id, is_extra: false });
       }
       clearTasksForm();
@@ -9524,7 +9649,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }
       const next = tasks.filter(x => x.id !== id);
       saveTasks(next);
-      const detail = t.loja ? `Loja: ${t.loja}` : "";
+      const status = t.isExtra ? "" : (getEffectivePhaseStatus(t) || t.status || "");
+      const detail = buildTaskActionDetail(status, t.loja);
       logUserAction(t.isExtra ? "task_extra_delete" : "task_delete", detail, { target_id: id, is_extra: Boolean(t.isExtra) });
       if(tasksEditId === id) clearTasksForm();
     }
@@ -10343,6 +10469,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     function getUserPresenceInfo(u){
       const isBlocked = String(u?.access_blocked || "") === "1";
       const isPending = String(u?.access_pending || "") === "1";
+      const pauseState = (u?.pause_state || "").toString().trim();
       const lastActive = Number(u?.last_active_at || 0);
       const lastLogout = Number(u?.last_logout_at || 0);
       const isLoggedIn = lastActive > 0 && (!lastLogout || lastActive > lastLogout);
@@ -10357,6 +10484,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
         presenceClass = "presenceBlocked";
         presenceLabel = "Bloqueado";
         presenceKey = "bloqueado";
+      }else if(pauseState === "general"){
+        presenceClass = "presencePauseGeneral";
+        presenceLabel = "Pausa geral";
+        presenceKey = "pausa_geral";
+      }else if(pauseState === "lunch"){
+        presenceClass = "presencePauseLunch";
+        presenceLabel = "Pausa almoço";
+        presenceKey = "pausa_almoco";
       }else if(lastActive > 0 && isLoggedIn){
         const diffMs = Date.now() - (lastActive * 1000);
         if(diffMs <= 5 * 60 * 1000){
@@ -10438,12 +10573,24 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
         return true;
       });
+      const ownerId = Number(currentUser?.id || 0);
+      filtered.sort((a, b) => {
+        const aOwner = Number(a?.owner_user_id || 0);
+        const bOwner = Number(b?.owner_user_id || 0);
+        const aGroup = ownerId && aOwner === ownerId ? 0 : 1;
+        const bGroup = ownerId && bOwner === ownerId ? 0 : 1;
+        if(aGroup !== bGroup) return aGroup - bGroup;
+        const aTime = Date.parse(a?.created_at || "") || 0;
+        const bTime = Date.parse(b?.created_at || "") || 0;
+        return bTime - aTime;
+      });
       usersCount.textContent = formatUsersCount(filtered.length);
       if(!filtered.length){
         usersCards.innerHTML = `<div class="muted">Nenhum usu&aacute;rio encontrado.</div>`;
         return;
       }
       const canBlockUsers = isAdminUser();
+      const canGrantUsersAccess = isPrincipalUser() && !isSecondaryUser();
       usersCards.innerHTML = filtered.map(u => {
         const username = (u?.username || "").toString();
         const email = (u?.email || "").toString();
@@ -10452,6 +10599,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const statusLabel = verified ? "Confirmado" : "Pendente";
         const createdAt = formatDateTimeBR(u?.created_at || "");
         const isBlocked = String(u?.access_blocked || "") === "1";
+        const isSecondary = normalizeUserRole(u?.role) === "secundario";
+        const hasUsersAccess = String(u?.can_manage_users || "") === "1";
         const presence = getUserPresenceInfo(u);
         const presenceClass = presence.presenceClass;
         const presenceLabel = presence.presenceLabel;
@@ -10504,6 +10653,16 @@ function getNuvemshopSupportBaseUrl(lojaText){
               <div class="userRow userRowActions">
                 <div class="userRowLabel">A&ccedil;&otilde;es</div>
                 <div class="userActionButtons">
+                  ${canGrantUsersAccess && isSecondary ? `
+                  <button class="btn small iconBtn userUsersAccessBtn${hasUsersAccess ? " isActive" : ""}" type="button" data-user-users-access="${escapeHtml(String(u?.id || ""))}" data-user-users-access-state="${hasUsersAccess ? "1" : "0"}" data-user-name="${escapeHtml(username || "-")}" title="${hasUsersAccess ? "Revogar acesso a usu\u00e1rios" : "Liberar acesso a usu\u00e1rios"}" aria-label="${hasUsersAccess ? "Revogar acesso a usu\u00e1rios" : "Liberar acesso a usu\u00e1rios"}">
+                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="8" cy="8" r="3"></circle>
+                      <circle cx="16" cy="10" r="2.5"></circle>
+                      <path d="M3 20c0-3 3-5 5-5s5 2 5 5"></path>
+                      <path d="M13.5 20c.3-2 2-3.5 4.5-3.5"></path>
+                    </svg>
+                  </button>
+                  ` : ""}
                   ${canBlockUsers ? `
                   <button class="btn small iconBtn userBlockBtn${isBlocked ? " isBlocked" : ""}" type="button" data-user-action="${escapeHtml(String(u?.id || ""))}" data-user-blocked="${isBlocked ? "1" : "0"}" data-user-name="${escapeHtml(username || "-")}" title="${isBlocked ? "Liberar acesso" : "Limitar acesso"}" aria-label="${isBlocked ? "Liberar acesso" : "Limitar acesso"}">
                     ${isBlocked ? `
@@ -10552,6 +10711,26 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const ok = await showConfirm(
             `${isBlocked ? "Desbloquear" : "Bloquear"} o acesso do usuário ${userName || ""}?`,
             isBlocked ? "Desbloquear acesso" : "Bloquear acesso"
+          );
+          if(!ok) return;
+          try{
+            await apiAdminUserAction(action, userId);
+            await refreshUsersView();
+          }catch(e){
+            showAlert("N\u00e3o foi poss\u00edvel atualizar o acesso.");
+          }
+        });
+      });
+      usersCards.querySelectorAll("[data-user-users-access]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const userId = (btn.getAttribute("data-user-users-access") || "").trim();
+          const hasAccess = (btn.getAttribute("data-user-users-access-state") || "") === "1";
+          const userName = (btn.getAttribute("data-user-name") || "").trim();
+          if(!userId) return;
+          const action = hasAccess ? "revoke_users_access" : "grant_users_access";
+          const ok = await showConfirm(
+            `${hasAccess ? "Revogar" : "Liberar"} acesso a usu\u00e1rios para ${userName || ""}?`,
+            hasAccess ? "Revogar acesso" : "Liberar acesso"
           );
           if(!ok) return;
           try{
@@ -10690,26 +10869,6 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const lastSeen = formatDateTimeFromTs(summary.last_seen);
         const lastActive = formatDateTimeFromTs(summary.last_active_at);
         const lastLogout = formatDateTimeFromTs(summary.last_logout_at);
-        summaryEl.innerHTML = `
-          <div class="activitySummaryGrid">
-            <div class="activitySummaryItem">
-              <div class="activitySummaryLabel">Primeira atividade</div>
-              <div class="activitySummaryValue">${escapeHtml(firstSeen)}</div>
-            </div>
-            <div class="activitySummaryItem">
-              <div class="activitySummaryLabel">\u00daltima atividade</div>
-              <div class="activitySummaryValue">${escapeHtml(lastSeen)}</div>
-            </div>
-            <div class="activitySummaryItem">
-              <div class="activitySummaryLabel">\u00daltimo acesso</div>
-              <div class="activitySummaryValue">${escapeHtml(lastActive)}</div>
-            </div>
-            <div class="activitySummaryItem">
-              <div class="activitySummaryLabel">\u00daltimo logout</div>
-              <div class="activitySummaryValue">${escapeHtml(lastLogout)}</div>
-            </div>
-          </div>
-        `;
         const activePeriods = Array.isArray(data?.active_periods) ? data.active_periods : [];
         const inactivePeriods = Array.isArray(data?.inactive_periods) ? data.inactive_periods : [];
         const activeHtml = activePeriods.length ? activePeriods.map(p => {
@@ -10718,7 +10877,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const duration = formatDuration(p.duration_sec);
           const ongoing = p.ongoing ? " (\u00faltimo se\u00e7\u00e3o)" : "";
           return `
-            <div class="activityItem">
+            <div class="activityItem activityItemPeriod">
               <div class="activityItemHead">
                 <div class="activityBadge">Ativo${ongoing}</div>
                 <div class="activityDuration">${escapeHtml(duration)}</div>
@@ -10729,7 +10888,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
               </div>
             </div>
           `;
-        }).join("") : `<div class="activityItem"><div class="activityRow">Nenhum per\u00edodo ativo registrado.</div></div>`;
+        }).join("") : `<div class="activityItem activityItemPeriod"><div class="activityRow">Nenhum per\u00edodo ativo registrado.</div></div>`;
         const inactiveSegments = [];
         inactivePeriods.forEach(p => {
           const startTs = Number(p.start || 0);
@@ -10761,7 +10920,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const duration = formatDuration(seg.end - seg.start);
           const ongoing = seg.ongoing ? " (\u00faltimo se\u00e7\u00e3o)" : "";
           return `
-            <div class="activityItem">
+            <div class="activityItem activityItemPeriod">
               <div class="activityItemHead">
                 <div class="activityBadge">${escapeHtml(seg.label)}${ongoing}</div>
                 <div class="activityDuration">${escapeHtml(duration)}</div>
@@ -10772,8 +10931,103 @@ function getNuvemshopSupportBaseUrl(lojaText){
               </div>
             </div>
           `;
-        }).join("") : `<div class="activityItem"><div class="activityRow">Nenhum per\u00edodo inativo registrado.</div></div>`;
+        }).join("") : `<div class="activityItem activityItemPeriod"><div class="activityRow">Nenhum per\u00edodo inativo registrado.</div></div>`;
         const actions = Array.isArray(data?.actions) ? data.actions : [];
+        const showWorkHours = canAccessUsersView();
+        const dayStartTs = Math.floor(new Date(`${selectedDay}T00:00:00`).getTime() / 1000);
+        const dayEndTs = dayStartTs + 86399;
+        let workSeconds = 0;
+        activePeriods.forEach(p => {
+          workSeconds += Number(p.duration_sec || 0);
+        });
+        inactiveSegments.forEach(seg => {
+          if(seg.label !== "Inativo") return;
+          workSeconds += Math.max(0, Number(seg.end || 0) - Number(seg.start || 0));
+        });
+        const sortedActions = actions.slice().sort((a, b) => (a?.ts || 0) - (b?.ts || 0));
+        let pauseSeconds = 0;
+        let pauseStart = 0;
+        let pauseType = "";
+        let lunchSeconds = 0;
+        sortedActions.forEach(item => {
+          const action = (item?.action || "").toString().trim();
+          const ts = Number(item?.ts || 0);
+          if(!ts) return;
+          if(action === "pause_general" || action === "pause_lunch"){
+            pauseStart = ts;
+            pauseType = action;
+            return;
+          }
+          if(action === "pause_end" && pauseStart){
+            if(ts > pauseStart){
+              pauseSeconds += ts - pauseStart;
+              if(pauseType === "pause_lunch"){
+                lunchSeconds += ts - pauseStart;
+              }
+            }
+            pauseStart = 0;
+            pauseType = "";
+          }
+        });
+        if(pauseStart){
+          if(dayEndTs > pauseStart){
+            pauseSeconds += dayEndTs - pauseStart;
+            if(pauseType === "pause_lunch"){
+              lunchSeconds += dayEndTs - pauseStart;
+            }
+          }
+        }
+        if(pauseSeconds > 0){
+          workSeconds = Math.max(0, workSeconds - pauseSeconds);
+        }
+        const tasksCreatedCount = actions.filter(a => {
+          const action = (a?.action || "").toString().trim();
+          return action === "task_create" || action === "task_extra_create";
+        }).length;
+        const tasksClosedCount = actions.filter(a => {
+          const action = (a?.action || "").toString().trim();
+          return action === "task_close" || action === "task_extra_close";
+        }).length;
+        const lunchValue = lunchSeconds > 0 ? formatDuration(lunchSeconds) : "Sem pausa";
+        const workHoursHtml = showWorkHours ? `
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">Horas de trabalho</div>
+              <div class="activitySummaryValue">${escapeHtml(formatDuration(workSeconds))}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">Horário de almoço</div>
+              <div class="activitySummaryValue">${escapeHtml(lunchValue)}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">Tarefas inseridas</div>
+              <div class="activitySummaryValue">${escapeHtml(String(tasksCreatedCount))}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">Tarefas encerradas</div>
+              <div class="activitySummaryValue">${escapeHtml(String(tasksClosedCount))}</div>
+            </div>
+        ` : "";
+        summaryEl.innerHTML = `
+          <div class="activitySummaryGrid">
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">Primeira atividade</div>
+              <div class="activitySummaryValue">${escapeHtml(firstSeen)}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">\u00daltima atividade</div>
+              <div class="activitySummaryValue">${escapeHtml(lastSeen)}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">\u00daltimo acesso</div>
+              <div class="activitySummaryValue">${escapeHtml(lastActive)}</div>
+            </div>
+            <div class="activitySummaryItem">
+              <div class="activitySummaryLabel">\u00daltimo logout</div>
+              <div class="activitySummaryValue">${escapeHtml(lastLogout)}</div>
+            </div>
+            ${workHoursHtml}
+          </div>
+        `;
         const actionsHtml = actions.length ? actions.map(item => {
           const label = (item?.label || "Atividade").toString();
           const detail = (item?.detail || "").toString().trim();
@@ -10781,7 +11035,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           const targetId = (item?.target_id || "").toString().trim();
           const targetType = (item?.target_type || "").toString().trim();
           const isExtra = Boolean(item?.is_extra);
-          const canOpenTask = targetId && targetType === "task";
+            const canOpenTask = Boolean(targetId);
           const eyeBtn = canOpenTask ? `
             <button class="btn small iconBtn activityActionBtn" type="button" data-activity-task-id="${escapeHtml(targetId)}" data-activity-is-extra="${isExtra ? "1" : "0"}" title="Ver tarefa" aria-label="Ver tarefa">
               <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
@@ -11101,6 +11355,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(openQuestionModalBtn){
       openQuestionModalBtn.addEventListener("click", (e)=>{
         e.preventDefault();
+        if(!canManageQuestions()){
+          showAlert("Você não tem privilégio de acesso para essa ação.");
+          return;
+        }
         clearForm();
         openQuestionModal("add");
       });
@@ -12844,6 +13102,91 @@ navAtalhosBtn.addEventListener("click", ()=>{
         setView("personalizations");
       });
     }
+    function closePauseOverlay(){
+      if(!pauseOverlay) return;
+      pauseOverlay.classList.remove("show");
+      pauseOverlay.setAttribute("aria-hidden", "true");
+    }
+    function openPauseOverlay(){
+      if(!pauseOverlay) return;
+      pauseOverlay.classList.add("show");
+      pauseOverlay.setAttribute("aria-hidden", "false");
+    }
+    if(userPauseBtn){
+      userPauseBtn.addEventListener("click", async (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        if(currentPauseState){
+          try{
+            const result = await apiUserPause("off");
+            setPauseState(result?.pause_state || "", result?.pause_since || 0);
+            logUserAction("pause_end", "");
+            if(canAccessUsersView()){
+              refreshUsersView();
+            }
+          }catch(e){
+            showAlert("N\u00e3o foi poss\u00edvel atualizar a pausa.");
+          }
+          return;
+        }
+        openPauseOverlay();
+      });
+    }
+    if(pauseCloseBtn){
+      pauseCloseBtn.addEventListener("click", closePauseOverlay);
+    }
+    if(pauseOverlay){
+      pauseOverlay.addEventListener("click", (e)=>{
+        if(e.target === pauseOverlay) closePauseOverlay();
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key === "Escape" && pauseOverlay.classList.contains("show")) closePauseOverlay();
+      });
+    }
+    if(pauseGeneralBtn){
+      pauseGeneralBtn.addEventListener("click", async ()=>{
+        try{
+          const result = await apiUserPause("general");
+          setPauseState(result?.pause_state || "", result?.pause_since || 0);
+          closePauseOverlay();
+          logUserAction("pause_general", "");
+          if(canAccessUsersView()){
+            refreshUsersView();
+          }
+        }catch(e){
+          showAlert("N\u00e3o foi poss\u00edvel atualizar a pausa.");
+        }
+      });
+    }
+    if(pauseLunchBtn){
+      pauseLunchBtn.addEventListener("click", async ()=>{
+        try{
+          const result = await apiUserPause("lunch");
+          setPauseState(result?.pause_state || "", result?.pause_since || 0);
+          closePauseOverlay();
+          logUserAction("pause_lunch", "");
+          if(canAccessUsersView()){
+            refreshUsersView();
+          }
+        }catch(e){
+          showAlert("N\u00e3o foi poss\u00edvel atualizar a pausa.");
+        }
+      });
+    }
+    if(pauseAlertResumeBtn){
+      pauseAlertResumeBtn.addEventListener("click", async ()=>{
+        try{
+          const result = await apiUserPause("off");
+          setPauseState(result?.pause_state || "", result?.pause_since || 0);
+          logUserAction("pause_end", "");
+          if(canAccessUsersView()){
+            refreshUsersView();
+          }
+        }catch(e){
+          showAlert("N\u00e3o foi poss\u00edvel atualizar a pausa.");
+        }
+      });
+    }
     if(personalizationCloseBtn){
       personalizationCloseBtn.addEventListener("click", closePersonalizationOverlay);
     }
@@ -13526,6 +13869,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         if(authLoginActions) authLoginActions.style.display = authMode === "login" ? "flex" : "none";
         if(authSetupActions) authSetupActions.style.display = "none";
         if(backToLoginBtn) backToLoginBtn.style.display = authMode === "register" || authMode === "reset_request" || authMode === "reset_password" ? "inline-flex" : "none";
+      setAuthLoading(false);
       authOverlay.classList.add("show");
       authOverlay.setAttribute("aria-hidden", "false");
     }
@@ -13543,6 +13887,17 @@ navAtalhosBtn.addEventListener("click", ()=>{
         authError.textContent = msg;
       }
       authError.style.display = "block";
+    }
+    function setAuthLoading(isLoading){
+      if(authProgress){
+        authProgress.classList.toggle("isActive", isLoading);
+        authProgress.setAttribute("aria-hidden", isLoading ? "false" : "true");
+      }
+      if(authOverlay){
+        authOverlay.querySelectorAll(".authSubmit").forEach((btn) => {
+          btn.disabled = Boolean(isLoading);
+        });
+      }
     }
     async function loadSetupCaptcha(){
       return;
@@ -13764,6 +14119,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         const result = await apiRequest(`${API_BASE}/login.php`, { username, password });
         currentUser = result.user || null;
         updateAdminAccessUI();
+        loadPauseState();
         if(loginPassword) loginPassword.value = "";
         hideAuthOverlay();
         await refreshAppDataForUser();
@@ -13799,6 +14155,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
         return;
       }
       try{
+        setAuthLoading(true);
         const endpoint = authMode === "register" ? `${API_BASE}/register.php` : `${API_BASE}/setup.php`;
         const result = await apiRequest(endpoint, {
           username,
@@ -13834,6 +14191,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
         }else{
           setAuthError("Nao foi possivel criar o usuario.");
         }
+      }finally{
+        setAuthLoading(false);
       }
     }
     async function handleResetRequestSubmit(e){
@@ -13906,6 +14265,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(session && session.authenticated){
         currentUser = session.user || null;
         updateAdminAccessUI();
+        loadPauseState();
         return;
       }
       const setupStatus = await apiSetupStatus().catch(() => ({}));

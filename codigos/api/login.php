@@ -14,7 +14,11 @@ if ($username === "" || $password === "") {
   respond(["ok" => false, "error" => "missing_credentials"], 400);
 }
 
-$stmt = db()->prepare("SELECT id, username, display_name, password_hash, email, email_verified, role, owner_user_id, access_blocked, access_pending FROM users WHERE username = :username LIMIT 1");
+$selectColumns = "id, username, display_name, password_hash, email, email_verified, role, owner_user_id, access_blocked, access_pending";
+if (users_has_can_manage_users_column()) {
+  $selectColumns .= ", can_manage_users";
+}
+$stmt = db()->prepare("SELECT {$selectColumns} FROM users WHERE username = :username LIMIT 1");
 $stmt->execute([":username" => $username]);
 $user = $stmt->fetch();
 
@@ -66,5 +70,6 @@ respond([
     "role" => normalize_user_role($user["role"] ?? null),
     "owner_user_id" => $user["owner_user_id"],
     "is_admin" => is_admin_user($user),
+    "can_manage_users" => (int)(users_has_can_manage_users_column() ? ($user["can_manage_users"] ?? 0) : (get_user_storage_value((int)$user["id"], "can_manage_users") ?? 0)),
   ]
 ]);

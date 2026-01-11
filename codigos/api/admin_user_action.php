@@ -33,11 +33,17 @@ if (is_admin_user($target)) {
 }
 
 $isAdmin = is_admin_user($current);
+$isPrincipal = is_principal_user($current);
+$isOwner = can_manage_secondary($current, $target);
+$canGrant = $isPrincipal && $isOwner;
 if (!$isAdmin) {
-  if ($action !== "delete") {
+  if ($action !== "delete" && $action !== "grant_users_access" && $action !== "revoke_users_access") {
     respond(["ok" => false, "error" => "forbidden"], 403);
   }
-  if (!can_manage_secondary($current, $target)) {
+  if (!$isOwner) {
+    respond(["ok" => false, "error" => "forbidden"], 403);
+  }
+  if (($action === "grant_users_access" || $action === "revoke_users_access") && !$canGrant) {
     respond(["ok" => false, "error" => "forbidden"], 403);
   }
 }
@@ -57,6 +63,24 @@ if ($action === "delete") {
   $delStorage->execute([":uid" => $targetId]);
   $delUser = db()->prepare("DELETE FROM users WHERE id = :id");
   $delUser->execute([":id" => $targetId]);
+  respond(["ok" => true]);
+}
+if ($action === "grant_users_access") {
+  if (users_has_can_manage_users_column()) {
+    $stmt = db()->prepare("UPDATE users SET can_manage_users = 1 WHERE id = :id");
+    $stmt->execute([":id" => $targetId]);
+  } else {
+    set_user_storage_value($targetId, "can_manage_users", "1");
+  }
+  respond(["ok" => true]);
+}
+if ($action === "revoke_users_access") {
+  if (users_has_can_manage_users_column()) {
+    $stmt = db()->prepare("UPDATE users SET can_manage_users = 0 WHERE id = :id");
+    $stmt->execute([":id" => $targetId]);
+  } else {
+    set_user_storage_value($targetId, "can_manage_users", "0");
+  }
   respond(["ok" => true]);
 }
 

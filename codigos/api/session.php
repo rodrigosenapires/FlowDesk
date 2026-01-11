@@ -22,5 +22,6 @@ respond([
     "role" => normalize_user_role($user["role"] ?? null),
     "owner_user_id" => $user["owner_user_id"],
     "is_admin" => is_admin_user($user),
+    "can_manage_users" => (int)($user["can_manage_users"] ?? 0),
   ],
 ]);

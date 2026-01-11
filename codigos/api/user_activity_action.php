@@ -38,6 +38,9 @@ $labels = [
   "task_extra_delete" => "Tarefa extra excluída",
   "search" => "Pesquisa no buscador",
   "personalization_send" => "Personalização enviada",
+  "pause_general" => "Pausa geral",
+  "pause_lunch" => "Pausa almoço",
+  "pause_end" => "Pausa encerrada",
 ];
 
 if ($label === "") {
