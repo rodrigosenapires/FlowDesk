@@ -20,6 +20,10 @@
     const STORAGE_KEY_TASKS = "tarefasDiarias_v1";
     const STORAGE_KEY_TASKS_DONE = "tarefasDiarias_concluidas_v1";
     const STORAGE_KEY_PERSONALIZACOES = "personalizacoes_v1";
+    const STORAGE_KEY_NOTIFICATIONS = "notifications_v1";
+    const STORAGE_KEY_NOTIFICATIONS_SHARED = "notifications_shared_v1";
+    const STORAGE_KEY_BROWSER_NOTIFY = "browser_notify_v1";
+    const NOTIFICATIONS_SERVER_SIDE = true;
     // >>> CALEND\u00c1RIO (hist\u00f3rico dos assuntos por Pr\u00f3xima Etapa)
     // Mant\u00e9m registros mesmo ap\u00f3s remover chamados (para aparecer vermelho no calend\u00e1rio)
     const STORAGE_KEY_CALENDAR = "calendarHistory_v1";
@@ -54,17 +58,41 @@
     let authMode = "login";
     let needsSetupFlag = false;
     let usersCache = [];
+    let usersLoading = false;
+    let usersLoadingForced = false;
+    let usersLoaded = false;
+    let usersLoadingMinUntil = 0;
     let usersError = "";
     let usersSearchName = "";
     let usersSearchStore = "ALL";
     let usersSearchStatus = "";
+    const homeActivitySummaryCache = new Map();
+    let homeActivitySummaryLoading = false;
     let activityPingTimer = null;
     let usersAutoRefreshTimer = null;
     let usersRefreshStatusTimer = null;
+    let calendarRefreshTimer = null;
+    let browserNotifyTimer = null;
+    let browserNotifyState = null;
+    let browserNotifyQueue = [];
+    let browserNotifyPermissionPromise = null;
     let lastActivityPing = 0;
+    const refreshState = {
+      tasks: { last: 0, inflight: false },
+      personalizations: { last: 0, inflight: false },
+      notifications: { last: 0, inflight: false },
+      users: { last: 0, inflight: false }
+    };
+    const refreshTtlMs = {
+      tasks: 15000,
+      personalizations: 15000,
+      notifications: 15000,
+      users: 300000
+    };
     let currentPauseState = "";
     let currentPauseSince = 0;
     let pauseAlertTimer = null;
+    let isSyncingModelSwapSize = false;
     let personalizationsRefreshTimer = null;
     function storageGet(key){
       return Object.prototype.hasOwnProperty.call(storageCache, key) ? storageCache[key] : null;
@@ -83,6 +111,42 @@
       });
       if(Object.keys(payload).length){
         void apiStorageSetMany(payload);
+      }
+    }
+    function getUsersCacheKey(){
+      const ownerId = getAccountOwnerId() || 0;
+      return `flowdesk_users_cache_${ownerId}`;
+    }
+    function hashUsers(list){
+      const raw = JSON.stringify(list || []);
+      let hash = 0;
+      for(let i = 0; i < raw.length; i++){
+        hash = (hash << 5) - hash + raw.charCodeAt(i);
+        hash |= 0;
+      }
+      return String(hash);
+    }
+    function loadUsersCache(){
+      try{
+        const key = getUsersCacheKey();
+        const raw = localStorage.getItem(key) || "";
+        const ts = Number(localStorage.getItem(`${key}_ts`) || 0);
+        const list = safeJsonParse(raw);
+        if(!Array.isArray(list)) return null;
+        return { list, ts, hash: localStorage.getItem(`${key}_hash`) || "" };
+      }catch(_err){
+        return null;
+      }
+    }
+    function saveUsersCache(list){
+      try{
+        const key = getUsersCacheKey();
+        const raw = JSON.stringify(list || []);
+        localStorage.setItem(key, raw);
+        localStorage.setItem(`${key}_ts`, String(Date.now()));
+        localStorage.setItem(`${key}_hash`, hashUsers(list));
+      }catch(_err){
+        // ignore local cache failures
       }
     }
     function normalizeUserProfile(profile){
@@ -149,6 +213,13 @@
       const root = `${window.location.origin}${base}`;
       return `${root}/personalizacao/?loja=${encodeURIComponent(id)}`;
     }
+    function buildPersonalizacaoAdminLink(personalizacaoId){
+      const id = (personalizacaoId || "").toString().trim();
+      if(!id) return "";
+      const base = getAppBasePath();
+      const root = `${window.location.origin}${base}`;
+      return `${root}/codigos/personalizacao-admin.html?loja=${encodeURIComponent(id)}`;
+    }
     function setAvatarElements(imgEl, fallbackEl, name, avatar){
       if(!imgEl || !fallbackEl) return;
       const initials = getInitials(name);
@@ -176,6 +247,17 @@
       if(navUsersBtn) navUsersBtn.style.display = canUsers ? "" : "none";
       if(addUserBtn) addUserBtn.style.display = (isAdminUser() || isPrincipalUser()) ? "" : "none";
       if(openRegisterBtn) openRegisterBtn.style.display = "none";
+      if(openStoresConfigBtn) openStoresConfigBtn.style.display = isSecondaryUser() ? "none" : "";
+      updateReportTestUI();
+    }
+    function canUseReportTest(){
+      const username = (currentUser?.username || "").toString().trim().toLowerCase();
+      return isPrincipalUser() && username === "rodrigosp";
+    }
+    function updateReportTestUI(){
+      const canUse = canUseReportTest();
+      if(testDailyReportBtn) testDailyReportBtn.style.display = canUse ? "inline-flex" : "none";
+      if(testMonthlyReportBtn) testMonthlyReportBtn.style.display = canUse ? "inline-flex" : "none";
     }
     async function apiRequest(path, body, options){
       const response = await fetch(path, {
@@ -228,6 +310,12 @@
         payload.target_type = meta.target_type || "task";
         payload.is_extra = Boolean(meta.is_extra);
       }
+      if(meta && meta.notify_user_id){
+        payload.notify_user_id = meta.notify_user_id;
+      }
+      if(meta && meta.created_by_user_id){
+        payload.created_by_user_id = meta.created_by_user_id;
+      }
       return apiRequest(`${API_BASE}/user_activity_action.php`, payload);
     }
     async function apiUserPause(state){
@@ -244,6 +332,37 @@
     }
     async function apiAdminUserAction(action, userId){
       return apiRequest(`${API_BASE}/admin_user_action.php`, { action, user_id: userId });
+    }
+    async function apiReportTrigger(mode){
+      return apiRequest(`${API_BASE}/report_trigger.php`, { mode });
+    }
+    function formatReportSummary(summary){
+      const sent = Number(summary?.sent || 0);
+      const failed = Number(summary?.failed || 0);
+      if(sent === 0 && failed === 0){
+        return "Nenhum e-mail principal encontrado para envio.";
+      }
+      if(failed <= 0){
+        return `Relatorio enviado. Enviados: ${sent}.`;
+      }
+      const lines = [`Falha ao enviar o relatorio. Enviados: ${sent}. Falhas: ${failed}.`];
+      const details = Array.isArray(summary?.details) ? summary.details : [];
+      details.filter(d => !d?.sent).forEach((d)=>{
+        const store = (d?.store || "Loja").toString();
+        const to = (d?.to || "sem e-mail").toString();
+        const err = (d?.error || "mail_failed").toString();
+        lines.push(`- ${store}: ${to} (${err})`);
+      });
+      const smtp = summary?.settings || {};
+      const smtpLine = [
+        smtp.smtp ? `SMTP ${smtp.smtp}` : "",
+        smtp.smtp_port ? `porta ${smtp.smtp_port}` : "",
+        smtp.sendmail_from ? `from ${smtp.sendmail_from}` : ""
+      ].filter(Boolean).join(", ");
+      if(smtpLine){
+        lines.push(smtpLine);
+      }
+      return lines.join("\n");
     }
     async function apiSetupStatus(){
       const response = await fetch(`${API_BASE}/setup.php`, { credentials: "include" });
@@ -307,6 +426,13 @@
       "Nuvemshop - Di\u00e1rio Nerdify",
       "Nuvemshop - Shop 80",
     ];
+    const PERSONALIZATION_STAGE_OPTIONS = [
+      "Enviado pelo cliente",
+      "Enviado ao designer",
+      "Modelo enviado ao cliente",
+      "Aguardando o cliente comprar",
+      "Conclu\u00edda"
+    ];
     const QUICK_LINK_KEYS = ["sakChat", "metaInbox", "emailMenu", "storeLinks", "productsExtra", "transportadorasExtra"];
     const DEFAULT_SEARCH_TAGS = [
       "envio",
@@ -355,6 +481,8 @@
         youtubeUrl: "",
         pinterestUrl: "",
         whatsappUrl: "",
+        storeMessagesUrl: "",
+        reclameAquiUrl: "",
         socialExtras: [],
         metaInboxUrl: "https://business.facebook.com/latest/inbox/instagram?asset_id=288888780971776&business_id=1796204240794310&mailbox_id=288888780971776&selected_item_id=770298646164118&thread_type=INSTAGRAM_POST",
         emailAdmin: "atendimento@diarionerdify.com.br",
@@ -376,6 +504,8 @@
         youtubeUrl: "",
         pinterestUrl: "",
         whatsappUrl: "",
+        storeMessagesUrl: "",
+        reclameAquiUrl: "",
         socialExtras: [],
         metaInboxUrl: "https://business.facebook.com/latest/inbox/facebook?asset_id=643845715482383&business_id=1882886565833888&mailbox_id=643845715482383&selected_item_id=707518642448423&thread_type=FB_AD_POST",
         emailAdmin: "atendimento@shop80.com.br",
@@ -865,12 +995,15 @@
         youtubeUrl: (s?.youtubeUrl || "").toString().trim(),
         pinterestUrl: (s?.pinterestUrl || "").toString().trim(),
         whatsappUrl: (s?.whatsappUrl || "").toString().trim(),
+        storeMessagesUrl: (s?.storeMessagesUrl || "").toString().trim(),
+        reclameAquiUrl: (s?.reclameAquiUrl || "").toString().trim(),
         whatsappPhone: normalizeStoreWhatsappPhone(s?.whatsappPhone || ""),
         socialExtras: Array.isArray(s?.socialExtras)
           ? s.socialExtras.map(item => ({
               name: (item?.name || "").toString().trim(),
-              url: (item?.url || "").toString().trim()
-            })).filter(item => item.name || item.url)
+              supportUrl: (item?.supportUrl || item?.support_url || item?.url || "").toString().trim(),
+              profileUrl: (item?.profileUrl || item?.profile_url || "").toString().trim()
+            })).filter(item => item.name || item.supportUrl || item.profileUrl)
           : [],
         metaInboxUrl: (s?.metaInboxUrl || "").toString().trim(),
         emailList: Array.isArray(s?.emailList)
@@ -914,7 +1047,7 @@
           ];
           legacy.forEach(item => {
             const url = (s[item.key] || "").toString().trim();
-            if(url) extras.push({ name: item.label, url });
+            if(url) extras.push({ name: item.label, profileUrl: url });
           });
           if(extras.length) s.socialExtras = extras;
         }
@@ -927,7 +1060,7 @@
           if(legacy.length) s.emailList = legacy;
         }
         return s;
-      }).filter(s => s.name || s.personalizacaoId || s.logoUrl || s.siteUrl || s.stampsUrl || s.supportWhatsapp || s.instagramUrl || s.facebookUrl || s.tiktokUrl || s.youtubeUrl || s.pinterestUrl || s.whatsappUrl || s.whatsappPhone || s.socialExtras.length || s.metaInboxUrl || (s.emailList && s.emailList.length) || s.emailAdmin || s.emailAtendimento || s.emailOpenUrl1 || s.emailOpenUrl2);
+      }).filter(s => s.name || s.personalizacaoId || s.logoUrl || s.siteUrl || s.stampsUrl || s.supportWhatsapp || s.instagramUrl || s.facebookUrl || s.tiktokUrl || s.youtubeUrl || s.pinterestUrl || s.whatsappUrl || s.storeMessagesUrl || s.reclameAquiUrl || s.whatsappPhone || s.socialExtras.length || s.metaInboxUrl || (s.emailList && s.emailList.length) || s.emailAdmin || s.emailAtendimento || s.emailOpenUrl1 || s.emailOpenUrl2);
       return out.slice(0, MAX_STORES);
     }
     function loadStores(){
@@ -1505,9 +1638,12 @@
           youtubeUrl: (s?.youtubeUrl || "").toString(),
           pinterestUrl: (s?.pinterestUrl || "").toString(),
           whatsappUrl: (s?.whatsappUrl || "").toString(),
+          storeMessagesUrl: (s?.storeMessagesUrl || "").toString(),
+          reclameAquiUrl: (s?.reclameAquiUrl || "").toString(),
           socialExtras: Array.isArray(s?.socialExtras) ? s.socialExtras.map(item => ({
             name: (item?.name || "").toString(),
-            url: (item?.url || "").toString()
+            supportUrl: (item?.supportUrl || item?.support_url || item?.url || "").toString(),
+            profileUrl: (item?.profileUrl || item?.profile_url || "").toString()
           })) : [],
           metaInboxUrl: (s?.metaInboxUrl || "").toString(),
           emailList,
@@ -1531,6 +1667,46 @@
         : slugifyPersonalizacaoId(name || "");
       linkInput.value = buildPersonalizacaoLink(id);
     }
+    const SOCIAL_NETWORK_OPTIONS = [
+      { label: "Instagram", value: "instagram" },
+      { label: "Facebook", value: "facebook" },
+      { label: "Tik-tok", value: "tik-tok" },
+      { label: "Pinterest", value: "pinterest" },
+      { label: "Youtube", value: "youtube" },
+      { label: "Twitter", value: "twitter" }
+    ];
+    const normalizeSocialName = (value) => (value || "")
+      .toString()
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+    const socialOptionMap = new Map(SOCIAL_NETWORK_OPTIONS.map(option => [
+      normalizeSocialName(option.label),
+      option.value
+    ]));
+    const socialLabelMap = new Map(SOCIAL_NETWORK_OPTIONS.map(option => [option.value, option.label]));
+    const getSocialOptionValue = (name) => {
+      const key = normalizeSocialName(name);
+      if(key === "facebookinstagram") return "facebook";
+      return socialOptionMap.get(key) || "";
+    };
+    const getSocialLabelFromValue = (value) => {
+      const label = socialLabelMap.get(value);
+      if(label) return label;
+      return (value || "").toString().trim();
+    };
+    const renderSocialOptions = (selectedValue, fallbackLabel) => {
+      const options = [];
+      options.push(`<option value="">Selecione a rede</option>`);
+      SOCIAL_NETWORK_OPTIONS.forEach(option => {
+        options.push(`<option value="${option.value}"${option.value === selectedValue ? " selected" : ""}>${option.label}</option>`);
+      });
+      if(fallbackLabel){
+        const fallbackValue = escapeHtml(fallbackLabel);
+        options.push(`<option value="${fallbackValue}" selected>${fallbackValue}</option>`);
+      }
+      return options.join("");
+    };
     function renderStoresConfig(){
       if(!storesConfigHost) return;
       const list = storesDraft.length ? storesDraft : [];
@@ -1540,16 +1716,25 @@
         const extrasHtml = extras.length
           ? extras.map((item, j) => {
               const nameId = `store-${idx}-social-${j}-name`;
-              const urlId = `store-${idx}-social-${j}-url`;
+              const supportId = `store-${idx}-social-${j}-support`;
+              const profileId = `store-${idx}-social-${j}-profile`;
+              const selectedValue = getSocialOptionValue(item?.name || "");
+              const fallbackLabel = selectedValue ? "" : (item?.name || "");
               return `
               <div class="socialExtraRow" data-social-extra-row="${j}">
                 <div class="fieldStack">
-                  <input id="${nameId}" type="text" data-social-extra-field="name" data-social-extra-index="${j}" placeholder="Nome da rede" value="${escapeHtml(item?.name || "")}">
+                  <select id="${nameId}" data-social-extra-field="name" data-social-extra-index="${j}">
+                    ${renderSocialOptions(selectedValue, fallbackLabel)}
+                  </select>
                   <div class="fieldError" data-error-for="${nameId}"></div>
                 </div>
                 <div class="fieldStack">
-                  <input id="${urlId}" type="text" data-social-extra-field="url" data-social-extra-index="${j}" placeholder="Link de atendimento" value="${escapeHtml(item?.url || "")}">
-                  <div class="fieldError" data-error-for="${urlId}"></div>
+                  <input id="${supportId}" type="text" data-social-extra-field="supportUrl" data-social-extra-index="${j}" placeholder="Link de atendimento" value="${escapeHtml(item?.supportUrl || "")}">
+                  <div class="fieldError" data-error-for="${supportId}"></div>
+                </div>
+                <div class="fieldStack">
+                  <input id="${profileId}" type="text" data-social-extra-field="profileUrl" data-social-extra-index="${j}" placeholder="Link do perfil" value="${escapeHtml(item?.profileUrl || "")}">
+                  <div class="fieldError" data-error-for="${profileId}"></div>
                 </div>
                 <button class="specsRemoveBtn" type="button" data-social-extra-remove="${j}" title="Remover" aria-label="Remover">x</button>
               </div>
@@ -1561,17 +1746,23 @@
           ? emails.map((item, j) => {
               const emailId = `store-${idx}-email-${j}-email`;
               const openId = `store-${idx}-email-${j}-open`;
+              const primaryNote = j === 0
+                ? `<div class="emailPrimaryNote">Este e-mail será o principal e receberá os relatórios.</div>`
+                : "";
               return `
-              <div class="emailExtraRow" data-email-row="${j}">
-                <div class="fieldStack">
-                  <input id="${emailId}" type="text" data-email-field="email" data-email-index="${j}" placeholder="E-mail" value="${escapeHtml(item?.email || "")}">
-                  <div class="fieldError" data-error-for="${emailId}"></div>
+              <div class="emailExtraRowGroup">
+                <div class="emailExtraRow" data-email-row="${j}">
+                  <div class="fieldStack">
+                    <input id="${emailId}" type="text" data-email-field="email" data-email-index="${j}" placeholder="E-mail" value="${escapeHtml(item?.email || "")}">
+                    <div class="fieldError" data-error-for="${emailId}"></div>
+                  </div>
+                  <div class="fieldStack">
+                    <input id="${openId}" type="text" data-email-field="openUrl" data-email-index="${j}" placeholder="Link de acesso" value="${escapeHtml(item?.openUrl || "")}">
+                    <div class="fieldError" data-error-for="${openId}"></div>
+                  </div>
+                  <button class="specsRemoveBtn" type="button" data-email-remove="${j}" title="Remover" aria-label="Remover">x</button>
                 </div>
-                <div class="fieldStack">
-                  <input id="${openId}" type="text" data-email-field="openUrl" data-email-index="${j}" placeholder="Link de acesso" value="${escapeHtml(item?.openUrl || "")}">
-                  <div class="fieldError" data-error-for="${openId}"></div>
-                </div>
-                <button class="specsRemoveBtn" type="button" data-email-remove="${j}" title="Remover" aria-label="Remover">x</button>
+                ${primaryNote}
               </div>
             `;
             }).join("")
@@ -1610,6 +1801,12 @@
               <div class="label">Link do site da loja</div>
               <input id="${fieldId("siteUrl")}" type="text" data-store-field="siteUrl" placeholder="Link do site da loja" value="${escapeHtml(store.siteUrl || "")}">
               <div class="fieldError" data-error-for="${fieldId("siteUrl")}"></div>
+              <div class="label">Link de mensagens da loja</div>
+              <input id="${fieldId("storeMessagesUrl")}" type="text" data-store-field="storeMessagesUrl" placeholder="Link de mensagens da loja" value="${escapeHtml(store.storeMessagesUrl || "")}">
+              <div class="fieldError" data-error-for="${fieldId("storeMessagesUrl")}"></div>
+              <div class="label">Link de atendimento do Reclame Aqui</div>
+              <input id="${fieldId("reclameAquiUrl")}" type="text" data-store-field="reclameAquiUrl" placeholder="Link do Reclame Aqui" value="${escapeHtml(store.reclameAquiUrl || "")}">
+              <div class="fieldError" data-error-for="${fieldId("reclameAquiUrl")}"></div>
               <div class="label">Link das estampas</div>
               <input id="${fieldId("stampsUrl")}" type="text" data-store-field="stampsUrl" placeholder="Link das estampas" value="${escapeHtml(store.stampsUrl || "")}">
               <div class="fieldError" data-error-for="${fieldId("stampsUrl")}"></div>
@@ -1621,7 +1818,7 @@
               <input id="${fieldId("whatsappUrl")}" type="text" data-store-field="whatsappUrl" placeholder="Link de atendimento do WhatsApp" value="${escapeHtml(store.whatsappUrl || "")}">
               <div class="fieldError" data-error-for="${fieldId("whatsappUrl")}"></div>
               <div class="label">Redes sociais</div>
-              <div class="note">Use o link do atendimento/caixa de entrada (onde voce responde aos clientes), nao o link do perfil da rede social.</div>
+              <div class="note">Informe o link de atendimento (inbox) e o link do perfil/pagina da rede.</div>
               ${extrasHtml}
               <button class="btn small" type="button" data-social-extra-add="${idx}">+ Adicionar rede</button>
               <div class="label">E-mails</div>
@@ -1647,8 +1844,9 @@
       storesConfigHost.innerHTML = cards.join("");
     }
     function openStoresConfig(options){
+      if(isSecondaryUser()) return;
       storesRequired = Boolean(options?.required);
-      const emptyStore = { name:"", personalizacaoId:"", logoUrl:"", siteUrl:"", stampsUrl:"", whatsappPhone:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailList: [] };
+      const emptyStore = { name:"", personalizacaoId:"", logoUrl:"", siteUrl:"", stampsUrl:"", whatsappPhone:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", whatsappUrl:"", storeMessagesUrl:"", reclameAquiUrl:"", metaInboxUrl:"", socialExtras: [], emailList: [] };
       const base = stores.length ? stores : [emptyStore];
       storesDraft = cloneStoresList(base);
       renderStoresConfig();
@@ -1674,6 +1872,8 @@
             personalizacaoId: read("personalizacaoId"),
           logoUrl: read("logoUrl"),
           siteUrl: read("siteUrl"),
+          storeMessagesUrl: read("storeMessagesUrl"),
+          reclameAquiUrl: read("reclameAquiUrl"),
           stampsUrl: read("stampsUrl"),
           whatsappPhone: read("whatsappPhone"),
           supportWhatsapp: read("supportWhatsapp"),
@@ -1685,12 +1885,19 @@
           whatsappUrl: read("whatsappUrl"),
           socialExtras: Array.from(card.querySelectorAll("[data-social-extra-row]")).map(row => {
             const nameInput = row.querySelector('[data-social-extra-field="name"]');
-            const urlInput = row.querySelector('[data-social-extra-field="url"]');
+            const supportInput = row.querySelector('[data-social-extra-field="supportUrl"]');
+            const profileInput = row.querySelector('[data-social-extra-field="profileUrl"]');
+            let nameValue = "";
+            if(nameInput){
+              const rawName = (nameInput.value || "").toString().trim();
+              nameValue = nameInput.tagName === "SELECT" ? getSocialLabelFromValue(rawName) : rawName;
+            }
             return {
-              name: nameInput ? (nameInput.value || "").toString().trim() : "",
-              url: urlInput ? (urlInput.value || "").toString().trim() : ""
+              name: nameValue,
+              supportUrl: supportInput ? (supportInput.value || "").toString().trim() : "",
+              profileUrl: profileInput ? (profileInput.value || "").toString().trim() : ""
             };
-          }).filter(item => item.name || item.url),
+          }).filter(item => item.name || item.supportUrl || item.profileUrl),
           emailList: Array.from(card.querySelectorAll("[data-email-row]")).map(row => {
             const emailInput = row.querySelector('[data-email-field="email"]');
             const urlInput = row.querySelector('[data-email-field="openUrl"]');
@@ -1720,6 +1927,8 @@
         const nameInput = get("name");
         const logoInput = get("logoUrl");
         const siteInput = get("siteUrl");
+        const messagesInput = get("storeMessagesUrl");
+        const reclameInput = get("reclameAquiUrl");
         const stampsInput = get("stampsUrl");
         const whatsappInput = get("whatsappUrl");
         const phoneInput = get("whatsappPhone");
@@ -1727,6 +1936,8 @@
         const nameVal = read("name");
         const logoVal = read("logoUrl");
         const siteVal = read("siteUrl");
+        const messagesVal = read("storeMessagesUrl");
+        const reclameVal = read("reclameAquiUrl");
         const stampsVal = read("stampsUrl");
         const whatsappVal = read("whatsappUrl");
         const phoneVal = read("whatsappPhone");
@@ -1744,6 +1955,14 @@
         }
         if(siteVal && !isValidUrl(siteVal)){
           setFieldError(siteInput, "Link do site invalido.");
+          ok = false;
+        }
+        if(messagesVal && !isValidUrl(messagesVal)){
+          setFieldError(messagesInput, "Link de mensagens invalido.");
+          ok = false;
+        }
+        if(reclameVal && !isValidUrl(reclameVal)){
+          setFieldError(reclameInput, "Link do Reclame Aqui invalido.");
           ok = false;
         }
         if(stampsVal && !isValidUrl(stampsVal)){
@@ -1767,19 +1986,29 @@
         }
         card.querySelectorAll("[data-social-extra-row]").forEach(row => {
           const nameInput = row.querySelector('[data-social-extra-field="name"]');
-          const urlInput = row.querySelector('[data-social-extra-field="url"]');
-          const nameVal = nameInput ? (nameInput.value || "").toString().trim() : "";
-          const urlVal = urlInput ? (urlInput.value || "").toString().trim() : "";
-          if(nameVal || urlVal){
+          const supportInput = row.querySelector('[data-social-extra-field="supportUrl"]');
+          const profileInput = row.querySelector('[data-social-extra-field="profileUrl"]');
+          const nameRaw = nameInput ? (nameInput.value || "").toString().trim() : "";
+          const nameVal = nameInput && nameInput.tagName === "SELECT"
+            ? getSocialLabelFromValue(nameRaw)
+            : nameRaw;
+          const supportVal = supportInput ? (supportInput.value || "").toString().trim() : "";
+          const profileVal = profileInput ? (profileInput.value || "").toString().trim() : "";
+          if(nameVal || supportVal || profileVal){
             if(!nameVal){
               setFieldError(nameInput, "Informe o nome da rede.");
               ok = false;
             }
-            if(!urlVal){
-              setFieldError(urlInput, "Informe o link da rede.");
+            if(!supportVal && !profileVal){
+              setFieldError(supportInput || profileInput, "Informe o link da rede.");
               ok = false;
-            }else if(!isValidUrl(urlVal)){
-              setFieldError(urlInput, "Link invalido.");
+            }
+            if(supportVal && !isValidUrl(supportVal)){
+              setFieldError(supportInput, "Link de atendimento invalido.");
+              ok = false;
+            }
+            if(profileVal && !isValidUrl(profileVal)){
+              setFieldError(profileInput, "Link do perfil invalido.");
               ok = false;
             }
           }
@@ -1850,9 +2079,9 @@
           const extras = Array.isArray(store.socialExtras) ? store.socialExtras : [];
           extras.forEach(item => {
             const label = (item?.name || "").toString().trim();
-            const url = (item?.url || "").toString().trim();
-            if(!url) return;
-            buttons.push(`<a class="btn small" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label || url)}</a>`);
+            const supportUrl = (item?.supportUrl || item?.support_url || item?.url || "").toString().trim();
+            if(!supportUrl) return;
+            buttons.push(`<a class="btn small" href="${escapeHtml(supportUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label || supportUrl)}</a>`);
           });
           const fallback = buttons.length
             ? ""
@@ -1870,6 +2099,58 @@
               </div>
               <div class="storeLinkActions">
                 <div class="socialLinksActions">${buttons.join("") || fallback}</div>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+      if(storeMessagesGrid){
+        storeMessagesGrid.dataset.count = String(list.length || 0);
+        storeMessagesGrid.innerHTML = list.map(store => {
+          const cls = store === list[0] ? "storeLinkLogo dn" : "storeLinkLogo";
+          const url = (store.storeMessagesUrl || "").trim();
+          const logoUrl = (store.logoUrl || "").trim();
+          const nameHtml = `<div class="storeLinkName${logoUrl ? " isHidden" : ""}">${escapeHtml(store.name)}</div>`;
+          const logoHtml = logoUrl
+            ? `<img class="${cls}" alt="${escapeHtml(store.name)}" src="${escapeHtml(logoUrl)}" onerror="this.style.display='none';const n=this.closest('.storeLinkCard').querySelector('.storeLinkName');if(n){n.style.display='block';n.classList.remove('isHidden');}">`
+            : "";
+          const action = url
+            ? `<a class="btn small storeLinkSiteBtn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Mensagens</a>`
+            : `<button class="btn small" type="button" data-open-stores-config="1">Adicionar link</button>`;
+          return `
+            <div class="storeLinkCard">
+              <div class="storeLinkMedia">
+                ${logoHtml}
+                ${nameHtml}
+              </div>
+              <div class="storeLinkActions">
+                ${action}
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+      if(reclameAquiGrid){
+        reclameAquiGrid.dataset.count = String(list.length || 0);
+        reclameAquiGrid.innerHTML = list.map(store => {
+          const cls = store === list[0] ? "storeLinkLogo dn" : "storeLinkLogo";
+          const url = (store.reclameAquiUrl || "").trim();
+          const logoUrl = (store.logoUrl || "").trim();
+          const nameHtml = `<div class="storeLinkName${logoUrl ? " isHidden" : ""}">${escapeHtml(store.name)}</div>`;
+          const logoHtml = logoUrl
+            ? `<img class="${cls}" alt="${escapeHtml(store.name)}" src="${escapeHtml(logoUrl)}" onerror="this.style.display='none';const n=this.closest('.storeLinkCard').querySelector('.storeLinkName');if(n){n.style.display='block';n.classList.remove('isHidden');}">`
+            : "";
+          const action = url
+            ? `<a class="btn small storeLinkSiteBtn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Reclame Aqui</a>`
+            : `<button class="btn small" type="button" data-open-stores-config="1">Adicionar link</button>`;
+          return `
+            <div class="storeLinkCard">
+              <div class="storeLinkMedia">
+                ${logoHtml}
+                ${nameHtml}
+              </div>
+              <div class="storeLinkActions">
+                ${action}
               </div>
             </div>
           `;
@@ -2017,6 +2298,34 @@
       const loja = (entry?.loja || "").toString().trim();
       return loja === filter;
     }
+    function matchesCalendarTypeFilter(entry){
+      if(currentView !== "tasks") return true;
+      const isExtra = Boolean(entry?.extra || entry?.simple);
+      if((tasksTypeFilter || "normal").toString().trim().toLowerCase() === "extra"){
+        return isExtra;
+      }
+      return !isExtra;
+    }
+    function normalizeDateToISO(value){
+      const raw = (value || "").toString().trim();
+      if(!raw) return "";
+      if(/^\d{4}-\d{2}-\d{2}/.test(raw)){
+        return raw.slice(0, 10);
+      }
+      const matchBr = raw.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if(matchBr){
+        return `${matchBr[3]}-${matchBr[2]}-${matchBr[1]}`;
+      }
+      return "";
+    }
+    function getPersonalizationsCountForDate(iso){
+      if(!iso) return 0;
+      const list = Array.isArray(personalizations) ? personalizations : [];
+      return list.filter(p => {
+        const dateIso = normalizeDateToISO(p?.created_at || p?.updated_at || "");
+        return dateIso === iso;
+      }).length;
+    }
     function shouldIncludeDailyRepeatOnDate(entry, iso){
       if(!shouldIncludeRepeatWindow(entry, iso)) return false;
       return true;
@@ -2056,6 +2365,7 @@
         }
       });
       let entries = base.concat(repeats);
+      entries = entries.filter(matchesCalendarTypeFilter);
       if(applyStoreFilter) entries = entries.filter(matchesCalendarStoreFilter);
       return entries;
     }
@@ -2100,6 +2410,7 @@
      ***********************/
     const searchRow   = document.getElementById("searchRow");
     const searchHint  = document.getElementById("searchHint");
+    const viewHome = document.getElementById("viewHome");
     const viewSearch  = document.getElementById("viewSearch");
     const viewTasks   = document.getElementById("viewTasks");
     const viewDone    = document.getElementById("viewDone");
@@ -2110,8 +2421,12 @@
     const sideMenu    = document.getElementById("sideMenu");
     const sideMenuToggle = document.getElementById("sideMenuToggle");
     const openUserProfileBtn = document.getElementById("openUserProfileBtn");
-    const personalizationsNotifyBtn = document.getElementById("personalizationsNotifyBtn");
-    const personalizationsNotifyBadge = document.getElementById("personalizationsNotifyBadge");
+    const appNotifyBtn = document.getElementById("appNotifyBtn");
+    const appNotifyBadge = document.getElementById("appNotifyBadge");
+    const notifyDrawer = document.getElementById("notifyDrawer");
+    const notifyDrawerBackdrop = document.getElementById("notifyDrawerBackdrop");
+    const closeNotifyDrawerBtn = document.getElementById("closeNotifyDrawerBtn");
+    const notifyList = document.getElementById("notifyList");
     const userPauseBtn = document.getElementById("userPauseBtn");
     const userPauseWrap = document.getElementById("userPauseWrap");
     const pauseOverlay = document.getElementById("pauseOverlay");
@@ -2173,6 +2488,29 @@
     const questionLinksHost = document.getElementById("questionLinksHost");
     const cardsNav = document.getElementById("cardsNav");
     const viewTitleText = document.getElementById("viewTitleText");
+    const homePeriodSelect = document.getElementById("homePeriodSelect");
+    const homeDateFrom = document.getElementById("homeDateFrom");
+    const homeDateTo = document.getElementById("homeDateTo");
+    const homeCustomRange = document.getElementById("homeCustomRange");
+    const homeStoreSelect = document.getElementById("homeStoreSelect");
+    const homeUserSelect = document.getElementById("homeUserSelect");
+    const homeUsersLoading = document.getElementById("homeUsersLoading");
+    const homeUsersRefreshBtn = document.getElementById("homeUsersRefreshBtn");
+    const homeApplyBtn = document.getElementById("homeApplyBtn");
+    const homeClearBtn = document.getElementById("homeClearBtn");
+    const homePeriodTopLabel = document.getElementById("homePeriodTopLabel");
+    const homeKpiGrid = document.getElementById("homeKpiGrid");
+    const homeTasksNormalChart = document.getElementById("homeTasksNormalChart");
+    const homeTasksExtraChart = document.getElementById("homeTasksExtraChart");
+    const homePersonalizationsChart = document.getElementById("homePersonalizationsChart");
+    const homeStatusList = document.getElementById("homeStatusList");
+    const homeStoreList = document.getElementById("homeStoreList");
+    const homePersonalizationStoreList = document.getElementById("homePersonalizationStoreList");
+    const homeUserClosedList = document.getElementById("homeUserClosedList");
+    const homeSwapList = document.getElementById("homeSwapList");
+    const homeSwapsCount = document.getElementById("homeSwapsCount");
+    const homeUsersList = document.getElementById("homeUsersList");
+    const homeUsersSummary = document.getElementById("homeUsersSummary");
     const drawer = document.getElementById("drawer");
     const drawerBackdrop = document.getElementById("drawerBackdrop");
     const openDrawerBtn = document.getElementById("openDrawerBtn");
@@ -2262,6 +2600,9 @@
     const settingsCloseBtn = document.getElementById("settingsCloseBtn");
     const openUserProfileSettingsBtn = document.getElementById("openUserProfileSettingsBtn");
     const openStoresConfigBtn = document.getElementById("openStoresConfigBtn");
+    const openAnyDeskBtn = document.getElementById("openAnyDeskBtn");
+    const testDailyReportBtn = document.getElementById("testDailyReportBtn");
+    const testMonthlyReportBtn = document.getElementById("testMonthlyReportBtn");
     const quickLinkOverlay = document.getElementById("quickLinkOverlay");
     const quickLinkLabel = document.getElementById("quickLinkLabel");
     const quickLinkTitleInput = document.getElementById("quickLinkTitleInput");
@@ -2301,10 +2642,21 @@
     const stampsLinksRow = document.getElementById("stampsLinksRow");
     const productsExtraLinks = document.getElementById("productsExtraLinks");
     const transportadorasExtraLinks = document.getElementById("transportadorasExtraLinks");
+    const storeSearchInput = document.getElementById("storeSearchInput");
+    const storeSearchWhatsapp = document.getElementById("storeSearchWhatsapp");
+    const storeSearchSendBtn = document.getElementById("storeSearchSendBtn");
     const emailMenuBtn = document.getElementById("emailMenuBtn");
     const emailMenuOverlay = document.getElementById("emailMenuOverlay");
     const emailMenuCloseBtn = document.getElementById("emailMenuCloseBtn");
     const emailMenuHost = document.getElementById("emailMenuHost");
+    const storeMessagesBtn = document.getElementById("storeMessagesBtn");
+    const storeMessagesOverlay = document.getElementById("storeMessagesOverlay");
+    const storeMessagesCloseBtn = document.getElementById("storeMessagesCloseBtn");
+    const storeMessagesGrid = document.getElementById("storeMessagesGrid");
+    const reclameAquiBtn = document.getElementById("reclameAquiBtn");
+    const reclameAquiOverlay = document.getElementById("reclameAquiOverlay");
+    const reclameAquiCloseBtn = document.getElementById("reclameAquiCloseBtn");
+    const reclameAquiGrid = document.getElementById("reclameAquiGrid");
     const closeAppOverlay = document.getElementById("closeAppOverlay");
     const closeAppSaveBtn = document.getElementById("closeAppSaveBtn");
     const closeAppCloseBtn = document.getElementById("closeAppCloseBtn");
@@ -2319,10 +2671,15 @@
     const personalizationOverlay = document.getElementById("personalizationOverlay");
     const personalizationCloseBtn = document.getElementById("personalizationCloseBtn");
     const personalizationDetails = document.getElementById("personalizationDetails");
-    const personalizationPreviewImg = document.getElementById("personalizationPreviewImg");
+    const personalizationPreviewImgFront = document.getElementById("personalizationPreviewImgFront");
+    const personalizationPreviewImgBack = document.getElementById("personalizationPreviewImgBack");
+    const personalizationPreviewEmptyFront = document.getElementById("personalizationPreviewEmptyFront");
+    const personalizationPreviewEmptyBack = document.getElementById("personalizationPreviewEmptyBack");
     const personalizationWhatsappBtn = document.getElementById("personalizationWhatsappBtn");
-    const personalizationStampDownload = document.getElementById("personalizationStampDownload");
-    const personalizationMockupDownload = document.getElementById("personalizationMockupDownload");
+    const personalizationStampDownloadFront = document.getElementById("personalizationStampDownloadFront");
+    const personalizationMockupDownloadFront = document.getElementById("personalizationMockupDownloadFront");
+    const personalizationStampDownloadBack = document.getElementById("personalizationStampDownloadBack");
+    const personalizationMockupDownloadBack = document.getElementById("personalizationMockupDownloadBack");
     const personalizationFinalDownload = document.getElementById("personalizationFinalDownload");
     const personalizationFinalInput = document.getElementById("personalizationFinalInput");
     const personalizationFinalSaveBtn = document.getElementById("personalizationFinalSaveBtn");
@@ -2333,6 +2690,7 @@
     const popupInputWrap = document.getElementById("popupInputWrap");
     const popupInput = document.getElementById("popupInput");
     const popupTextarea = document.getElementById("popupTextarea");
+    let popupSelect = null;
     const popupShortcutHint = document.getElementById("popupShortcutHint");
     const popupCloseBtn = document.getElementById("popupCloseBtn");
     const popupCancelBtn = document.getElementById("popupCancelBtn");
@@ -2419,6 +2777,7 @@
       if(existing) existing.remove();
     }
     function getActivePopupInput(){
+      if(popupSelect && popupSelect.style.display !== "none") return popupSelect;
       if(popupTextarea && popupTextarea.style.display !== "none") return popupTextarea;
       return popupInput;
     }
@@ -2603,11 +2962,13 @@ function renderPopupImages(){
     const phaseEditDeleteBtn = document.getElementById("phaseEditDeleteBtn");
     const phaseEditCancelBtn = document.getElementById("phaseEditCancelBtn");
     // nav drawer (2 bot\u00f5es)
+    const navHomeBtn = document.getElementById("navHomeBtn");
     const navAtalhosBtn = document.getElementById("navAtalhosBtn");
     const navToggleViewBtn = document.getElementById("navToggleViewBtn");
     const navTasksExtraBtn = document.getElementById("navTasksExtraBtn");
     const navPersonalizationsBtn = document.getElementById("navPersonalizationsBtn");
     const navUsersBtn = document.getElementById("navUsersBtn");
+    const goToHomeBtn = document.getElementById("goToHomeBtn");
     const goToDoneTasksBtn = document.getElementById("goToDoneTasksBtn");
     const goToUsersBtn = document.getElementById("goToUsersBtn");
     const goToSearchBtn = document.getElementById("goToSearchBtn");
@@ -2642,6 +3003,8 @@ function renderPopupImages(){
     const doneTasksList = document.getElementById("doneTasksList");
     const personalizationsList = document.getElementById("personalizationsList");
     const personalizationsCount = document.getElementById("personalizationsCount");
+    const personalizationsEditPageBtn = document.getElementById("personalizationsEditPageBtn");
+    const personalizationsCard = document.querySelector(".personalizationsCard");
     const usersCount = document.getElementById("usersCount");
     const usersCards = document.getElementById("usersCards");
     const usersSearchStoreSelect = document.getElementById("usersSearchStore");
@@ -2820,7 +3183,12 @@ function renderPopupImages(){
     let editingMenuGlobalIndex = -1;
     let editingMenuLinks = [];
     // view state
-    let currentView = "search"; // "search" | "tasks"
+    let currentView = "search"; // "home" | "search" | "tasks"
+    let homePeriod = "30d";
+    let homeCustomFrom = "";
+    let homeCustomTo = "";
+    let homeStoreFilter = "ALL";
+    let homeUserFilter = "ALL";
     let taskModalFromCalendar = false;
     // close flow
     let allowAppClose = false;
@@ -2834,6 +3202,7 @@ function renderPopupImages(){
     let tasks = [];
     let tasksDone = [];
     let personalizations = [];
+    let notifications = [];
     let personalizationSelectedId = "";
     let tasksEditId = null;
     let pendingTaskDraft = null;
@@ -3843,6 +4212,10 @@ function renderPopupImages(){
         popupTextarea.value = "";
         popupTextarea.placeholder = "";
       }
+      if(popupSelect){
+        if(popupSelect.parentElement) popupSelect.parentElement.removeChild(popupSelect);
+        popupSelect = null;
+      }
       if(popupInputWrap) popupInputWrap.style.display = "none";
       if(popupModal){
         popupModal.classList.remove("isCentered");
@@ -3892,6 +4265,36 @@ function renderPopupImages(){
         inputValue: options?.inputValue || "",
         inputPlaceholder: options?.inputPlaceholder || ""
       });
+    }
+    function showSelectPrompt({ title, items, placeholder }){
+      const popupPromise = openPopup({
+        title: title || "Selecionar",
+        message: "",
+        okLabel: "OK",
+        cancelLabel: "Cancelar",
+        showCancel: true,
+        input: true
+      });
+      if(popupInput) popupInput.style.display = "none";
+      if(popupTextarea) popupTextarea.style.display = "none";
+      if(popupInputWrap){
+        if(popupSelect && popupSelect.parentElement){
+          popupSelect.parentElement.removeChild(popupSelect);
+        }
+        popupSelect = document.createElement("select");
+        popupSelect.className = "popupSelect";
+        const opts = [];
+        opts.push(`<option value="">${escapeHtml((placeholder || "Escolha a loja").toString())}</option>`);
+        (items || []).forEach(item => {
+          const value = (item?.value || "").toString();
+          const label = (item?.label || value).toString();
+          if(!value) return;
+          opts.push(`<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`);
+        });
+        popupSelect.innerHTML = opts.join("");
+        popupInputWrap.appendChild(popupSelect);
+      }
+      return popupPromise;
     }
     /***********************
      * CALEND\u00c1RIO (visualiza\u00e7\u00e3o)
@@ -4099,6 +4502,14 @@ function renderPopupImages(){
         showAlert("Informe a data.");
         return;
       }
+      if(!simpleTaskEditId){
+        const selectedDate = new Date(`${date}T00:00:00`);
+        const today = new Date(`${todayISO()}T00:00:00`);
+        if(selectedDate < today){
+          showAlert("A data deve ser hoje ou futura.");
+          return;
+        }
+      }
       if(!subject){
         showAlert("Digite o assunto.");
         return;
@@ -4204,9 +4615,7 @@ function renderPopupImages(){
       const next = (calendarHistory || []).filter(e => String(e.id || "") !== entryId);
       next.push(entry);
       saveCalendarHistory(next);
-      renderCalendar();
       calSelectedISO = date;
-      renderCalendarDayDetails(date, { scrollToFirst:true });
       const extraTask = {
         id: entryId,
         data: date,
@@ -4240,6 +4649,9 @@ function renderPopupImages(){
       }
       tasksSingleIndex = 0;
       saveTasks(list);
+      if(calendarOverlay && calendarOverlay.classList.contains("show")){
+        renderCalendarDayDetails(date, { scrollToFirst:true });
+      }
       if(!editingId){
         const detail = buildTaskActionDetail("", loja);
         logUserAction("task_extra_create", detail, { target_id: entryId, is_extra: true });
@@ -4258,7 +4670,7 @@ function renderPopupImages(){
       tasks = (tasks || []).filter(x => String(x.id || "") !== id);
       saveTasks(tasks);
       const detail = buildTaskActionDetail("", t.loja);
-      logUserAction("task_extra_close", detail, { target_id: id, is_extra: true });
+      logUserAction("task_extra_close", detail, { target_id: id, is_extra: true, notify_user_id: t.created_by_user_id || "" });
       const prev = (calendarHistory || []).find(e => String(e.id || "") === id);
       if(prev){
         const next = (calendarHistory || []).filter(e => String(e.id || "") !== id);
@@ -4409,7 +4821,8 @@ function renderPopupImages(){
             if(Boolean(a.open) != Boolean(b.open)) return a.open ? -1 : 1;
             return (a.assunto||"").localeCompare(b.assunto||"");
           });
-        cells.push({ blank:false, dayNum, iso, entries, valid:true });
+        const personalizationsCount = tasksTypeFilter === "extra" ? 0 : getPersonalizationsCountForDate(iso);
+        cells.push({ blank:false, dayNum, iso, entries, valid:true, personalizationsCount });
       }
       for(let i = 0; i < trailingBlanks; i++){
         cells.push({ blank:true });
@@ -4431,7 +4844,7 @@ function renderPopupImages(){
         const isToday = c.iso && (c.iso === todayIso);
         const isSelected = c.iso && (c.iso === calSelectedISO);
         const normalEntries = (c.entries || []).filter(e => !(e.extra || e.simple));
-        const extraEntries = (c.entries || []).filter(e => (e.extra || e.simple));
+        const extraEntries = (c.entries || []).filter(e => (e.extra || e.simple) && e.open !== false);
         const normalCount = normalEntries.length;
         const extraCount = extraEntries.length;
         const normalList = normalCount > 1
@@ -4460,11 +4873,15 @@ function renderPopupImages(){
             </div>`
           : "";
         const cellAttrs = (!c.isOtherMonth && c.iso) ? `data-iso="${c.iso}" data-cal-iso="${c.iso}" tabindex="0"` : "";
+        const personalizationBadge = c.personalizationsCount
+          ? `<span class="calPersBadge">${c.personalizationsCount}</span>`
+          : "";
         return `
           <div class="calCell ${isSelected ? "isSelected" : ""} ${c.isOtherMonth ? "isOtherMonth" : ""}" ${cellAttrs}${countAttr}>
             <div class="calDayNum">
               <span>${c.dayNum}</span>
               ${isToday ? `<span class="calTodayDot" title="Hoje"></span>` : ""}
+              ${personalizationBadge}
             </div>
             <div class="calItems">${list}</div>
             ${countsMobile}
@@ -4513,7 +4930,8 @@ function renderPopupImages(){
         const openEntries = entries.filter(e => e.open !== false);
         const normalCount = openEntries.filter(e => !(e.extra || e.simple)).length;
         const extraCount = openEntries.filter(e => (e.extra || e.simple)).length;
-        cells.push({ blank:false, dayNum, iso, normalCount, extraCount });
+        const personalizationsCount = tasksTypeFilter === "extra" ? 0 : getPersonalizationsCountForDate(iso);
+        cells.push({ blank:false, dayNum, iso, normalCount, extraCount, personalizationsCount });
       }
       for(let i = 0; i < trailingBlanks; i++){
         cells.push({ blank:true });
@@ -4529,8 +4947,13 @@ function renderPopupImages(){
         const extraHtml = c.extraCount
           ? `<span class="miniCalCount miniCalCountExtra">${c.extraCount}</span>`
           : "";
-        const ariaSuffix = c.isOtherMonth ? " (ms anterior)" : "";
-        const ariaLabel = `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`;
+        const personalHtml = c.personalizationsCount
+          ? `<span class="miniCalCount miniCalCountPersonal">${c.personalizationsCount}</span>`
+          : "";
+        const ariaSuffix = c.isOtherMonth ? " (m\u00eas anterior)" : "";
+        const ariaLabel = tasksTypeFilter === "extra"
+          ? `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s)`
+          : `Dia ${c.dayNum}${ariaSuffix}: ${c.normalCount || 0} tarefa(s) normal(is), ${c.extraCount || 0} tarefa(s) extra(s), ${c.personalizationsCount || 0} personaliza\u00e7\u00e3o(\u00f5es)`;
         const isoAttr = c.isOtherMonth ? "" : ` data-mini-iso="${c.iso}"`;
         return `
           <button class="miniCalCell ${isToday ? "isToday" : ""} ${c.isOtherMonth ? "isOtherMonth" : ""}" type="button"${isoAttr} aria-label="${ariaLabel}">
@@ -4538,6 +4961,7 @@ function renderPopupImages(){
             <span class="miniCalCounts">
               ${normalHtml}
               ${extraHtml}
+              ${personalHtml}
             </span>
           </button>
         `;
@@ -4707,11 +5131,13 @@ function renderPopupImages(){
         calAddSimpleBtn.disabled = !iso;
         calAddSimpleBtn.style.opacity = iso ? "1" : "0.5";
         calAddSimpleBtn.style.pointerEvents = iso ? "auto" : "none";
+        calAddSimpleBtn.style.display = tasksTypeFilter === "extra" ? "inline-flex" : "none";
       }
       if(calAddTaskBtn){
         calAddTaskBtn.disabled = !iso;
         calAddTaskBtn.style.opacity = iso ? "1" : "0.5";
         calAddTaskBtn.style.pointerEvents = iso ? "auto" : "none";
+        calAddTaskBtn.style.display = tasksTypeFilter === "extra" ? "none" : "inline-flex";
       }
       const shouldScroll = Boolean(options && options.scrollToFirst);
       syncOverdueCalendarEntries();
@@ -4745,6 +5171,7 @@ function renderPopupImages(){
           const repeatLabel = (e.repeat || "").toString().trim();
           const extraText = (e.extraText || "").toString().trim();
           const lojaLabel = (e.loja || "").toString().trim();
+          const extraAuthor = (e.created_by_username || "").toString().trim();
           const isClosed = e.open === false;
           const title = isClosed ? "Conclu\u00edda" : (e.assunto || "Tarefa extra");
           return `
@@ -4755,6 +5182,7 @@ function renderPopupImages(){
                 <div class="meta">
                   ${extraText ? `<div class="extraMeta"><span>Descri\u00e7\u00e3o:</span> <span class="extraValue">${escapeHtml(extraText)}</span></div>` : ""}
                   ${lojaLabel ? `<div class="extraMeta"><span>Loja:</span> <span class="extraValue">${escapeHtml(lojaLabel)}</span></div>` : ""}
+                  ${extraAuthor ? `<div class="extraMeta"><span>Autor:</span> <span class="extraValue">${escapeHtml(extraAuthor)}</span></div>` : ""}
                   <div class="extraMeta"><span>Hor\u00e1rio:</span> <span class="extraValue">${escapeHtml(timeLabel)}</span></div>
                   ${repeatLabel ? `<div class="extraMeta"><span>Repeti\u00e7\u00e3o:</span> <span class="extraValue">${escapeHtml(repeatLabel)}</span></div>` : ""}
                 </div>
@@ -4772,6 +5200,11 @@ function renderPopupImages(){
                     <path d="M16.5 3.5l4 4L7 21l-4 1 1-4 12.5-14.5z"></path>
                   </svg>
                 </button>
+                ${!isClosed ? `<button class="btn small iconBtn" data-cal-simple-close="${escapeHtml(String(e.id || ""))}" title="Concluir tarefa" aria-label="Concluir tarefa">
+                  <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="5 13 9 17 19 7"></polyline>
+                  </svg>
+                </button>` : ""}
                 <button class="btn small danger iconBtn" data-cal-simple-del="${escapeHtml(String(e.id || ""))}" title="Excluir" aria-label="Excluir">
                   <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M3 6h18"></path>
@@ -4792,6 +5225,7 @@ function renderPopupImages(){
         const rastreio = (e.rastreio || "").trim();
         const cliente = (e.cliente || "").trim();
         const taskRef = (tasks || []).find(t => String(t.id || "") === String(e.id || "")) || (tasksDone || []).find(t => String(t.id || "") === String(e.id || ""));
+        const authorLabel = (taskRef?.created_by_username || e.created_by_username || "").toString().trim();
         const customerWhatsappRaw = (e.whatsapp || (taskRef?.whatsapp || "")).toString().trim();
         const customerPhone = normalizeWhatsappNumber(customerWhatsappRaw);
         const customerWhatsappUrl = buildCustomerWhatsappUrl(customerWhatsappRaw);
@@ -4867,6 +5301,7 @@ function renderPopupImages(){
           : "";
         const metaLines = [
           `${titleGreen("Loja:")} ${escapeHtml(loja || "-")}`,
+          `${titleGreen("Autor:")} ${escapeHtml(authorLabel || "-")}`,
           `${titleGreen("Cliente:")} ${escapeHtml(cliente || "-")} ${clienteCopyBtn}`,
           `${titleGreen("Telefone:")} ${phoneAction} ${phoneCopyBtn}`,
           `${titleGreen("Pedido:")} ${pedidoHtml} ${pedidoCopyBtn}`,
@@ -5103,6 +5538,15 @@ function renderPopupImages(){
           renderCalendarDayDetails(calSelectedISO);
         });
       });
+      calDayDetails.querySelectorAll("[data-cal-simple-close]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const id = (btn.getAttribute("data-cal-simple-close") || "").toString().trim();
+          if(!id) return;
+          await closeExtraTask(id);
+          renderCalendar();
+          renderCalendarDayDetails(calSelectedISO);
+        });
+      });
       calDayDetails.querySelectorAll("[data-cal-simple-edit]").forEach(btn=>{
         btn.addEventListener("click", (e)=>{
           e.preventDefault();
@@ -5195,7 +5639,7 @@ function renderPopupImages(){
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
           if(!ref){
-            showAlert("Tarefa no encontrada.");
+            showAlert("Tarefa não encontrada.", "Tarefa não encontrada");
             return;
           }
           openTaskSummaryPopup(ref);
@@ -5209,7 +5653,7 @@ function renderPopupImages(){
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           const ref = fromTasks || fromDone;
           if(!ref){
-            showAlert("Tarefa nuo encontrada.");
+            showAlert("Tarefa não encontrada.", "Tarefa não encontrada");
             return;
           }
           const info = getEffectivePhaseAttention(ref);
@@ -5222,7 +5666,7 @@ function renderPopupImages(){
           if(!id) return;
           const fromDone = (tasksDone || []).find(t => String(t.id || "") === id);
           if(!fromDone){
-            showAlert("Tarefa nuo encontrada.");
+            showAlert("Tarefa não encontrada.", "Tarefa não encontrada");
             return;
           }
           const ok = await showConfirm("Reativar esta tarefa?");
@@ -5293,12 +5737,20 @@ function renderPopupImages(){
     function openCalendar(){
       if(!calendarOverlay) return;
       calendarOverlay.classList.add("show");
+      if(calendarRefreshTimer){
+        clearInterval(calendarRefreshTimer);
+        calendarRefreshTimer = null;
+      }
       // garante estado consistente
       syncCalendarOpenFlags();
       updateCalendarStoreFilterOptions();
       setCalendarFilterPanelOpen(false);
       renderCalendar();
       renderMiniCalendar();
+      void refreshCalendarHistoryFromServer(true);
+      calendarRefreshTimer = setInterval(() => {
+        void refreshCalendarHistoryFromServer(true);
+      }, 15000);
       // se ainda n\u00e3o selecionou nada, mostra instru\u00e7\u00e3o
       if(calDayDetails && !calDayDetails.innerHTML.trim()){
         renderCalendarDayDetails("");
@@ -5307,6 +5759,10 @@ function renderPopupImages(){
     function closeCalendar(){
       if(!calendarOverlay) return;
       calendarOverlay.classList.remove("show");
+      if(calendarRefreshTimer){
+        clearInterval(calendarRefreshTimer);
+        calendarRefreshTimer = null;
+      }
       // limpa sele\u00e7\u00e3o para evitar confus\u00e3o
       calSelectedISO = "";
       if(calDayTitle) calDayTitle.textContent = "";
@@ -5382,6 +5838,48 @@ function renderPopupImages(){
       if(m > 0) return `${m}m ${s}s`;
       return `${s}s`;
     }
+    function formatNumber(value){
+      const num = Number(value || 0);
+      if(Number.isNaN(num)) return "0";
+      return num.toLocaleString("pt-BR");
+    }
+    function parseIsoDate(value){
+      const raw = (value || "").toString().trim();
+      if(!raw) return null;
+      const d = new Date(`${raw}T00:00:00`);
+      if(Number.isNaN(d.getTime())) return null;
+      return d;
+    }
+    function clampHomeRange(start, end){
+      const today = new Date(`${todayISO()}T00:00:00`);
+      const minStart = new Date(today.getTime() - (90 * 24 * 60 * 60 * 1000));
+      const safeStart = start && start.getTime() < minStart.getTime() ? minStart : (start || minStart);
+      const safeEnd = end && end.getTime() > today.getTime() ? today : (end || today);
+      if(safeEnd.getTime() < safeStart.getTime()){
+        return { start: safeStart, end: safeStart };
+      }
+      return { start: safeStart, end: safeEnd };
+    }
+    function getHomeRange(){
+      const today = new Date(`${todayISO()}T00:00:00`);
+      if(homePeriod === "7d" || homePeriod === "30d" || homePeriod === "90d"){
+        const days = homePeriod === "7d" ? 7 : (homePeriod === "30d" ? 30 : 90);
+        const start = new Date(today.getTime() - ((days - 1) * 24 * 60 * 60 * 1000));
+        const end = today;
+        return { start, end, label: `${days} dias` };
+      }
+      const fromDate = parseIsoDate(homeCustomFrom);
+      const toDate = parseIsoDate(homeCustomTo);
+      const clamped = clampHomeRange(fromDate, toDate);
+      return { start: clamped.start, end: clamped.end, label: "Personalizado" };
+    }
+    function isWithinRange(ts, start, end){
+      const value = Number(ts || 0);
+      if(!value || !start || !end) return false;
+      const startMs = start.getTime();
+      const endMs = end.getTime() + (24 * 60 * 60 * 1000) - 1;
+      return value >= startMs && value <= endMs;
+    }
     const actionLogCache = new Map();
     function buildTaskActionDetail(status, loja){
       const parts = [];
@@ -5436,7 +5934,8 @@ function renderPopupImages(){
       clearInterval(pauseAlertTimer);
       pauseAlertTimer = null;
     }
-    function setPauseState(state, since){
+    function setPauseState(state, since, options){
+      const prevState = currentPauseState;
       currentPauseState = (state || "").toString().trim();
       currentPauseSince = Number(since || 0);
       if(userPauseBtn){
@@ -5445,6 +5944,9 @@ function renderPopupImages(){
         userPauseBtn.classList.toggle("isPaused", isPaused);
         userPauseBtn.title = isPaused ? "Retomar atividade" : "Pausar";
         userPauseBtn.setAttribute("aria-label", isPaused ? "Retomar atividade" : "Pausar");
+      }
+      if(!options || !options.suppressNotify){
+        maybeNotifyPauseChange(prevState, currentPauseState);
       }
       if(!currentPauseState){
         closePauseAlertOverlay();
@@ -5458,9 +5960,321 @@ function renderPopupImages(){
       if(!currentUser) return;
       try{
         const data = await apiUserPauseStatus();
-        setPauseState(data?.pause_state || "", data?.pause_since || 0);
+        setPauseState(data?.pause_state || "", data?.pause_since || 0, { suppressNotify: true });
       }catch(e){
-        setPauseState("", 0);
+        setPauseState("", 0, { suppressNotify: true });
+      }
+    }
+    function canUseBrowserNotifications(){
+      return typeof window !== "undefined" && "Notification" in window;
+    }
+    function queueBrowserNotification(title, message, options){
+      if(!canUseBrowserNotifications()) return false;
+      const tag = options && options.tag ? String(options.tag) : "";
+      if(tag){
+        const idx = browserNotifyQueue.findIndex(entry => entry.tag === tag);
+        if(idx >= 0) browserNotifyQueue.splice(idx, 1);
+      }
+      browserNotifyQueue.push({ title, message, options, tag });
+      return true;
+    }
+    function showBrowserNotification(title, message, options){
+      const body = (message || "").toString().trim();
+      const icon = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+      try{
+        const tag = options && options.tag ? options.tag : undefined;
+        new Notification(title || "FlowDesk", {
+          body,
+          tag,
+          renotify: Boolean(tag),
+          silent: true,
+          icon
+        });
+        return true;
+      }catch(e){
+        return false;
+      }
+    }
+    function flushBrowserNotificationQueue(){
+      if(!canUseBrowserNotifications()) return;
+      if(Notification.permission !== "granted") return;
+      if(!browserNotifyQueue.length) return;
+      const pending = browserNotifyQueue.slice();
+      browserNotifyQueue.length = 0;
+      pending.forEach((entry) => {
+        showBrowserNotification(entry.title, entry.message, entry.options);
+      });
+    }
+    function requestBrowserNotificationPermission(){
+      if(!canUseBrowserNotifications()) return Promise.resolve("unsupported");
+      if(Notification.permission === "granted"){
+        flushBrowserNotificationQueue();
+        return Promise.resolve("granted");
+      }
+      if(Notification.permission === "denied") return Promise.resolve("denied");
+      if(browserNotifyPermissionPromise) return browserNotifyPermissionPromise;
+      try{
+        browserNotifyPermissionPromise = Notification.requestPermission()
+          .then((perm)=>{
+            if(perm === "granted"){
+              flushBrowserNotificationQueue();
+            }
+            return perm;
+          })
+          .catch(() => "default")
+          .finally(() => { browserNotifyPermissionPromise = null; });
+        return browserNotifyPermissionPromise;
+      }catch(e){
+        browserNotifyPermissionPromise = null;
+        return Promise.resolve("default");
+      }
+    }
+    function initBrowserNotifyPermission(){
+      if(!canUseBrowserNotifications()) return;
+      if(Notification.permission === "granted") return;
+      const handler = () => {
+        requestBrowserNotificationPermission();
+        document.removeEventListener("click", handler, true);
+        document.removeEventListener("keydown", handler, true);
+      };
+      document.addEventListener("click", handler, true);
+      document.addEventListener("keydown", handler, true);
+    }
+    function getBrowserNotifyStorageKey(){
+      const uid = currentUser ? String(currentUser.id || "") : "";
+      return `${STORAGE_KEY_BROWSER_NOTIFY}_${uid || "guest"}`;
+    }
+    function loadBrowserNotifyState(){
+      const raw = storageGet(getBrowserNotifyStorageKey());
+      const parsed = safeJsonParse(raw);
+      if(parsed && typeof parsed === "object"){
+        return {
+          lastDailyCheck: (parsed.lastDailyCheck || "").toString(),
+          lastPersonalizationTs: Number(parsed.lastPersonalizationTs || 0) || 0,
+          seenExtraTasks: parsed.seenExtraTasks && typeof parsed.seenExtraTasks === "object" ? parsed.seenExtraTasks : {},
+          deadlineNotified: parsed.deadlineNotified && typeof parsed.deadlineNotified === "object" ? parsed.deadlineNotified : {},
+          extraTasksInit: Boolean(parsed.extraTasksInit),
+          personalizationsInit: Boolean(parsed.personalizationsInit)
+        };
+      }
+      return { lastDailyCheck:"", lastPersonalizationTs:0, seenExtraTasks:{}, deadlineNotified:{}, extraTasksInit:false, personalizationsInit:false };
+    }
+    function saveBrowserNotifyState(next){
+      browserNotifyState = next;
+      storageSet(getBrowserNotifyStorageKey(), JSON.stringify(next));
+    }
+    function ensureBrowserNotifyState(){
+      if(browserNotifyState) return browserNotifyState;
+      browserNotifyState = loadBrowserNotifyState();
+      return browserNotifyState;
+    }
+    function notifyBrowser(title, message, options){
+      if(!canUseBrowserNotifications()) return false;
+      if(Notification.permission === "granted"){
+        return showBrowserNotification(title, message, options);
+      }
+      if(Notification.permission === "default"){
+        queueBrowserNotification(title, message, options);
+        requestBrowserNotificationPermission();
+        return false;
+      }
+      return false;
+    }
+    function getPersonalizationTimestamp(p){
+      const created = Date.parse((p?.created_at || "").toString()) || 0;
+      if(created) return created;
+      const updated = Date.parse((p?.updated_at || "").toString()) || 0;
+      return updated || 0;
+    }
+    function notifyNewPersonalizations(){
+      const state = ensureBrowserNotifyState();
+      const list = Array.isArray(personalizations) ? personalizations.slice() : [];
+      if(!list.length){
+        if(!state.personalizationsInit){
+          state.personalizationsInit = true;
+          saveBrowserNotifyState(state);
+        }
+        return;
+      }
+      const maxTs = list.reduce((acc, p) => Math.max(acc, getPersonalizationTimestamp(p)), 0);
+      if(!state.personalizationsInit){
+        state.personalizationsInit = true;
+        state.lastPersonalizationTs = maxTs;
+        saveBrowserNotifyState(state);
+        return;
+      }
+      const lastTs = Number(state.lastPersonalizationTs || 0) || 0;
+      if(!maxTs || maxTs <= lastTs) return;
+      const fresh = list.filter(p => getPersonalizationTimestamp(p) > lastTs);
+      if(!fresh.length){
+        state.lastPersonalizationTs = maxTs;
+        saveBrowserNotifyState(state);
+        return;
+      }
+      const first = fresh[0];
+      const title = fresh.length > 1 ? "Novas personalizações" : "Nova personalização";
+      const detail = fresh.length > 1
+        ? `Você recebeu ${fresh.length} personalizações.`
+        : `${(first?.customer_name || "").toString().trim() || "Cliente"} • ${(first?.store_name || "").toString().trim() || "Loja"}`;
+      notifyBrowser(title, detail, { tag: "personalizations" });
+      state.lastPersonalizationTs = maxTs;
+      saveBrowserNotifyState(state);
+    }
+    function notifyNewExtraTasks(){
+      const state = ensureBrowserNotifyState();
+      const list = Array.isArray(tasks) ? tasks.filter(t => t && (t.isExtra || t.extra || t.simple)) : [];
+      if(!state.extraTasksInit){
+        const nextSeen = {};
+        list.forEach(t => { const id = String(t.id || ""); if(id) nextSeen[id] = true; });
+        state.seenExtraTasks = nextSeen;
+        state.extraTasksInit = true;
+        saveBrowserNotifyState(state);
+        return;
+      }
+      const seen = state.seenExtraTasks || {};
+      const fresh = list.filter(t => {
+        const id = String(t.id || "");
+        return id && !seen[id];
+      });
+      if(!fresh.length) return;
+      const first = fresh[0];
+      const title = fresh.length > 1 ? "Novas tarefas extras" : "Nova tarefa extra";
+      const detail = fresh.length > 1
+        ? `Você recebeu ${fresh.length} tarefas extras.`
+        : ((first?.assunto || first?.extraText || "").toString().trim() || "Tarefa extra");
+      notifyBrowser(title, detail, { tag: "extra_tasks" });
+      fresh.forEach(t => {
+        const id = String(t.id || "");
+        if(id) seen[id] = true;
+      });
+      state.seenExtraTasks = seen;
+      saveBrowserNotifyState(state);
+    }
+    function checkDailyTaskReminder(){
+      const state = ensureBrowserNotifyState();
+      const today = todayISO();
+      if(state.lastDailyCheck === today) return;
+      state.lastDailyCheck = today;
+      saveBrowserNotifyState(state);
+      const list = getVisibleTasksList(tasks || []);
+      const normalToday = list.filter(t => !t.isExtra && (isDailyRepeatTask(t) || getTaskDisplayDate(t) === today));
+      const extraNoPrazo = list.filter(t => (t.isExtra || t.extra) && !getLastPhasePrazoInfo(t).has);
+      if(!normalToday.length && !extraNoPrazo.length) return;
+      const parts = [];
+      if(normalToday.length) parts.push(`${normalToday.length} tarefa(s) diárias`);
+      if(extraNoPrazo.length) parts.push(`${extraNoPrazo.length} tarefa(s) extras sem prazo`);
+      notifyBrowser("Tarefas de hoje", `Você tem ${parts.join(" e ")} para hoje.`, { tag: "daily_tasks" });
+    }
+    function checkDeadlineNotifications(){
+      const state = ensureBrowserNotifyState();
+      const list = getVisibleTasksList(tasks || []);
+      if(!list.length) return;
+      const now = Date.now();
+      const windowMs = 30 * 60 * 1000;
+      const notified = state.deadlineNotified || {};
+      const keep = {};
+      Object.keys(notified).forEach(key => {
+        const dueTs = Number(notified[key] || 0);
+        if(dueTs && (now - dueTs) < (24 * 60 * 60 * 1000)){
+          keep[key] = dueTs;
+        }
+      });
+      state.deadlineNotified = keep;
+      list.forEach(t => {
+        const info = getLastPhasePrazoInfo(t);
+        if(!info.has) return;
+        const dueTs = getDueTimestamp(info.date, info.time);
+        if(!Number.isFinite(dueTs)) return;
+        const diff = dueTs - now;
+        if(diff <= 0 || diff > windowMs) return;
+        const key = `${String(t.id || "")}_${dueTs}`;
+        if(state.deadlineNotified[key]) return;
+        const title = "Prazo em 30 minutos";
+        const assunto = (getEffectivePhaseStatus(t) || t.assunto || "Tarefa").toString().trim();
+        const cliente = (t.cliente || "").toString().trim();
+        const detail = cliente ? `${assunto} • ${cliente}` : assunto;
+        notifyBrowser(title, detail, { tag: `deadline_${t.id || ""}` });
+        state.deadlineNotified[key] = dueTs;
+      });
+      saveBrowserNotifyState(state);
+    }
+    function maybeNotifyPauseChange(prevState, nextState){
+      if(prevState === nextState) return;
+      if(nextState){
+        const label = getPauseLabel(nextState) || "Pausa";
+        notifyBrowser("Pausa iniciada", label, { tag: "pause_start" });
+      }else if(prevState){
+        const label = getPauseLabel(prevState) || "Pausa";
+        notifyBrowser("Pausa encerrada", label, { tag: "pause_end" });
+      }
+    }
+    function startBrowserNotifications(){
+      if(browserNotifyTimer){
+        clearInterval(browserNotifyTimer);
+        browserNotifyTimer = null;
+      }
+      requestBrowserNotificationPermission();
+      checkDailyTaskReminder();
+      checkDeadlineNotifications();
+      browserNotifyTimer = setInterval(() => {
+        checkDailyTaskReminder();
+        checkDeadlineNotifications();
+      }, 60000);
+    }
+    function stopBrowserNotifications(){
+      if(browserNotifyTimer){
+        clearInterval(browserNotifyTimer);
+        browserNotifyTimer = null;
+      }
+    }
+    function getNotificationTitle(action){
+      if(action === "task_create") return "Tarefa criada";
+      if(action === "task_close") return "Tarefa encerrada";
+      if(action === "task_extra_create") return "Tarefa extra criada";
+      if(action === "task_extra_close") return "Tarefa extra encerrada";
+      return "Nova mensagem";
+    }
+    function shouldNotifyAction(action){
+      return action === "task_create"
+        || action === "task_close"
+        || action === "task_extra_create"
+        || action === "task_extra_close";
+    }
+    async function pushNotificationForOwner(action, detail, meta){
+      if(NOTIFICATIONS_SERVER_SIDE) return;
+      if(!shouldNotifyAction(action)) return;
+      if(!isSecondaryUser()) return;
+      const ownerId = getAccountOwnerId();
+      if(!ownerId) return;
+      const nowIso = new Date().toISOString();
+      const byName = (currentUser?.display_name || currentUser?.username || "").toString().trim();
+      const taskId = meta && meta.target_id ? String(meta.target_id) : "";
+      const isExtra = Boolean(meta && meta.is_extra);
+      const payload = {
+        id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        type: action,
+        title: getNotificationTitle(action),
+        detail: detail || "",
+        created_at: nowIso,
+        seen: false,
+        task_id: taskId,
+        is_extra: isExtra,
+        by_name: byName
+      };
+      try{
+        const result = await apiRequest(`${API_BASE}/storage.php`, {
+          action: "get",
+          keys: [STORAGE_KEY_NOTIFICATIONS]
+        });
+        const raw = result?.data && Object.prototype.hasOwnProperty.call(result.data, STORAGE_KEY_NOTIFICATIONS)
+          ? result.data[STORAGE_KEY_NOTIFICATIONS]
+          : storageGet(STORAGE_KEY_NOTIFICATIONS);
+        const list = normalizeNotifications(safeJsonParse(raw));
+        list.unshift(payload);
+        const next = list.slice(0, 200);
+        await apiStorageSet(STORAGE_KEY_NOTIFICATIONS, JSON.stringify(next));
+      }catch(e){
+        // ignore
       }
     }
     function logUserAction(action, detail, meta){
@@ -5477,7 +6291,27 @@ function renderPopupImages(){
         payload.target_type = "task";
         payload.is_extra = Boolean(meta && meta.is_extra);
       }
+      if(meta && meta.notify_user_id){
+        payload.notify_user_id = String(meta.notify_user_id);
+      }
       apiUserActivityAction(payload.action, payload.detail, payload).catch(()=>{});
+      void pushNotificationForOwner(payload.action, payload.detail, payload);
+      if(action === "task_extra_create" && targetId){
+        const label = (detail || "Tarefa extra").toString().trim() || "Tarefa extra";
+        notifyBrowser("Nova tarefa extra", label, { tag: `extra_create_${targetId}` });
+        const state = ensureBrowserNotifyState();
+        if(!state.seenExtraTasks || typeof state.seenExtraTasks !== "object") state.seenExtraTasks = {};
+        state.seenExtraTasks[targetId] = true;
+        state.extraTasksInit = true;
+        saveBrowserNotifyState(state);
+      }
+      if(action === "pause_general" || action === "pause_lunch"){
+        const label = (meta && meta.pause_label) ? String(meta.pause_label) : getPauseLabel(action === "pause_general" ? "general" : "lunch") || "Pausa";
+        notifyBrowser("Pausa iniciada", label, { tag: "pause_start" });
+      }else if(action === "pause_end"){
+        const label = (meta && meta.pause_label) ? String(meta.pause_label) : "Pausa";
+        notifyBrowser("Pausa encerrada", label, { tag: "pause_end" });
+      }
     }
     function stopActivityTracking(){
       if(activityPingTimer){
@@ -5508,13 +6342,68 @@ function renderPopupImages(){
       document.addEventListener("visibilitychange", () => {
         if(!document.hidden){
           sendActivityPing(true);
-          void refreshPersonalizationsFromServer();
-          void refreshTasksFromServer();
-          if(currentView === "users"){
-            refreshUsersView();
-          }
+          void refreshForView(currentView, { reason: "visibility" });
         }
       });
+    }
+    function isRefreshStale(key, ttlMs){
+      const state = refreshState[key];
+      if(!state) return true;
+      if(!state.last) return true;
+      return (Date.now() - state.last) > ttlMs;
+    }
+    async function refreshIfNeeded(key, ttlMs, fn, options){
+      const opts = options || {};
+      const state = refreshState[key];
+      if(!state) return false;
+      if(state.inflight) return false;
+      if(!opts.force && !isRefreshStale(key, ttlMs)) return false;
+      state.inflight = true;
+      try{
+        const result = await fn();
+        if(result !== false){
+          state.last = Date.now();
+        }
+        return true;
+      }finally{
+        state.inflight = false;
+      }
+    }
+    function refreshCoreData(options){
+      const opts = options || {};
+      const batch = [
+        refreshIfNeeded("tasks", refreshTtlMs.tasks, refreshTasksFromServer, opts),
+        refreshIfNeeded("personalizations", refreshTtlMs.personalizations, refreshPersonalizationsFromServer, opts)
+      ];
+      if(canSeeNotifications()){
+        batch.push(refreshIfNeeded("notifications", refreshTtlMs.notifications, refreshNotificationsFromServer, opts));
+      }
+      return Promise.all(batch);
+    }
+    function refreshForView(view, options){
+      const opts = options || {};
+      const promises = [];
+      if(view === "home"){
+        promises.push(refreshCoreData(opts));
+        if(canAccessUsersView()){
+          promises.push(refreshIfNeeded("users", refreshTtlMs.users, refreshUsersView, opts));
+        }
+        renderHomeDashboard();
+      }
+      if(view === "tasks" || view === "done"){
+        promises.push(refreshIfNeeded("tasks", refreshTtlMs.tasks, refreshTasksFromServer, opts));
+      }
+      if(view === "personalizations"){
+        promises.push(refreshIfNeeded("personalizations", refreshTtlMs.personalizations, refreshPersonalizationsFromServer, opts));
+        promises.push(refreshIfNeeded("tasks", refreshTtlMs.tasks, refreshTasksFromServer, opts));
+      }
+      if(view === "users" || view === "userActivity"){
+        if(canAccessUsersView()){
+          promises.push(refreshIfNeeded("users", refreshTtlMs.users, refreshUsersView, opts));
+        }
+      }
+      promises.push(refreshCoreData(opts));
+      return Promise.all(promises);
     }
     function startUsersAutoRefresh(){
       if(usersAutoRefreshTimer){
@@ -5522,7 +6411,7 @@ function renderPopupImages(){
       }
       usersAutoRefreshTimer = setInterval(() => {
         if(currentView === "users" && !document.hidden){
-          refreshUsersView();
+          refreshIfNeeded("users", refreshTtlMs.users, refreshUsersView);
         }
       }, 60000);
     }
@@ -5538,8 +6427,7 @@ function renderPopupImages(){
       }
       personalizationsRefreshTimer = setInterval(() => {
         if(!document.hidden){
-          void refreshPersonalizationsFromServer();
-          void refreshTasksFromServer();
+          void refreshCoreData();
         }
       }, 30000);
     }
@@ -5643,6 +6531,72 @@ function renderPopupImages(){
       if(isSecondaryUser() && ownerId > 0) return ownerId;
       return Number(currentUser.id || 0);
     }
+    function getAllowedOwnerIds(){
+      const ids = new Set();
+      if(!currentUser) return ids;
+      const id = Number(currentUser.id || 0);
+      const ownerId = Number(currentUser.owner_user_id || 0);
+      const ownerAlt = Number(currentUser.owner_id || 0);
+      if(id) ids.add(id);
+      if(ownerId) ids.add(ownerId);
+      if(ownerAlt) ids.add(ownerAlt);
+      return ids;
+    }
+    function getHomeVisibleUsers(){
+      const list = Array.isArray(usersCache) ? usersCache.slice() : [];
+      if(!currentUser) return list;
+      const ownerId = Number(getAccountOwnerId() || 0);
+      const selfId = Number(currentUser.id || 0);
+      const isSecondary = isSecondaryUser();
+      const canPriv = String(currentUser.can_manage_users || "") === "1";
+      const isPrincipal = isPrincipalUser() || isAdminUser();
+      const byOwner = (u) => ownerId && Number(u?.owner_user_id || 0) === ownerId;
+      let filtered = [];
+      if(isPrincipal){
+        filtered = list.filter(u => {
+          const role = normalizeUserRole(u?.role || "");
+          const isSelf = Number(u?.id || 0) === selfId;
+          return isSelf || (role === "secundario" && byOwner(u));
+        });
+      }else if(isSecondary){
+        if(canPriv){
+          filtered = list.filter(u => {
+            const role = normalizeUserRole(u?.role || "");
+            const isSelf = Number(u?.id || 0) === selfId;
+            if(isSelf) return true;
+            if(role !== "secundario") return false;
+            if(!byOwner(u)) return false;
+            const hasPriv = String(u?.can_manage_users || "") === "1";
+            return !hasPriv;
+          });
+        }else{
+          filtered = list.filter(u => Number(u?.id || 0) === selfId);
+        }
+      }else{
+        filtered = list;
+      }
+      if(currentUser && !filtered.some(u => Number(u?.id || 0) === selfId)){
+        filtered.unshift(currentUser);
+      }
+      const seen = new Set();
+      return filtered.filter(u => {
+        const id = String(u?.id || "");
+        if(!id) return true;
+        if(seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+    }
+    function getUserLastSessionSeconds(user){
+      const lastActive = Number(user?.last_active_at || 0);
+      const lastLogout = Number(user?.last_logout_at || 0);
+      if(!lastActive) return null;
+      if(lastLogout && lastLogout > lastActive){
+        return Math.max(0, lastLogout - lastActive);
+      }
+      const now = Math.floor(Date.now() / 1000);
+      return Math.max(0, now - lastActive);
+    }
     function getNuvemshopOrderUrl(loja, pedido){
       const p = (pedido || "").trim();
       if(!p) return "";
@@ -5671,15 +6625,23 @@ function renderPopupImages(){
      ***********************/
     function setView(view){
       const prevView = currentView;
-      const allowedViews = ["search", "tasks", "personalizations", "done", "users", "userActivity"];
-      const desired = allowedViews.includes(view) ? view : "search";
-      currentView = (desired === "userActivity" && !currentUserActivityId) ? "users" : desired;
+      const allowedViews = ["home", "search", "tasks", "personalizations", "done", "users", "userActivity"];
+      const desired = allowedViews.includes(view) ? view : "home";
+      if((desired === "users" || desired === "userActivity") && !canAccessUsersView()){
+        currentView = "search";
+      }else{
+        currentView = (desired === "userActivity" && !currentUserActivityId) ? "users" : desired;
+      }
       storageSet(STORAGE_KEY_VIEW, currentView);
+      const toHome = currentView === "home";
       const toTasks = currentView === "tasks";
       const toPersonalizations = currentView === "personalizations";
       const toDone = currentView === "done";
       const toUsers = currentView === "users";
       const toUserActivity = currentView === "userActivity";
+      if(goToHomeBtn){
+        goToHomeBtn.classList.remove("isHomeView");
+      }
       if(currentView !== "users"){
         stopUsersAutoRefresh();
       }else{
@@ -5703,11 +6665,37 @@ function renderPopupImages(){
         });
       };
       if(viewStack && viewSearch && viewTasks){
-        if(viewPersonalizations && toPersonalizations){
+        if(viewHome){
+          viewHome.classList.remove("isActive", "toLeft", "toRight");
+          viewHome.classList.add("viewHidden");
+        }
+        if(viewHome && toHome){
           const isFirst = !viewStack.classList.contains("viewReady");
           if(isFirst) viewStack.classList.add("isInstant");
           viewStack.classList.add("viewReady");
-          void refreshPersonalizationsFromServer();
+          viewSearch.classList.remove("isActive", "toLeft", "toRight");
+          viewTasks.classList.remove("isActive", "toLeft", "toRight");
+          if(viewDone) viewDone.classList.remove("isActive", "toLeft", "toRight");
+          if(viewUsers) viewUsers.classList.remove("isActive", "toLeft", "toRight");
+          if(viewUserActivity) viewUserActivity.classList.remove("isActive", "toLeft", "toRight");
+          if(viewPersonalizations) viewPersonalizations.classList.remove("isActive", "toLeft", "toRight");
+          viewSearch.classList.add("viewHidden");
+          viewTasks.classList.add("viewHidden");
+          if(viewDone) viewDone.classList.add("viewHidden");
+          if(viewUsers) viewUsers.classList.add("viewHidden");
+          if(viewUserActivity) viewUserActivity.classList.add("viewHidden");
+          if(viewPersonalizations) viewPersonalizations.classList.add("viewHidden");
+          viewHome.classList.remove("viewHidden", "toLeft", "toRight");
+          viewHome.classList.add("isActive", "toRight");
+          setTimeout(()=>{
+            if(isFirst) viewStack.classList.remove("isInstant");
+            viewHome.classList.remove("toRight");
+          }, 80);
+        }else if(viewPersonalizations && toPersonalizations){
+          const isFirst = !viewStack.classList.contains("viewReady");
+          if(isFirst) viewStack.classList.add("isInstant");
+          viewStack.classList.add("viewReady");
+            void refreshForView(currentView, { reason: "view" });
           viewSearch.classList.remove("isActive", "toLeft", "toRight");
           viewTasks.classList.remove("isActive", "toLeft", "toRight");
           if(viewDone) viewDone.classList.remove("isActive", "toLeft", "toRight");
@@ -5760,6 +6748,8 @@ function renderPopupImages(){
           if(viewUserActivity) viewUserActivity.classList.add("viewHidden");
           viewUsers.classList.remove("viewHidden", "toLeft", "toRight");
           viewUsers.classList.add("isActive", "toRight");
+          renderUsersView();
+          void refreshForView(currentView, { reason: "view" });
           requestAnimationFrame(() => {
             if(isFirst) viewStack.classList.remove("isInstant");
             viewUsers.classList.remove("toRight");
@@ -5821,10 +6811,56 @@ function renderPopupImages(){
       if(prevView === "done" && currentView === "done"){
         animateFromRight(viewDone);
       }
-      const showSearchRow = !toUserActivity;
+      const showSearchRow = !toUserActivity && !toHome;
       if(searchRow) searchRow.style.display = showSearchRow ? "" : "none";
       if(searchFilterBtn) searchFilterBtn.disabled = !showSearchRow;
       if(searchInput) searchInput.disabled = !showSearchRow;
+      if(currentView === "home"){
+        if(searchInput) searchInput.value = "";
+        navToggleViewBtn.textContent = "Tarefas";
+        navToggleViewBtn.classList.remove("primary");
+        if(viewTitleText) viewTitleText.textContent = "In\u00edcio";
+        if(goToHomeBtn){
+          goToHomeBtn.classList.add("isHomeView");
+          goToHomeBtn.setAttribute("title", "In\u00edcio");
+          goToHomeBtn.setAttribute("aria-label", "In\u00edcio");
+        }
+        if(goToSearchBtn){
+          goToSearchBtn.classList.remove("isSearchView");
+          goToSearchBtn.setAttribute("title", "Ir para o buscador");
+          goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
+        }
+        if(goToTasksBtn){
+          goToTasksBtn.classList.remove("isTasksView");
+          goToTasksBtn.setAttribute("title", "Tarefas");
+          goToTasksBtn.setAttribute("aria-label", "Tarefas");
+        }
+        if(goToTasksExtraBtn){
+          goToTasksExtraBtn.classList.remove("isTasksView");
+          goToTasksExtraBtn.setAttribute("title", "Tarefas extras");
+          goToTasksExtraBtn.setAttribute("aria-label", "Tarefas extras");
+        }
+        if(goToDoneTasksBtn){
+          goToDoneTasksBtn.classList.remove("isDoneView");
+          goToDoneTasksBtn.setAttribute("title", "Tarefas encerradas");
+          goToDoneTasksBtn.setAttribute("aria-label", "Tarefas encerradas");
+        }
+        if(goToUsersBtn){
+          goToUsersBtn.classList.remove("isUsersView");
+          goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
+          goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
+        }
+        if(goToPersonalizationsBtn){
+          goToPersonalizationsBtn.classList.remove("isPersonalizationsView");
+          goToPersonalizationsBtn.setAttribute("title", "Personaliza\u00e7\u00f5es");
+          goToPersonalizationsBtn.setAttribute("aria-label", "Personaliza\u00e7\u00f5es");
+        }
+        updateHomeFilterUI();
+        renderHomeDashboard();
+        scrollToTop();
+        updateFilterButtonsState();
+        return;
+      }
       if(currentView === "tasks"){
         if(searchInput) searchInput.placeholder = "Buscar por cliente ou pedido...";
         if(searchInput){
@@ -5834,8 +6870,10 @@ function renderPopupImages(){
         navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = (tasksTypeFilter === "extra" ? "Tarefas extras" : "Tarefas Diárias");
-        void refreshTasksFromServer();
-if(goToSearchBtn){
+        void refreshForView(currentView, { reason: "view" });
+        if(personalizationsEditPageBtn) personalizationsEditPageBtn.style.display = "none";
+        if(personalizationsCard) personalizationsCard.style.display = "none";
+        if(goToSearchBtn){
           goToSearchBtn.classList.remove("isSearchView");
           goToSearchBtn.setAttribute("title", "Ir para o buscador");
           goToSearchBtn.setAttribute("aria-label", "Ir para o buscador");
@@ -5868,6 +6906,8 @@ if(goToSearchBtn){
         navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Personalizações";
+        if(personalizationsEditPageBtn) personalizationsEditPageBtn.style.display = "inline-flex";
+        if(personalizationsCard) personalizationsCard.style.display = "block";
         if(goToSearchBtn){
           goToSearchBtn.classList.remove("isSearchView");
           goToSearchBtn.setAttribute("title", "Ir para o buscador");
@@ -5909,7 +6949,7 @@ if(goToSearchBtn){
         navToggleViewBtn.textContent = "Tarefas";
         navToggleViewBtn.classList.remove("primary");
         if(viewTitleText) viewTitleText.textContent = "Tarefas Encerradas";
-        void refreshTasksFromServer();
+        void refreshForView(currentView, { reason: "view" });
         if(goToSearchBtn){
           goToSearchBtn.classList.remove("isSearchView");
           goToSearchBtn.setAttribute("title", "Ir para o buscador");
@@ -5981,7 +7021,7 @@ if(goToSearchBtn){
         updateUsersStoreFilterOptions();
         updateUsersStatusFilterOptions();
         updateUsersFilterButtonState();
-        refreshUsersView();
+        void refreshForView(currentView, { reason: "view" });
         scrollToTop();
         updateFilterButtonsState();
         return;
@@ -6015,6 +7055,7 @@ if(goToSearchBtn){
           goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
           goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
         }
+        void refreshForView(currentView, { reason: "view" });
         scrollToTop();
         updateFilterButtonsState();
         return;
@@ -6049,6 +7090,7 @@ if(goToSearchBtn){
         goToUsersBtn.setAttribute("title", "Usu\u00e1rios");
         goToUsersBtn.setAttribute("aria-label", "Usu\u00e1rios");
       }
+      void refreshForView(currentView, { reason: "view" });
       render();
       scrollToTop();
       updateFilterButtonsState();
@@ -6542,6 +7584,28 @@ function fillAssuntoSelect(){
       if(Array.isArray(parsed)) return hydrateCalendarOwnership(normalizeCalendarHistory(parsed));
       return [];
     }
+    async function refreshCalendarHistoryFromServer(forceRender){
+      try{
+        const result = await apiRequest(`${API_BASE}/storage.php`, {
+          action: "get",
+          keys: [STORAGE_KEY_CALENDAR]
+        });
+        if(!result?.data || !Object.prototype.hasOwnProperty.call(result.data, STORAGE_KEY_CALENDAR)) return;
+        const raw = (result.data[STORAGE_KEY_CALENDAR] ?? "").toString();
+        storageCache[STORAGE_KEY_CALENDAR] = raw;
+        const parsed = safeJsonParse(raw);
+        calendarHistory = hydrateCalendarOwnership(normalizeCalendarHistory(Array.isArray(parsed) ? parsed : []));
+        if(forceRender){
+          renderCalendar();
+          renderMiniCalendar();
+          if(calendarOverlay && calendarOverlay.classList.contains("show")){
+            renderCalendarDayDetails(calSelectedISO || "");
+          }
+        }
+      }catch(_err){
+        // silent refresh
+      }
+    }
     function saveCalendarHistory(next){
       calendarHistory = hydrateCalendarOwnership(normalizeCalendarHistory(next));
       storageSet(STORAGE_KEY_CALENDAR, JSON.stringify(calendarHistory));
@@ -6768,6 +7832,18 @@ function fillAssuntoSelect(){
      ***********************/
     function openDrawer(){ drawer.classList.add("show"); drawerBackdrop.classList.add("show"); }
     function closeDrawer(){ drawer.classList.remove("show"); drawerBackdrop.classList.remove("show"); }
+    function openNotifyDrawer(){
+      if(!notifyDrawer || !notifyDrawerBackdrop) return;
+      notifyDrawer.classList.add("show");
+      notifyDrawerBackdrop.classList.add("show");
+      renderNotifications();
+      markAllNotificationsSeen();
+    }
+    function closeNotifyDrawer(){
+      if(!notifyDrawer || !notifyDrawerBackdrop) return;
+      notifyDrawer.classList.remove("show");
+      notifyDrawerBackdrop.classList.remove("show");
+    }
     function openRightDrawer(){
       if(!rightDrawer || !rightDrawerBackdrop) return;
       rightDrawer.classList.add("show");
@@ -8479,6 +9555,10 @@ function fillAssuntoSelect(){
       }
       return base;
     }
+    function hasNovoPedidoInTask(t){
+      const phases = Array.isArray(t?.obs) ? t.obs : [];
+      return phases.some(p => ((p?.novoPedido || "").toString()).trim());
+    }
     function getEffectiveRastreioFromTask(t){
       const base = ((t?.rastreio || "").toString()).trim();
       const phases = Array.isArray(t?.obs) ? t.obs : [];
@@ -8727,6 +9807,18 @@ function fillAssuntoSelect(){
       if(!n) return "";
       return `https://api.whatsapp.com/send?phone=${n}`;
     }
+    function buildWhatsappMessageUrl(raw, message){
+      const n = normalizeWhatsappNumber(raw);
+      if(!n) return "";
+      const text = encodeURIComponent((message || "").toString());
+      return `https://api.whatsapp.com/send?phone=${n}&text=${text}`;
+    }
+    function buildStoreSearchUrl(query){
+      const q = (query || "").toString().trim();
+      if(!q) return "";
+      const encoded = encodeURIComponent(q).replace(/%20/g, "+");
+      return `https://diarionerdify.com.br/search/?q=${encoded}`;
+    }
     function openCustomerWhatsapp(raw){
       const url = buildCustomerWhatsappUrl(raw);
       if(!url){
@@ -8858,7 +9950,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       saveTasks(tasks);
       const status = getEffectivePhaseStatus(t) || t.status || "";
       const detail = buildTaskActionDetail(status, t.loja);
-      logUserAction("task_close", detail, { target_id: id, is_extra: false });
+      logUserAction("task_close", detail, {
+        target_id: id,
+        is_extra: false,
+        notify_user_id: t.created_by_user_id || "",
+        created_by_user_id: t.created_by_user_id || ""
+      });
       if(tasksEditId === id) clearTasksForm();
       renderTasks();
       setView("done");
@@ -8922,6 +10019,28 @@ function getNuvemshopSupportBaseUrl(lojaText){
         customEl.style.display = "none";
         customEl.value = "";
       }
+    }
+    function isModelSwapStatus(statusValue){
+      return (statusValue || "").toString().trim().toLowerCase() === "troca de modelo";
+    }
+    function syncModelSwapSizes(source){
+      if(!isModelSwapStatus(phaseEditStatus?.value)) return;
+      if(isSyncingModelSwapSize) return;
+      isSyncingModelSwapSize = true;
+      const fromVal = resolveSizeValue(phaseEditSizeFrom, phaseEditSizeFromCustom);
+      const toVal = resolveSizeValue(phaseEditSizeTo, phaseEditSizeToCustom);
+      if(source === "from"){
+        applySizeValue(phaseEditSizeTo, phaseEditSizeToCustom, fromVal);
+      }else if(source === "to"){
+        applySizeValue(phaseEditSizeFrom, phaseEditSizeFromCustom, toVal);
+      }else{
+        if(fromVal && !toVal){
+          applySizeValue(phaseEditSizeTo, phaseEditSizeToCustom, fromVal);
+        }else if(toVal && !fromVal){
+          applySizeValue(phaseEditSizeFrom, phaseEditSizeFromCustom, toVal);
+        }
+      }
+      isSyncingModelSwapSize = false;
     }
     function resolveSizeValue(selectEl, customEl){
       const val = (selectEl?.value || "").toString().trim();
@@ -9029,6 +10148,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         : (current.status || "");
       if(phaseEditStatus) phaseEditStatus.value = phaseStatusValue.toString();
       togglePhaseSizeFields();
+      syncModelSwapSizes("status");
       // delete s\u00f3 no modo edit
       if(phaseEditDeleteBtn){
         phaseEditDeleteBtn.style.display = (phaseEditMode === "edit") ? "inline-flex" : "none";
@@ -9168,7 +10288,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(phaseEditSizeWrap && phaseEditSizeWrap.style.display !== "none"){
         const sizeFromNorm = (next.sizeFrom || "").toString().trim().toLowerCase();
         const sizeToNorm = (next.sizeTo || "").toString().trim().toLowerCase();
-        if(sizeFromNorm && sizeToNorm && sizeFromNorm === sizeToNorm){
+        if(!isModelSwapStatus(next.status) && sizeFromNorm && sizeToNorm && sizeFromNorm === sizeToNorm){
           setFieldError(phaseEditSizeFrom, "Os tamanhos da troca n\u00e3o podem ser iguais.");
           setFieldError(phaseEditSizeTo, "Os tamanhos da troca n\u00e3o podem ser iguais.");
           isOk = false;
@@ -9228,7 +10348,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           calIso: calSelectedISO || ""
         };
         closePhaseEditor();
-        openCloseTaskModal(id);
+        closeTaskAsDone(id);
         return true;
       }
       endValidation(true);
@@ -9492,6 +10612,13 @@ function getNuvemshopSupportBaseUrl(lojaText){
       }else if(!isValidDateInput(data)){
         setFieldError(tData, "Data invalida.");
         ok = false;
+      }else if(!tasksEditId){
+        const selectedDate = new Date(`${data}T00:00:00`);
+        const today = new Date(`${todayISO()}T00:00:00`);
+        if(selectedDate < today){
+          setFieldError(tData, "A data deve ser hoje ou futura.");
+          ok = false;
+        }
       }
       const c = (tCliente.value||"").trim();
       if(!c){
@@ -9711,6 +10838,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     function isTaskVisibleToCurrentUser(t){
       if(!isSecondaryUser()) return true;
+      if(!t?.isExtra) return true;
       const createdId = (t?.created_by_user_id || "").toString();
       return createdId !== "" && createdId === String(currentUser?.id || "");
     }
@@ -9723,6 +10851,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       const base = Array.isArray(list) ? list : [];
       if(!isSecondaryUser()) return base.slice();
       return base.filter(entry => {
+        if(!(entry?.extra || entry?.simple)) return true;
         const createdId = (entry?.created_by_user_id || "").toString();
         return createdId !== "" && createdId === String(currentUser?.id || "");
       });
@@ -9785,6 +10914,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
     function renderTasks(){
       if(currentView !== "tasks") return;
       updateTaskCountBadges();
+      if(openTaskModalBtn){
+        openTaskModalBtn.style.display = tasksTypeFilter === "extra" ? "none" : "inline-flex";
+      }
+      if(openExtraTaskModalBtn){
+        openExtraTaskModalBtn.style.display = tasksTypeFilter === "extra" ? "inline-flex" : "none";
+      }
       syncOverdueCalendarEntries();
       const filtered = getFilteredTasks();
       tasksCount.textContent = `${filtered.length} item(ns)`;
@@ -9821,7 +10956,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         const repeatLabel = (t.repeat || "").toString().trim();
         const hasDailyRepeat = isDailyRepeatTask(t);
         const hasExtraRepeat = isExtra && repeatLabel && !isNoRepeatLabel(repeatLabel);
-        const showRepeatIcon = isExtra;
+        const showRepeatIcon = hasExtraRepeat;
         const effDate = getTaskDisplayDate(t) || (t.proxEtapa || "").trim();
         const isOverdue = isTaskOverdue(t);
         const dueToday = (effDate && effDate === today);
@@ -10264,6 +11399,112 @@ function getNuvemshopSupportBaseUrl(lojaText){
       });
       renderMiniCalendar();
     }
+    function openTasksAllPopup(){
+      const filtered = getFilteredTasks();
+      openPopup({ title: "Todas as tarefas", message: "", okLabel: "", showCancel: false });
+      if(!popupMessage) return;
+      if(popupModal) popupModal.classList.add("isWide");
+      if(!filtered.length){
+        popupMessage.innerHTML = `<div class="note" style="text-align:center;">Nenhuma tarefa encontrada.</div>`;
+        return;
+      }
+      const rows = filtered.map(t => {
+        const status = (getEffectivePhaseStatus(t) || t.status || "-").toString().trim() || "-";
+        const dataInicial = formatDateBR((t.data || "").toString().trim()) || "-";
+        const clienteLabel = (t.cliente || "-").toString().trim() || "-";
+        const prazoInfo = getLastPhasePrazoInfo(t);
+        const prazoLabel = prazoInfo?.date
+          ? `${formatDateBR(prazoInfo.date)}${prazoInfo.time ? ` ${prazoInfo.time}` : ""}`
+          : "-";
+        const pedidoLabel = hasNovoPedidoInTask(t) ? "Novo n\u00famero do pedido" : "N\u00famero do pedido";
+        const pedidoValue = (getEffectivePedidoFromTask(t) || "-").toString().trim() || "-";
+        const rastreioValue = (getEffectiveRastreioFromTask(t) || "-").toString().trim() || "-";
+        const pedidoLink = pedidoValue !== "-"
+          ? (() => {
+              const url = getNuvemshopOrderUrl((t.loja || "").toString().trim(), pedidoValue);
+              if(!url) return `<span>${escapeHtml(pedidoValue)}</span>`;
+              return `<a href="${escapeHtml(url)}" class="tasksAllPopupLink" data-task-all-copy="${escapeHtml(pedidoValue)}" target="_blank" rel="noopener">${escapeHtml(pedidoValue)}</a>`;
+            })()
+          : `<span>${escapeHtml(pedidoValue)}</span>`;
+        const rastreioLink = rastreioValue !== "-"
+          ? (() => {
+              const url = detectCarrierFromCode(rastreioValue).url || "";
+              if(!url) return `<span>${escapeHtml(rastreioValue)}</span>`;
+              return `<a href="${escapeHtml(url)}" class="tasksAllPopupLink" data-task-all-copy="${escapeHtml(rastreioValue)}" target="_blank" rel="noopener">${escapeHtml(rastreioValue)}</a>`;
+            })()
+          : `<span>${escapeHtml(rastreioValue)}</span>`;
+        return `
+          <div class="tasksAllPopupRow" data-task-all-id="${escapeHtml(String(t.id || ""))}">
+            <div class="tasksAllPopupCell">
+              <div class="tasksAllPopupLabel">Status</div>
+              <div class="tasksAllPopupValue">${escapeHtml(status)}</div>
+            </div>
+            <div class="tasksAllPopupCell">
+              <div class="tasksAllPopupLabel">Data inicial</div>
+              <div class="tasksAllPopupValue">${escapeHtml(dataInicial)}</div>
+            </div>
+            <div class="tasksAllPopupCell">
+              <div class="tasksAllPopupLabel">Cliente</div>
+              <div class="tasksAllPopupValue">${escapeHtml(clienteLabel)}</div>
+            </div>
+            <div class="tasksAllPopupCell">
+              <div class="tasksAllPopupLabel">Prazo de resolu\u00e7\u00e3o</div>
+              <div class="tasksAllPopupValue">${escapeHtml(prazoLabel)}</div>
+            </div>
+            <div class="tasksAllPopupCell">
+              <div class="tasksAllPopupLabel">${escapeHtml(pedidoLabel)}</div>
+              <div class="tasksAllPopupValue withCopy">${pedidoLink}</div>
+            </div>
+            <div class="tasksAllPopupCell">
+              <div class="tasksAllPopupLabel">Rastreio</div>
+              <div class="tasksAllPopupValue withCopy">${rastreioLink}</div>
+            </div>
+            <div class="tasksAllPopupActions">
+              <button type="button" class="btn small iconBtn tasksAllPopupEye" data-task-all-open="${escapeHtml(String(t.id || ""))}" title="Ver tarefa" aria-label="Ver tarefa">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+      popupMessage.innerHTML = `
+        <div class="tasksAllPopupHeader">Lista de tarefas</div>
+        <div class="tasksAllPopupList">
+          ${rows}
+        </div>
+      `;
+      popupMessage.querySelectorAll("[data-task-all-open]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = (btn.getAttribute("data-task-all-open") || "").trim();
+          if(!id) return;
+          closePopup(false);
+          setView("tasks");
+          const list = getFilteredTasks();
+          const idx = list.findIndex(t => String(t.id || "") === id);
+          tasksShowAll = false;
+          tasksSingleIndex = idx >= 0 ? idx : 0;
+          renderTasks();
+          requestAnimationFrame(() => {
+            const card = tasksList ? tasksList.querySelector(`[data-task-id="${CSS.escape(id)}"]`) : null;
+            if(card){
+              card.scrollIntoView({ behavior:"smooth", block:"center" });
+              card.classList.add("isFocus");
+              setTimeout(()=> card.classList.remove("isFocus"), 1400);
+            }
+          });
+        });
+      });
+      popupMessage.querySelectorAll("[data-task-all-copy]").forEach(link => {
+        link.addEventListener("click", () => {
+          const val = (link.getAttribute("data-task-all-copy") || "").trim();
+          if(!val) return;
+          copyTextToClipboard(val, null, "");
+        });
+      });
+    }
     function renderDoneTasks(){
       if(currentView !== "done") return;
       if(!doneTasksList || !doneTasksCount) return;
@@ -10302,6 +11543,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         doneTasksList.innerHTML = `<div class="note">Nenhuma tarefa encerrada.</div>`;
         return;
       }
+      const canDeleteDone = !isSecondaryUser();
       doneTasksList.innerHTML = list.map(t => {
         const isExtra = Boolean(t.isExtra);
         const title = (t.assunto || "").trim() || (isExtra ? "Tarefa extra" : "Caso");
@@ -10343,6 +11585,9 @@ function getNuvemshopSupportBaseUrl(lojaText){
                  <polyline points="21 20 21 12 13 12"></polyline>
                </svg>
              </button>`;
+        const deleteBtn = canDeleteDone
+          ? `<button type="button" class="btn small danger iconBtn" data-done-del="${escapeHtml(String(t.id || ""))}" title="Excluir tarefa" aria-label="Excluir tarefa" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${trashIcon}</button>`
+          : "";
         const detailItems = [];
         if(isExtra && extraText) detailItems.push(escapeHtml(extraText));
         if(!isExtra && pedidoEfetivo) detailItems.push(`Pedido: <span style="font-weight:600;">${escapeHtml(pedidoEfetivo)}</span> <button type="button" class="btn small copyBtn" data-copy-done-pedido="${escapeHtml(pedidoEfetivo)}" title="Copiar pedido" aria-label="Copiar pedido" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; gap:0; line-height:1;">${copyIconSmall}</button>`);
@@ -10358,7 +11603,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
               <div class="doneTaskActions" style="display:inline-flex;align-items:center;gap:8px;">
                 ${summaryBtn}
                 ${reactivateBtn}
-                <button type="button" class="btn small danger iconBtn" data-done-del="${escapeHtml(String(t.id || ""))}" title="Excluir tarefa" aria-label="Excluir tarefa" style="padding:4px 6px; display:inline-flex; align-items:center; justify-content:center; line-height:1;">${trashIcon}</button>
+                ${deleteBtn}
               </div>
             </div>
             <div class="doneMetaRow" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:16px;">
@@ -10590,6 +11835,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
         return;
       }
       const canBlockUsers = isAdminUser();
+      const canDeleteUsers = isAdminUser() || isPrincipalUser();
       const canGrantUsersAccess = isPrincipalUser() && !isSecondaryUser();
       usersCards.innerHTML = filtered.map(u => {
         const username = (u?.username || "").toString();
@@ -10678,6 +11924,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
                     `}
                   </button>
                   ` : ""}
+                  ${canDeleteUsers ? `
                   <button class="btn small iconBtn danger userDeleteBtn" type="button" data-user-delete="${escapeHtml(String(u?.id || ""))}" data-user-name="${escapeHtml(username || "-")}" title="Remover usu\u00e1rio" aria-label="Remover usu\u00e1rio">
                     <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M3 6h18"></path>
@@ -10687,6 +11934,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
                       <path d="M14 10v6"></path>
                     </svg>
                   </button>
+                  ` : ""}
                 </div>
               </div>
             </div>
@@ -10840,6 +12088,134 @@ function getNuvemshopSupportBaseUrl(lojaText){
       if(userActivityNextDay) userActivityNextDay.disabled = disableNext;
       if(userActivityNextDayModal) userActivityNextDayModal.disabled = disableNext;
     }
+    function buildInactiveSegments(inactivePeriods){
+      const segments = [];
+      inactivePeriods.forEach(p => {
+        const startTs = Number(p.start || 0);
+        const endTs = Number(p.end || 0);
+        if(!startTs || !endTs || endTs <= startTs) return;
+        const inactiveWindowEnd = startTs + (30 * 60);
+        const firstEnd = Math.min(endTs, inactiveWindowEnd);
+        const secondStart = Math.min(endTs, inactiveWindowEnd);
+        if(firstEnd > startTs){
+          segments.push({
+            label: "Inativo",
+            start: startTs,
+            end: firstEnd,
+            ongoing: p.ongoing && endTs === firstEnd
+          });
+        }
+        if(endTs > secondStart){
+          segments.push({
+            label: "Parado",
+            start: secondStart,
+            end: endTs,
+            ongoing: p.ongoing
+          });
+        }
+      });
+      return segments;
+    }
+    function computeActivityMetrics(activePeriods, inactiveSegments, actions, selectedDay){
+      const dayStartTs = Math.floor(new Date(`${selectedDay}T00:00:00`).getTime() / 1000);
+      const dayEndTs = dayStartTs + 86399;
+      let workSeconds = 0;
+      activePeriods.forEach(p => {
+        workSeconds += Number(p.duration_sec || 0);
+      });
+      inactiveSegments.forEach(seg => {
+        if(seg.label !== "Inativo") return;
+        workSeconds += Math.max(0, Number(seg.end || 0) - Number(seg.start || 0));
+      });
+      const sortedActions = actions.slice().sort((a, b) => (a?.ts || 0) - (b?.ts || 0));
+      let pauseSeconds = 0;
+      let pauseStart = 0;
+      let pauseType = "";
+      let lunchSeconds = 0;
+      sortedActions.forEach(item => {
+        const action = (item?.action || "").toString().trim();
+        const ts = Number(item?.ts || 0);
+        if(!ts) return;
+        if(action === "pause_general" || action === "pause_lunch"){
+          pauseStart = ts;
+          pauseType = action;
+          return;
+        }
+        if(action === "pause_end" && pauseStart){
+          if(ts > pauseStart){
+            pauseSeconds += ts - pauseStart;
+            if(pauseType === "pause_lunch"){
+              lunchSeconds += ts - pauseStart;
+            }
+          }
+          pauseStart = 0;
+          pauseType = "";
+        }
+      });
+      if(pauseStart){
+        if(dayEndTs > pauseStart){
+          pauseSeconds += dayEndTs - pauseStart;
+          if(pauseType === "pause_lunch"){
+            lunchSeconds += dayEndTs - pauseStart;
+          }
+        }
+      }
+      if(pauseSeconds > 0){
+        workSeconds = Math.max(0, workSeconds - pauseSeconds);
+      }
+      const tasksCreatedCount = actions.filter(a => {
+        const action = (a?.action || "").toString().trim();
+        return action === "task_create" || action === "task_extra_create";
+      }).length;
+      const tasksClosedCount = actions.filter(a => {
+        const action = (a?.action || "").toString().trim();
+        return action === "task_close" || action === "task_extra_close";
+      }).length;
+      return {
+        workSeconds,
+        lunchSeconds,
+        tasksCreatedCount,
+        tasksClosedCount
+      };
+    }
+    function getHomeActivityCacheKey(userId, dayIso){
+      return `${userId || ""}:${dayIso || ""}`;
+    }
+    function getHomeActivityCacheEntry(userId, dayIso){
+      const key = getHomeActivityCacheKey(userId, dayIso);
+      const cached = homeActivitySummaryCache.get(key);
+      if(!cached) return null;
+      if(Date.now() - cached.ts > (5 * 60 * 1000)) return null;
+      return cached;
+    }
+    async function refreshHomeActivityMetrics(users, dayIso){
+      if(homeActivitySummaryLoading) return;
+      const targets = Array.isArray(users) ? users : [];
+      const missing = targets.filter(u => u && u.id).filter(u => !getHomeActivityCacheEntry(u.id, dayIso));
+      if(!missing.length) return;
+      homeActivitySummaryLoading = true;
+      try{
+        for(const user of missing){
+          const key = getHomeActivityCacheKey(user.id, dayIso);
+          try{
+            const data = await apiUserActivity(user.id, dayIso);
+            const activePeriods = Array.isArray(data?.active_periods) ? data.active_periods : [];
+            const inactivePeriods = Array.isArray(data?.inactive_periods) ? data.inactive_periods : [];
+            const inactiveSegments = buildInactiveSegments(inactivePeriods);
+            const actions = Array.isArray(data?.actions) ? data.actions : [];
+            const metrics = computeActivityMetrics(activePeriods, inactiveSegments, actions, dayIso);
+            homeActivitySummaryCache.set(key, { metrics, ts: Date.now() });
+          }catch(err){
+            homeActivitySummaryCache.set(key, { metrics: null, ts: Date.now() });
+          }
+        }
+      }finally{
+        homeActivitySummaryLoading = false;
+        if(currentView === "home"){
+          renderHomeDashboard();
+        }
+      }
+    }
     async function openUserActivity(userId, userName){
       const usePage = Boolean(viewUserActivity && userActivityViewSummary && userActivityViewList);
       const titleText = `Atividade: ${userName || "Usu\u00e1rio"}`;
@@ -10889,31 +12265,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
             </div>
           `;
         }).join("") : `<div class="activityItem activityItemPeriod"><div class="activityRow">Nenhum per\u00edodo ativo registrado.</div></div>`;
-        const inactiveSegments = [];
-        inactivePeriods.forEach(p => {
-          const startTs = Number(p.start || 0);
-          const endTs = Number(p.end || 0);
-          if(!startTs || !endTs || endTs <= startTs) return;
-          const inactiveWindowEnd = startTs + (30 * 60);
-          const firstEnd = Math.min(endTs, inactiveWindowEnd);
-          const secondStart = Math.min(endTs, inactiveWindowEnd);
-          if(firstEnd > startTs){
-            inactiveSegments.push({
-              label: "Inativo",
-              start: startTs,
-              end: firstEnd,
-              ongoing: p.ongoing && endTs === firstEnd
-            });
-          }
-          if(endTs > secondStart){
-            inactiveSegments.push({
-              label: "Parado",
-              start: secondStart,
-              end: endTs,
-              ongoing: p.ongoing
-            });
-          }
-        });
+        const inactiveSegments = buildInactiveSegments(inactivePeriods);
         const inactiveHtml = inactiveSegments.length ? inactiveSegments.map(seg => {
           const start = formatDateTimeFromTs(seg.start);
           const end = formatDateTimeFromTs(seg.end);
@@ -10934,65 +12286,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }).join("") : `<div class="activityItem activityItemPeriod"><div class="activityRow">Nenhum per\u00edodo inativo registrado.</div></div>`;
         const actions = Array.isArray(data?.actions) ? data.actions : [];
         const showWorkHours = canAccessUsersView();
-        const dayStartTs = Math.floor(new Date(`${selectedDay}T00:00:00`).getTime() / 1000);
-        const dayEndTs = dayStartTs + 86399;
-        let workSeconds = 0;
-        activePeriods.forEach(p => {
-          workSeconds += Number(p.duration_sec || 0);
-        });
-        inactiveSegments.forEach(seg => {
-          if(seg.label !== "Inativo") return;
-          workSeconds += Math.max(0, Number(seg.end || 0) - Number(seg.start || 0));
-        });
-        const sortedActions = actions.slice().sort((a, b) => (a?.ts || 0) - (b?.ts || 0));
-        let pauseSeconds = 0;
-        let pauseStart = 0;
-        let pauseType = "";
-        let lunchSeconds = 0;
-        sortedActions.forEach(item => {
-          const action = (item?.action || "").toString().trim();
-          const ts = Number(item?.ts || 0);
-          if(!ts) return;
-          if(action === "pause_general" || action === "pause_lunch"){
-            pauseStart = ts;
-            pauseType = action;
-            return;
-          }
-          if(action === "pause_end" && pauseStart){
-            if(ts > pauseStart){
-              pauseSeconds += ts - pauseStart;
-              if(pauseType === "pause_lunch"){
-                lunchSeconds += ts - pauseStart;
-              }
-            }
-            pauseStart = 0;
-            pauseType = "";
-          }
-        });
-        if(pauseStart){
-          if(dayEndTs > pauseStart){
-            pauseSeconds += dayEndTs - pauseStart;
-            if(pauseType === "pause_lunch"){
-              lunchSeconds += dayEndTs - pauseStart;
-            }
-          }
-        }
-        if(pauseSeconds > 0){
-          workSeconds = Math.max(0, workSeconds - pauseSeconds);
-        }
-        const tasksCreatedCount = actions.filter(a => {
-          const action = (a?.action || "").toString().trim();
-          return action === "task_create" || action === "task_extra_create";
-        }).length;
-        const tasksClosedCount = actions.filter(a => {
-          const action = (a?.action || "").toString().trim();
-          return action === "task_close" || action === "task_extra_close";
-        }).length;
-        const lunchValue = lunchSeconds > 0 ? formatDuration(lunchSeconds) : "Sem pausa";
+        const metrics = computeActivityMetrics(activePeriods, inactiveSegments, actions, selectedDay);
+        const lunchValue = metrics.lunchSeconds > 0 ? formatDuration(metrics.lunchSeconds) : "Sem pausa";
         const workHoursHtml = showWorkHours ? `
             <div class="activitySummaryItem">
               <div class="activitySummaryLabel">Horas de trabalho</div>
-              <div class="activitySummaryValue">${escapeHtml(formatDuration(workSeconds))}</div>
+              <div class="activitySummaryValue">${escapeHtml(formatDuration(metrics.workSeconds))}</div>
             </div>
             <div class="activitySummaryItem">
               <div class="activitySummaryLabel">Horário de almoço</div>
@@ -11000,11 +12299,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
             </div>
             <div class="activitySummaryItem">
               <div class="activitySummaryLabel">Tarefas inseridas</div>
-              <div class="activitySummaryValue">${escapeHtml(String(tasksCreatedCount))}</div>
+              <div class="activitySummaryValue">${escapeHtml(String(metrics.tasksCreatedCount))}</div>
             </div>
             <div class="activitySummaryItem">
               <div class="activitySummaryLabel">Tarefas encerradas</div>
-              <div class="activitySummaryValue">${escapeHtml(String(tasksClosedCount))}</div>
+              <div class="activitySummaryValue">${escapeHtml(String(metrics.tasksClosedCount))}</div>
             </div>
         ` : "";
         summaryEl.innerHTML = `
@@ -11084,25 +12383,61 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     function closeUserActivity(){
       if(currentView === "userActivity"){
-        setView("users");
+        setView("home");
         return;
       }
       if(userActivityOverlay) userActivityOverlay.classList.remove("show");
     }
-    async function refreshUsersView(){
-      if(!viewUsers) return false;
+    async function refreshUsersView(options){
       usersError = "";
+      usersLoading = true;
+      usersLoaded = false;
+      const forceLoading = Boolean(options && options.showLoading);
+      if(forceLoading){
+        usersLoadingForced = true;
+      }
+      usersLoadingMinUntil = Date.now() + 500;
+      if(currentView === "home"){
+        updateHomeFilterUI();
+      }
       try{
         const result = await apiAdminUsers();
-        usersCache = Array.isArray(result?.users) ? result.users : [];
-        renderUsersView();
+        const nextUsers = Array.isArray(result?.users) ? result.users : [];
+        const prevCache = loadUsersCache();
+        const nextHash = hashUsers(nextUsers);
+        const prevHash = prevCache ? prevCache.hash : "";
+        const hasChanges = !prevHash || nextHash !== prevHash;
+        usersCache = nextUsers;
+        if(hasChanges){
+          saveUsersCache(nextUsers);
+        }
+        if(viewUsers){
+          renderUsersView();
+        }
+        if(currentView === "home"){
+          updateHomeFilterUI();
+          renderHomeDashboard();
+        }
         return true;
       }catch(err){
         usersCache = [];
         const msg = (err && err.message) ? String(err.message) : "";
         usersError = msg === "forbidden" ? "Acesso restrito." : "Nao foi possivel carregar os usuarios.";
-        renderUsersView();
+        if(viewUsers){
+          renderUsersView();
+        }
+        if(currentView === "home"){
+          updateHomeFilterUI();
+          renderHomeDashboard();
+        }
         return false;
+      }finally{
+        usersLoading = false;
+        usersLoaded = true;
+        usersLoadingForced = false;
+        if(currentView === "home"){
+          updateHomeFilterUI();
+        }
       }
     }
     /***********************
@@ -11601,6 +12936,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
     if(openDrawerBtnMobile) openDrawerBtnMobile.addEventListener("click", openDrawer);
     if(closeDrawerBtn) closeDrawerBtn.addEventListener("click", closeDrawer);
     if(drawerBackdrop) drawerBackdrop.addEventListener("click", closeDrawer);
+    if(closeNotifyDrawerBtn) closeNotifyDrawerBtn.addEventListener("click", closeNotifyDrawer);
+    if(notifyDrawerBackdrop) notifyDrawerBackdrop.addEventListener("click", closeNotifyDrawer);
     if(openRightDrawerBtn) openRightDrawerBtn.addEventListener("click", openRightDrawer);
     if(closeRightDrawerBtn) closeRightDrawerBtn.addEventListener("click", closeRightDrawer);
     if(rightDrawerBackdrop) rightDrawerBackdrop.addEventListener("click", closeRightDrawer);
@@ -11965,9 +13302,11 @@ function getNuvemshopSupportBaseUrl(lojaText){
     });
     if(phaseEditDeleteBtn) phaseEditDeleteBtn.addEventListener("click", deletePhaseEditor);
     if(phaseEditAttention) phaseEditAttention.addEventListener("change", togglePhaseEditAttention);
-    if(phaseEditStatus) phaseEditStatus.addEventListener("change", togglePhaseSizeFields);
-    if(phaseEditSizeFrom) phaseEditSizeFrom.addEventListener("change", ()=> toggleCustomSizeInput(phaseEditSizeFrom, phaseEditSizeFromCustom));
-    if(phaseEditSizeTo) phaseEditSizeTo.addEventListener("change", ()=> toggleCustomSizeInput(phaseEditSizeTo, phaseEditSizeToCustom));
+    if(phaseEditStatus) phaseEditStatus.addEventListener("change", ()=>{ togglePhaseSizeFields(); syncModelSwapSizes("status"); });
+    if(phaseEditSizeFrom) phaseEditSizeFrom.addEventListener("change", ()=>{ toggleCustomSizeInput(phaseEditSizeFrom, phaseEditSizeFromCustom); syncModelSwapSizes("from"); });
+    if(phaseEditSizeTo) phaseEditSizeTo.addEventListener("change", ()=>{ toggleCustomSizeInput(phaseEditSizeTo, phaseEditSizeToCustom); syncModelSwapSizes("to"); });
+    if(phaseEditSizeFromCustom) phaseEditSizeFromCustom.addEventListener("input", ()=>{ syncModelSwapSizes("from"); });
+    if(phaseEditSizeToCustom) phaseEditSizeToCustom.addEventListener("input", ()=>{ syncModelSwapSizes("to"); });
     const phaseEditFields = [phaseEditText, phaseEditDate, phaseEditPrazo, phaseEditPrazoHora, phaseEditStatus, phaseEditNovoPedido, phaseEditSizeFrom, phaseEditSizeTo, phaseEditRastreio];
     phaseEditFields.forEach(field=>{
       if(!field) return;
@@ -12011,6 +13350,14 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     if(closeTaskCancelBtn){
       closeTaskCancelBtn.addEventListener("click", closeCloseTaskModal);
+    }
+    if(closeTaskOverlay){
+      document.addEventListener("keydown", (e)=>{ 
+        if(e.key === "Escape" && closeTaskOverlay.classList.contains("show")){
+          closeCloseTaskModal();
+          e.preventDefault();
+        }
+      });
     }
     if(closeTaskOverlay){
       closeTaskOverlay.addEventListener("click", (e)=>{ if(e.target === closeTaskOverlay) closeCloseTaskModal(); });
@@ -12099,12 +13446,87 @@ function getNuvemshopSupportBaseUrl(lojaText){
         openUserProfileOverlay({ required:false });
       });
     }
+    if(testDailyReportBtn){
+      testDailyReportBtn.addEventListener("click", async ()=>{
+        if(!canUseReportTest()) return;
+        testDailyReportBtn.disabled = true;
+        try{
+          const result = await apiReportTrigger("daily");
+          const summary = result?.summary || {};
+          if(!result?.ok){
+            showAlert(formatReportSummary(summary));
+          }else{
+            showAlert(`Relatorio diario enviado.\n${formatReportSummary(summary)}`);
+          }
+        }catch(e){
+          showAlert("Falha ao enviar o relatorio diario.");
+        }finally{
+          testDailyReportBtn.disabled = false;
+        }
+      });
+    }
+    if(testMonthlyReportBtn){
+      testMonthlyReportBtn.addEventListener("click", async ()=>{
+        if(!canUseReportTest()) return;
+        testMonthlyReportBtn.disabled = true;
+        try{
+          const result = await apiReportTrigger("monthly");
+          const summary = result?.summary || {};
+          if(!result?.ok){
+            showAlert(formatReportSummary(summary));
+          }else{
+            showAlert(`Relatorio mensal enviado.\n${formatReportSummary(summary)}`);
+          }
+        }catch(e){
+          showAlert("Falha ao enviar o relatorio mensal.");
+        }finally{
+          testMonthlyReportBtn.disabled = false;
+        }
+      });
+    }
     if(openStoresConfigBtn){
       openStoresConfigBtn.addEventListener("click", (e)=>{
         e.preventDefault();
         if(settingsOverlay) settingsOverlay.classList.remove("show");
         clearDrawerReturnState(settingsOverlay, [settingsCloseBtn]);
         openStoresConfig();
+      });
+    }
+    if(openAnyDeskBtn){
+      openAnyDeskBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        const url = "../anydesk/AnyDesk.exe";
+        try{
+          window.open(url, "_blank", "noopener");
+        }catch(e2){
+          showAlert("Não foi possível abrir o AnyDesk.");
+        }
+      });
+    }
+    if(storeSearchSendBtn){
+      storeSearchSendBtn.addEventListener("click", ()=>{
+        const term = (storeSearchInput?.value || "").toString().trim();
+        if(!term){
+          showAlert("Digite o tema para pesquisar.");
+          return;
+        }
+        const phone = (storeSearchWhatsapp?.value || "").toString().trim();
+        if(!phone){
+          showAlert("Informe o WhatsApp com DDD.");
+          return;
+        }
+        const link = buildStoreSearchUrl(term);
+        if(!link){
+          showAlert("Nao foi possivel gerar o link da pesquisa.");
+          return;
+        }
+        const message = `Segue o link dos modelos: ${link}`;
+        const url = buildWhatsappMessageUrl(phone, message);
+        if(!url){
+          showAlert("WhatsApp invalido.");
+          return;
+        }
+        window.open(url, "_blank", "noopener");
       });
     }
     if(quickLinkSaveBtn){
@@ -12136,7 +13558,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
       storesConfigAddBtn.addEventListener("click", (e)=>{
         e.preventDefault();
         if(storesDraft.length >= MAX_STORES) return;
-        storesDraft.push({ name:"", personalizacaoId:"", logoUrl:"", siteUrl:"", stampsUrl:"", whatsappPhone:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", metaInboxUrl:"", emailList: [] });
+        storesDraft.push({ name:"", personalizacaoId:"", logoUrl:"", siteUrl:"", stampsUrl:"", whatsappPhone:"", supportWhatsapp:"", instagramUrl:"", facebookUrl:"", tiktokUrl:"", youtubeUrl:"", pinterestUrl:"", whatsappUrl:"", storeMessagesUrl:"", reclameAquiUrl:"", metaInboxUrl:"", socialExtras: [], emailList: [] });
         renderStoresConfig();
         requestAnimationFrame(()=>{
           if(!storesConfigHost) return;
@@ -12239,6 +13661,8 @@ function getNuvemshopSupportBaseUrl(lojaText){
       storeLinksOverlay: () => storeLinksOverlay && storeLinksOverlay.classList.remove("show"),
       metaInboxOverlay: () => metaInboxOverlay && metaInboxOverlay.classList.remove("show"),
       emailMenuOverlay: () => emailMenuOverlay && emailMenuOverlay.classList.remove("show"),
+      storeMessagesOverlay: () => storeMessagesOverlay && storeMessagesOverlay.classList.remove("show"),
+      reclameAquiOverlay: () => reclameAquiOverlay && reclameAquiOverlay.classList.remove("show"),
     };
     document.addEventListener("keydown", (e)=>{
       if(e.key !== "Escape") return;
@@ -12278,7 +13702,7 @@ function getNuvemshopSupportBaseUrl(lojaText){
           if(Number.isNaN(idx) || !storesDraft[idx]) return;
           const next = storesDraft.slice();
           const extras = Array.isArray(next[idx].socialExtras) ? next[idx].socialExtras.slice() : [];
-          extras.push({ name:"", url:"" });
+          extras.push({ name:"", supportUrl:"", profileUrl:"" });
           next[idx] = { ...next[idx], socialExtras: extras };
           storesDraft = next;
           renderStoresConfig();
@@ -12429,6 +13853,22 @@ function getNuvemshopSupportBaseUrl(lojaText){
     }
     if(storeLinksGrid){
       storeLinksGrid.addEventListener("click", (e)=>{
+        const btn = e.target.closest("[data-open-stores-config]");
+        if(!btn) return;
+        e.preventDefault();
+        openStoresConfig();
+      });
+    }
+    if(storeMessagesGrid){
+      storeMessagesGrid.addEventListener("click", (e)=>{
+        const btn = e.target.closest("[data-open-stores-config]");
+        if(!btn) return;
+        e.preventDefault();
+        openStoresConfig();
+      });
+    }
+    if(reclameAquiGrid){
+      reclameAquiGrid.addEventListener("click", (e)=>{
         const btn = e.target.closest("[data-open-stores-config]");
         if(!btn) return;
         e.preventDefault();
@@ -12591,6 +14031,42 @@ function getNuvemshopSupportBaseUrl(lojaText){
         handleDrawerReturnAfterClose(storeLinksOverlay, [storeLinksCloseBtn]);
       });
     }
+    if(storeMessagesCloseBtn){
+      storeMessagesCloseBtn.addEventListener("click", ()=>{
+        if(storeMessagesOverlay) storeMessagesOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(storeMessagesOverlay, [storeMessagesCloseBtn]);
+      });
+    }
+    if(storeMessagesOverlay){
+      storeMessagesOverlay.addEventListener("click", (e)=>{
+        if(e.target !== storeMessagesOverlay) return;
+        storeMessagesOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(storeMessagesOverlay, [storeMessagesCloseBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !storeMessagesOverlay.classList.contains("show")) return;
+        storeMessagesOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(storeMessagesOverlay, [storeMessagesCloseBtn]);
+      });
+    }
+    if(reclameAquiCloseBtn){
+      reclameAquiCloseBtn.addEventListener("click", ()=>{
+        if(reclameAquiOverlay) reclameAquiOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(reclameAquiOverlay, [reclameAquiCloseBtn]);
+      });
+    }
+    if(reclameAquiOverlay){
+      reclameAquiOverlay.addEventListener("click", (e)=>{
+        if(e.target !== reclameAquiOverlay) return;
+        reclameAquiOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(reclameAquiOverlay, [reclameAquiCloseBtn]);
+      });
+      document.addEventListener("keydown", (e)=>{
+        if(e.key !== "Escape" || !reclameAquiOverlay.classList.contains("show")) return;
+        reclameAquiOverlay.classList.remove("show");
+        handleDrawerReturnAfterClose(reclameAquiOverlay, [reclameAquiCloseBtn]);
+      });
+    }
     if(metaInboxCloseBtn){
       metaInboxCloseBtn.addEventListener("click", ()=>{
         if(metaInboxOverlay) metaInboxOverlay.classList.remove("show");
@@ -12654,6 +14130,20 @@ function getNuvemshopSupportBaseUrl(lojaText){
         tryCloseApp();
       });
     }
+    if(storeMessagesBtn){
+      storeMessagesBtn.addEventListener("click", ()=>{
+        if(!storeMessagesOverlay) return;
+        markOverlayForDrawerReturn(storeMessagesOverlay, [storeMessagesCloseBtn]);
+        storeMessagesOverlay.classList.add("show");
+      });
+    }
+    if(reclameAquiBtn){
+      reclameAquiBtn.addEventListener("click", ()=>{
+        if(!reclameAquiOverlay) return;
+        markOverlayForDrawerReturn(reclameAquiOverlay, [reclameAquiCloseBtn]);
+        reclameAquiOverlay.classList.add("show");
+      });
+    }
     if(quickLinkButtons.length){
       quickLinkButtons.forEach((btn)=>{
         btn.addEventListener("click", (e)=>{
@@ -12715,7 +14205,10 @@ function getNuvemshopSupportBaseUrl(lojaText){
         }
       });
       document.addEventListener("keydown", (e)=>{
-        if(e.key === "Escape" && calendarOverlay.classList.contains("show")) closeCalendar();
+        if(e.key === "Escape" && calendarOverlay.classList.contains("show")){
+          if(closeTaskOverlay && closeTaskOverlay.classList.contains("show")) return;
+          closeCalendar();
+        }
       });
     }
     window.addEventListener("resize", ()=>{
@@ -13028,6 +14521,12 @@ function getNuvemshopSupportBaseUrl(lojaText){
       });
     }
     // nav drawer (2 bot\u00f5es)
+    if(navHomeBtn){
+      navHomeBtn.addEventListener("click", ()=>{
+        setView("home");
+        closeDrawer();
+      });
+    }
 navAtalhosBtn.addEventListener("click", ()=>{
   // sempre volta para o buscador
   setView("search");
@@ -13070,6 +14569,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
         setView("search");
       });
     }
+    if(goToHomeBtn){
+      goToHomeBtn.addEventListener("click", ()=>{
+        setView("home");
+      });
+    }
     if(goToTasksBtn){
       goToTasksBtn.addEventListener("click", ()=>{
         tasksTypeFilter = "normal";
@@ -13097,9 +14601,57 @@ navAtalhosBtn.addEventListener("click", ()=>{
         setView("users");
       });
     }
-    if(personalizationsNotifyBtn){
-      personalizationsNotifyBtn.addEventListener("click", ()=>{
-        setView("personalizations");
+    if(homePeriodSelect){
+      homePeriodSelect.addEventListener("change", ()=>{
+        homePeriod = (homePeriodSelect.value || "30d").toString();
+        applyHomeFilter();
+      });
+    }
+    if(homeApplyBtn){
+      homeApplyBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        applyHomeFilter();
+      });
+    }
+    if(homeClearBtn){
+      homeClearBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        homePeriod = "30d";
+        homeCustomFrom = "";
+        homeCustomTo = "";
+        homeStoreFilter = "ALL";
+        homeUserFilter = "ALL";
+        updateHomeFilterUI();
+        renderHomeDashboard();
+      });
+    }
+    if(homeDateFrom){
+      homeDateFrom.addEventListener("change", ()=>{ if(homePeriod === "custom") applyHomeFilter(); });
+    }
+    if(homeDateTo){
+      homeDateTo.addEventListener("change", ()=>{ if(homePeriod === "custom") applyHomeFilter(); });
+    }
+    if(homeStoreSelect){
+      homeStoreSelect.addEventListener("change", ()=>{ applyHomeFilter(); });
+    }
+    if(homeUserSelect){
+      homeUserSelect.addEventListener("change", ()=>{ applyHomeFilter(); });
+    }
+    if(homeUsersRefreshBtn){
+      homeUsersRefreshBtn.addEventListener("click", async () => {
+        if(!canAccessUsersView()) return;
+        homeUsersRefreshBtn.classList.add("isLoading");
+        homeUsersRefreshBtn.disabled = true;
+        await refreshUsersView({ showLoading: true });
+        homeUsersRefreshBtn.disabled = false;
+        homeUsersRefreshBtn.classList.remove("isLoading");
+      });
+    }
+    if(appNotifyBtn){
+      appNotifyBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        openNotifyDrawer();
       });
     }
     function closePauseOverlay(){
@@ -13116,11 +14668,13 @@ navAtalhosBtn.addEventListener("click", ()=>{
       userPauseBtn.addEventListener("click", async (e)=>{
         e.preventDefault();
         e.stopPropagation();
+        requestBrowserNotificationPermission();
         if(currentPauseState){
+          const prevLabel = getPauseLabel(currentPauseState);
           try{
             const result = await apiUserPause("off");
-            setPauseState(result?.pause_state || "", result?.pause_since || 0);
-            logUserAction("pause_end", "");
+            setPauseState(result?.pause_state || "", result?.pause_since || 0, { suppressNotify: true });
+            logUserAction("pause_end", "", { pause_label: prevLabel });
             if(canAccessUsersView()){
               refreshUsersView();
             }
@@ -13145,11 +14699,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(pauseGeneralBtn){
       pauseGeneralBtn.addEventListener("click", async ()=>{
+        requestBrowserNotificationPermission();
         try{
           const result = await apiUserPause("general");
-          setPauseState(result?.pause_state || "", result?.pause_since || 0);
+          setPauseState(result?.pause_state || "", result?.pause_since || 0, { suppressNotify: true });
           closePauseOverlay();
-          logUserAction("pause_general", "");
+          logUserAction("pause_general", "", { pause_label: getPauseLabel(result?.pause_state || "general") });
           if(canAccessUsersView()){
             refreshUsersView();
           }
@@ -13160,11 +14715,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(pauseLunchBtn){
       pauseLunchBtn.addEventListener("click", async ()=>{
+        requestBrowserNotificationPermission();
         try{
           const result = await apiUserPause("lunch");
-          setPauseState(result?.pause_state || "", result?.pause_since || 0);
+          setPauseState(result?.pause_state || "", result?.pause_since || 0, { suppressNotify: true });
           closePauseOverlay();
-          logUserAction("pause_lunch", "");
+          logUserAction("pause_lunch", "", { pause_label: getPauseLabel(result?.pause_state || "lunch") });
           if(canAccessUsersView()){
             refreshUsersView();
           }
@@ -13175,10 +14731,12 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(pauseAlertResumeBtn){
       pauseAlertResumeBtn.addEventListener("click", async ()=>{
+        requestBrowserNotificationPermission();
+        const prevLabel = getPauseLabel(currentPauseState);
         try{
           const result = await apiUserPause("off");
-          setPauseState(result?.pause_state || "", result?.pause_since || 0);
-          logUserAction("pause_end", "");
+          setPauseState(result?.pause_state || "", result?.pause_since || 0, { suppressNotify: true });
+          logUserAction("pause_end", "", { pause_label: prevLabel });
           if(canAccessUsersView()){
             refreshUsersView();
           }
@@ -13206,6 +14764,11 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(personalizationDeleteBtn){
       personalizationDeleteBtn.addEventListener("click", deletePersonalization);
+    }
+    if(personalizationsEditPageBtn){
+      personalizationsEditPageBtn.addEventListener("click", () => {
+        void openPersonalizacaoAdmin();
+      });
     }
     // tasks events (sem senha)
     tasksSaveBtn.addEventListener("click", startTaskPhaseFlow);
@@ -13493,8 +15056,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     if(tasksAllBtn){
       tasksAllBtn.addEventListener("click", ()=>{
-        tasksShowAll = true;
-        renderTasks();
+        tasksShowAll = false;
+        openTasksAllPopup();
       });
     }
     if(tasksSingleBtn){
@@ -14001,7 +15564,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       userProfileAvatarPrev = data.avatar || "";
       setAvatarElements(userProfileAvatarImg, userProfileAvatarFallback, data.name, data.avatar);
     }
-        function openUserProfileOverlay(options){
+    function openUserProfileOverlay(options){
       if(!userProfileOverlay) return;
       userProfileRequired = Boolean(options?.required);
       const data = normalizeUserProfile(userProfile);
@@ -14011,7 +15574,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(userProfileCloseBtn){
         userProfileCloseBtn.style.display = userProfileRequired ? "none" : "inline-flex";
       }
-      if(userProfileStoresBtn) userProfileStoresBtn.style.display = userProfileRequired ? "none" : "inline-flex";
+      if(userProfileStoresBtn) userProfileStoresBtn.style.display = (userProfileRequired || isSecondaryUser()) ? "none" : "inline-flex";
       if(userProfileLogoutBtn) userProfileLogoutBtn.style.display = userProfileRequired ? "none" : "inline-flex";
       if(userProfileSaveBtn) userProfileSaveBtn.style.display = secondaryRequired ? "inline-flex" : (userProfileRequired ? "none" : "inline-flex");
       if(userProfileNextBtn) userProfileNextBtn.style.display = secondaryRequired ? "none" : (userProfileRequired ? "inline-flex" : "none");
@@ -14099,6 +15662,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
         // ignore
       }
       currentUser = null;
+      browserNotifyState = null;
+      stopBrowserNotifications();
       stopActivityTracking();
       stopUsersAutoRefresh();
       storageCache = {};
@@ -14320,19 +15885,45 @@ navAtalhosBtn.addEventListener("click", ()=>{
         mockup_file: (p?.mockup_file || "").toString(),
         stamp_file: (p?.stamp_file || "").toString(),
         preview_file: (p?.preview_file || "").toString(),
+        custom_text: (p?.custom_text || "").toString(),
+        custom_text_font: (p?.custom_text_font || "").toString(),
+        custom_text_font_label: (p?.custom_text_font_label || "").toString(),
+        custom_text_color: (p?.custom_text_color || "").toString(),
+        custom_text_size: (p?.custom_text_size || "").toString(),
+        custom_font_file: (p?.custom_font_file || "").toString(),
+        has_back: Boolean(p?.has_back),
+        mockup_source_back: (p?.mockup_source_back || "").toString(),
+        mockup_file_back: (p?.mockup_file_back || "").toString(),
+        stamp_file_back: (p?.stamp_file_back || "").toString(),
+        preview_file_back: (p?.preview_file_back || "").toString(),
+        custom_text_back: (p?.custom_text_back || "").toString(),
+        custom_text_font_back: (p?.custom_text_font_back || "").toString(),
+        custom_text_font_label_back: (p?.custom_text_font_label_back || "").toString(),
+        custom_text_color_back: (p?.custom_text_color_back || "").toString(),
+        custom_text_size_back: (p?.custom_text_size_back || "").toString(),
+        custom_font_file_back: (p?.custom_font_file_back || "").toString(),
         final_file: (p?.final_file || "").toString(),
         area_w: Number.parseInt(p?.area_w ?? 0, 10) || 0,
         area_h: Number.parseInt(p?.area_h ?? 0, 10) || 0,
         area_x: Number.parseInt(p?.area_x ?? 0, 10) || 0,
         area_y: Number.parseInt(p?.area_y ?? 0, 10) || 0,
+        area_w_back: Number.parseInt(p?.area_w_back ?? 0, 10) || 0,
+        area_h_back: Number.parseInt(p?.area_h_back ?? 0, 10) || 0,
+        area_x_back: Number.parseInt(p?.area_x_back ?? 0, 10) || 0,
+        area_y_back: Number.parseInt(p?.area_y_back ?? 0, 10) || 0,
         stamp_x: Number.parseInt(p?.stamp_x ?? 0, 10) || 0,
         stamp_y: Number.parseInt(p?.stamp_y ?? 0, 10) || 0,
         stamp_w: Number.parseInt(p?.stamp_w ?? 0, 10) || 0,
         stamp_h: Number.parseInt(p?.stamp_h ?? 0, 10) || 0,
+        stamp_x_back: Number.parseInt(p?.stamp_x_back ?? 0, 10) || 0,
+        stamp_y_back: Number.parseInt(p?.stamp_y_back ?? 0, 10) || 0,
+        stamp_w_back: Number.parseInt(p?.stamp_w_back ?? 0, 10) || 0,
+        stamp_h_back: Number.parseInt(p?.stamp_h_back ?? 0, 10) || 0,
         customer_name: (p?.customer_name || "").toString(),
         customer_email: (p?.customer_email || "").toString(),
         customer_phone: (p?.customer_phone || "").toString(),
         customer_notes: (p?.customer_notes || "").toString(),
+        stage_status: (p?.stage_status || "").toString(),
         viewed: Boolean(p?.viewed),
         status: ((p?.status || "").toString() || "aberta"),
         created_at: (p?.created_at || "").toString(),
@@ -14358,6 +15949,8 @@ navAtalhosBtn.addEventListener("click", ()=>{
         personalizations = loadPersonalizations();
         updatePersonalizationsBadges();
         renderPersonalizations();
+        if(currentView === "home") renderHomeDashboard();
+        notifyNewPersonalizations();
       }catch(e){
         // Mantem a lista atual se falhar o refresh.
       }
@@ -14383,6 +15976,13 @@ navAtalhosBtn.addEventListener("click", ()=>{
         updateTaskCountBadges();
         if(currentView === "tasks") renderTasks();
         if(currentView === "done") renderDoneTasks();
+        if(currentView === "home"){
+          updateHomeFilterUI();
+          renderHomeDashboard();
+        }
+        notifyNewExtraTasks();
+        checkDailyTaskReminder();
+        checkDeadlineNotifications();
       }catch(e){
         // Mantem a lista atual se falhar o refresh.
       }
@@ -14393,15 +15993,791 @@ navAtalhosBtn.addEventListener("click", ()=>{
       updatePersonalizationsBadges();
       renderPersonalizations();
     }
+    async function openPersonalizacaoAdmin(){
+      const list = Array.isArray(stores) ? stores : [];
+      if(!list.length){
+        showAlert("Nenhuma loja cadastrada.");
+        return;
+      }
+      if(list.length === 1){
+        const store = list[0];
+        const storeId = store.personalizacaoId || store.name || "";
+        const url = buildPersonalizacaoAdminLink(storeId);
+        if(!url){
+          showAlert("Loja sem identificador.");
+          return;
+        }
+        window.open(url, "_blank");
+        return;
+      }
+      const options = list.map(s => {
+        const label = (s.name || s.personalizacaoId || "").toString().trim();
+        const value = (s.personalizacaoId || s.name || "").toString().trim();
+        if(!label || !value) return null;
+        return { label, value };
+      }).filter(Boolean);
+      const entry = await showSelectPrompt({ title: "Editar página", items: options, placeholder: "Selecione a loja" });
+      const chosen = (entry || "").toString().trim();
+      if(!chosen) return;
+      const store = list.find(s => {
+        const name = (s.name || "").toString().trim();
+        const custom = (s.personalizacaoId || "").toString().trim();
+        return name === chosen || custom === chosen;
+      });
+      if(!store){
+        showAlert("Loja não encontrada.");
+        return;
+      }
+      const storeId = store.personalizacaoId || store.name || "";
+      const url = buildPersonalizacaoAdminLink(storeId);
+      if(!url){
+        showAlert("Loja sem identificador.");
+        return;
+      }
+      window.open(url, "_blank");
+    }
+    function updatePersonalizationStage(id, stage){
+      const list = (personalizations || []).slice();
+      const idx = list.findIndex(item => String(item.id || "") === String(id || ""));
+      if(idx < 0) return;
+      list[idx] = {
+        ...list[idx],
+        stage_status: (stage || "").toString(),
+        updated_at: new Date().toISOString()
+      };
+      savePersonalizations(list);
+    }
+    function normalizeNotifications(list){
+      if(!Array.isArray(list)) return [];
+      const cleaned = list.map((item) => {
+        const it = item && typeof item === "object" ? item : {};
+        return {
+          id: (it.id || "").toString(),
+          type: (it.type || "").toString(),
+          title: (it.title || "").toString(),
+          detail: (it.detail || "").toString(),
+          created_at: (it.created_at || "").toString(),
+          seen: Boolean(it.seen),
+          seen_at: (it.seen_at || "").toString(),
+          customer_name: (it.customer_name || "").toString(),
+          store_name: (it.store_name || "").toString(),
+          task_id: (it.task_id || "").toString(),
+          is_extra: Boolean(it.is_extra),
+          by_name: (it.by_name || "").toString(),
+          target_user_id: (it.target_user_id || "").toString()
+        };
+      }).filter(it => it.id);
+      cleaned.sort((a, b) => {
+        if(a.created_at === b.created_at) return 0;
+        return a.created_at > b.created_at ? -1 : 1;
+      });
+      return cleaned;
+    }
+    function pruneNotifications(list){
+      const now = Date.now();
+      const cutoffMs = 24 * 60 * 60 * 1000;
+      let pruned = false;
+      const kept = list.filter((n) => {
+        if(!n.seen) return true;
+        const base = n.seen_at || n.created_at;
+        if(!base) return true;
+        const ts = Date.parse(base);
+        if(Number.isNaN(ts)) return true;
+        const keep = (now - ts) <= cutoffMs;
+        if(!keep) pruned = true;
+        return keep;
+      });
+      return { list: kept, pruned };
+    }
+    function getNotificationsStorageKey(){
+      return isSecondaryUser() ? STORAGE_KEY_NOTIFICATIONS_SHARED : STORAGE_KEY_NOTIFICATIONS;
+    }
+    function getVisibleNotifications(list){
+      const base = Array.isArray(list) ? list : [];
+      if(!isSecondaryUser()) return base;
+      const currentId = String(currentUser?.id || "");
+      return base.filter(n => (n.target_user_id || "").toString() === currentId);
+    }
+    function loadNotifications(){
+      const raw = storageGet(getNotificationsStorageKey());
+      const parsed = safeJsonParse(raw);
+      if(Array.isArray(parsed)) return normalizeNotifications(parsed);
+      return [];
+    }
+    function saveNotifications(next){
+      notifications = normalizeNotifications(next);
+      storageSet(getNotificationsStorageKey(), JSON.stringify(notifications));
+      updateNotificationsBadge();
+      renderNotifications();
+    }
+    function canSeeNotifications(){
+      return isPrincipalUser() || isAdminUser() || isSecondaryUser();
+    }
+    function updateNotificationsBadge(){
+      if(!appNotifyBadge) return;
+      if(!canSeeNotifications()){
+        appNotifyBadge.textContent = "0";
+        appNotifyBadge.style.display = "none";
+        return;
+      }
+      const unread = getVisibleNotifications(notifications).filter(n => !n.seen).length;
+      appNotifyBadge.textContent = String(unread);
+      appNotifyBadge.style.display = unread ? "inline-flex" : "none";
+    }
+    function markAllNotificationsSeen(){
+      const list = getVisibleNotifications(notifications);
+      let changed = false;
+      const nowIso = new Date().toISOString();
+      notifications = (notifications || []).map((n) => {
+        if(!isSecondaryUser()){
+          if(!n.seen){
+            changed = true;
+            return { ...n, seen: true, seen_at: nowIso };
+          }
+          return n;
+        }
+        const isVisible = (n.target_user_id || "").toString() === String(currentUser?.id || "");
+        if(isVisible && !n.seen){
+          changed = true;
+          return { ...n, seen: true, seen_at: nowIso };
+        }
+        return n;
+      });
+      if(changed){
+        saveNotifications(notifications);
+      }
+    }
+    function markNotificationRead(id){
+      const target = (id || "").toString();
+      if(!target) return;
+      const list = Array.isArray(notifications) ? notifications.slice() : [];
+      const idx = list.findIndex(n => String(n.id || "") === target);
+      if(idx < 0 || list[idx].seen) return;
+      if(isSecondaryUser()){
+        const currentId = String(currentUser?.id || "");
+        const targetId = (list[idx].target_user_id || "").toString();
+        if(targetId && targetId !== currentId) return;
+      }
+      list[idx] = { ...list[idx], seen: true, seen_at: new Date().toISOString() };
+      saveNotifications(list);
+    }
+    function parseNotificationDetail(detail){
+      const text = (detail || "").toString();
+      const customerMatch = text.match(/Cliente:\s*([^|-]+)/i);
+      const storeMatch = text.match(/Loja:\s*([^|-]+)/i);
+      return {
+        customer: customerMatch ? customerMatch[1].trim() : "",
+        store: storeMatch ? storeMatch[1].trim() : ""
+      };
+    }
+    function renderNotifications(){
+      if(!notifyList) return;
+      if(!canSeeNotifications()){
+        notifyList.innerHTML = `<div class="notifyEmpty">Nenhuma mensagem para este usu&aacute;rio.</div>`;
+        return;
+      }
+      const baseList = getVisibleNotifications(notifications);
+      const pruned = pruneNotifications(baseList);
+      if(pruned.pruned){
+        saveNotifications(pruned.list);
+        return;
+      }
+      const list = pruned.list;
+      if(!list.length){
+        notifyList.innerHTML = `<div class="notifyEmpty">Nenhuma mensagem recebida.</div>`;
+        return;
+      }
+      notifyList.innerHTML = list.map((n) => {
+        const title = n.title || "Mensagem";
+        const detail = n.detail || "";
+        const parsed = parseNotificationDetail(detail);
+        const customer = n.customer_name || parsed.customer || "";
+        const store = n.store_name || parsed.store || "";
+        const created = n.created_at ? formatDateTimeBR(n.created_at) : "";
+        const author = (n.by_name || "").toString().trim();
+        const canOpen = Boolean(n.task_id) && (n.type === "task_create" || n.type === "task_extra_create");
+        const classes = `notifyItem${n.seen ? "" : " isUnread"}`;
+        const actionAttr = canOpen ? `data-notify-task-id="${escapeHtml(n.task_id)}" data-notify-is-extra="${n.is_extra ? "1" : "0"}"` : "";
+        const line1 = customer || title;
+        const line2 = store || detail;
+        return `
+          <button class="${classes}" type="button" data-notify-id="${escapeHtml(n.id)}" ${actionAttr}>
+            <div class="notifyItemTitle">${escapeHtml(title)}</div>
+            <div class="notifyDivider"></div>
+            <div class="notifyItemBody">
+              <div class="notifyLine">${escapeHtml(line1)}</div>
+              <div class="notifyDivider"></div>
+              <div class="notifyLine">${escapeHtml(line2)}</div>
+              ${author ? `<div class="notifyDivider"></div><div class="notifyLine">Autor: ${escapeHtml(author)}</div>` : ""}
+              <div class="notifyDivider"></div>
+              <div class="notifyLine">${escapeHtml(created)}</div>
+            </div>
+          </button>
+        `;
+      }).join("");
+      notifyList.querySelectorAll("[data-notify-id]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const notifyId = (btn.getAttribute("data-notify-id") || "").toString();
+          markNotificationRead(notifyId);
+          const taskId = (btn.getAttribute("data-notify-task-id") || "").toString().trim();
+          if(taskId){
+            const isExtra = (btn.getAttribute("data-notify-is-extra") || "") === "1";
+            openTaskFromActivity(taskId, isExtra);
+          }
+        });
+      });
+    }
+    function getHomeBucketLabel(date){
+      return formatDateBR(date.toISOString().slice(0, 10));
+    }
+    function buildHomeBuckets(start, end){
+      const dayMs = 24 * 60 * 60 * 1000;
+      const days = Math.floor((end.getTime() - start.getTime()) / dayMs) + 1;
+      const buckets = [];
+      if(days > 31){
+        let cursor = new Date(start.getTime());
+        while(cursor.getTime() <= end.getTime()){
+          const bucketStart = new Date(cursor.getTime());
+          const bucketEnd = new Date(Math.min(bucketStart.getTime() + (6 * dayMs), end.getTime()));
+          const key = `${bucketStart.toISOString().slice(0, 10)}_${bucketEnd.toISOString().slice(0, 10)}`;
+          buckets.push({
+            key,
+            label: `${getHomeBucketLabel(bucketStart)}-${getHomeBucketLabel(bucketEnd)}`,
+            start: bucketStart,
+            end: bucketEnd
+          });
+          cursor = new Date(bucketEnd.getTime() + dayMs);
+        }
+        return buckets;
+      }
+      for(let i = 0; i < days; i++){
+        const d = new Date(start.getTime() + (i * dayMs));
+        const key = d.toISOString().slice(0, 10);
+        buckets.push({
+          key,
+          label: getHomeBucketLabel(d),
+          start: d,
+          end: d
+        });
+      }
+      return buckets;
+    }
+    function getHomeChartScale(maxValue){
+      const steps = 4;
+      if(!maxValue || maxValue < 1){
+        return { top: 1, step: 1, steps };
+      }
+      const rawStep = maxValue / steps;
+      const pow = Math.pow(10, Math.floor(Math.log10(rawStep)));
+      const base = rawStep / pow;
+      const niceBase = base <= 1 ? 1 : base <= 2 ? 2 : base <= 5 ? 5 : 10;
+      let step = niceBase * pow;
+      if(step < 1) step = 1;
+      const top = step * steps;
+      return { top, step, steps };
+    }
+    function getHomeAxisStep(itemsLength){
+      if(itemsLength <= 14) return 1;
+      if(itemsLength <= 28) return 2;
+      return Math.max(1, Math.ceil(itemsLength / 6));
+    }
+    function buildHomeAxisLabels(items, step){
+      return items.map((item, idx) => {
+        const showLabel = idx % step === 0 || idx === items.length - 1;
+        const label = showLabel ? escapeHtml(item.label) : "";
+        const emptyClass = showLabel ? "" : " isEmpty";
+        return `<div class="homeChartAxisLabel${emptyClass}">${label}</div>`;
+      }).join("");
+    }
+    function buildHomeYAxis(scale){
+      const labels = [];
+      for(let i = scale.steps; i >= 0; i--){
+        labels.push(`<div class="homeChartYAxisLabel">${formatNumber(scale.step * i)}</div>`);
+      }
+      return labels.join("");
+    }
+    function buildHomeGridLines(count){
+      const lines = [];
+      for(let i = 0; i <= count; i++){
+        lines.push("<span></span>");
+      }
+      return `<div class="homeChartGrid">${lines.join("")}</div>`;
+    }
+    function buildHomeChart(items, barClass){
+      const visibleItems = items.filter(item => Number(item.count || 0) > 0);
+      if(!visibleItems.length) return `<div class="muted">Sem dados no per&iacute;odo.</div>`;
+      const max = Math.max(...items.map(i => i.count), 1);
+      const scale = getHomeChartScale(max);
+      const step = getHomeAxisStep(visibleItems.length);
+      const bars = visibleItems.map((item) => {
+        const height = Math.max(2, Math.round((item.count / scale.top) * 100));
+        const title = `${item.label}: ${item.count}`;
+        const barClasses = ["homeChartBar", barClass || ""].filter(Boolean).join(" ");
+        return `
+          <div class="homeChartGroup" title="${escapeHtml(title)}">
+            <div class="${barClasses}" style="height:${height}%"></div>
+          </div>
+        `;
+      }).join("");
+      const labels = buildHomeAxisLabels(visibleItems, step);
+      return `
+        <div class="homeChartLayout">
+          <div class="homeChartYAxis">${buildHomeYAxis(scale)}</div>
+          <div class="homeChartBars">
+            ${buildHomeGridLines(scale.steps)}
+            ${bars}
+          </div>
+          <div class="homeChartAxis">
+            <div class="homeChartAxisLabels">${labels}</div>
+          </div>
+        </div>
+      `;
+    }
+    function buildHomeDualChart(createdItems, closedItems){
+      if(!createdItems.length) return `<div class="muted">Sem dados no per&iacute;odo.</div>`;
+      const merged = createdItems.map((item, idx) => ({
+        label: item.label,
+        created: Number(item.count || 0),
+        closed: Number((closedItems[idx] || {}).count || 0)
+      }));
+      const visibleItems = merged.filter(item => item.created > 0 || item.closed > 0);
+      if(!visibleItems.length) return `<div class="muted">Sem dados no per&iacute;odo.</div>`;
+      const max = Math.max(
+        ...createdItems.map(i => i.count),
+        ...closedItems.map(i => i.count),
+        1
+      );
+      const scale = getHomeChartScale(max);
+      const step = getHomeAxisStep(visibleItems.length);
+      const bars = visibleItems.map((item) => {
+        const createdHeight = Math.max(2, Math.round((item.created / scale.top) * 100));
+        const closedHeight = Math.max(2, Math.round((item.closed / scale.top) * 100));
+        const title = `${item.label}: criadas ${item.created} | encerradas ${item.closed}`;
+        return `
+          <div class="homeChartGroup" title="${escapeHtml(title)}">
+            <div class="homeChartBar isCreated" style="height:${createdHeight}%"></div>
+            <div class="homeChartBar isClosed" style="height:${closedHeight}%"></div>
+          </div>
+        `;
+      }).join("");
+      const labels = buildHomeAxisLabels(visibleItems, step);
+      return `
+        <div class="homeChartLayout">
+          <div class="homeChartYAxis">${buildHomeYAxis(scale)}</div>
+          <div class="homeChartBars">
+            ${buildHomeGridLines(scale.steps)}
+            ${bars}
+          </div>
+          <div class="homeChartAxis">
+            <div class="homeChartAxisLabels">${labels}</div>
+          </div>
+        </div>
+      `;
+    }
+    function getTaskStoreLabel(task){
+      return (task?.loja || task?.store || task?.store_name || task?.storeName || "").toString().trim();
+    }
+    function getTaskUserLabel(task){
+      return (task?.created_by_username || task?.createdByUsername || task?.created_by_name || task?.createdByName || "").toString().trim();
+    }
+    function buildHomeBarList(items){
+      if(!items.length) return `<div class="muted">Sem dados no per&iacute;odo.</div>`;
+      const max = Math.max(...items.map(i => i.count), 1);
+      return items.map((item) => {
+        const width = Math.round((item.count / max) * 100);
+        return `
+          <div class="homeBarItem">
+            <div class="homeBarRow">
+              <span>${escapeHtml(item.label)}</span>
+              <strong>${item.count}</strong>
+            </div>
+            <div class="homeBarTrack">
+              <div class="homeBarFill" style="width:${width}%;"></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+    function renderHomeDashboard(){
+      if(currentView !== "home") return;
+      if(!homeKpiGrid || !homeTasksNormalChart || !homeTasksExtraChart || !homePersonalizationsChart) return;
+      const range = getHomeRange();
+      const storeFilter = (homeStoreFilter || "ALL").toString().trim();
+      const userFilter = (homeUserFilter || "ALL").toString().trim();
+      if(homePeriodTopLabel){
+        const parts = [
+          `${formatDateBR(range.start.toISOString().slice(0,10))} - ${formatDateBR(range.end.toISOString().slice(0,10))}`
+        ];
+        if(storeFilter && storeFilter !== "ALL") parts.push(`Loja: ${storeFilter}`);
+        if(userFilter && userFilter !== "ALL") parts.push(`Usuario: ${userFilter}`);
+        homePeriodTopLabel.textContent = parts.join(" | ");
+      }
+      const doneList = Array.isArray(tasksDone) ? tasksDone : [];
+      const openTasks = Array.isArray(tasks) ? tasks : [];
+      const persList = Array.isArray(personalizations) ? personalizations : [];
+      const filterByStore = (store) => !storeFilter || storeFilter === "ALL" || store === storeFilter;
+      const filterByUser = (task) => {
+        if(!userFilter || userFilter === "ALL") return true;
+        const createdBy = (task?.created_by_username || task?.createdByUsername || "").toString().trim();
+        const closedBy = (task?.closed_by_username || "").toString().trim();
+        return createdBy === userFilter || closedBy === userFilter;
+      };
+      const doneInRange = doneList.filter(t => {
+        const ts = Date.parse((t.closedAt || t.updatedAt || t.createdAt || "").toString()) || 0;
+        if(!isWithinRange(ts, range.start, range.end)) return false;
+        if(!filterByStore(getTaskStoreLabel(t))) return false;
+        if(!filterByUser(t)) return false;
+        return true;
+      });
+      const openInRange = openTasks.filter(t => {
+        const ts = Date.parse((t.createdAt || t.updatedAt || "").toString()) || 0;
+        if(!isWithinRange(ts, range.start, range.end)) return false;
+        if(!filterByStore(getTaskStoreLabel(t))) return false;
+        if(!filterByUser(t)) return false;
+        return true;
+      });
+      const createdInRange = openTasks.concat(doneList).filter(t => {
+        const ts = Date.parse((t.createdAt || t.updatedAt || "").toString()) || 0;
+        if(!isWithinRange(ts, range.start, range.end)) return false;
+        if(!filterByStore(getTaskStoreLabel(t))) return false;
+        if(!filterByUser(t)) return false;
+        return true;
+      });
+      const openAllFiltered = openTasks.filter(t => {
+        if(!filterByStore(getTaskStoreLabel(t))) return false;
+        if(!filterByUser(t)) return false;
+        return true;
+      });
+      const doneExtra = doneInRange.filter(t => t && (t.isExtra || t.extra)).length;
+      const openExtra = openAllFiltered.filter(t => t && (t.isExtra || t.extra)).length;
+      const persInRange = persList.filter(p => {
+        const ts = getPersonalizationTimestamp(p);
+        if(!isWithinRange(ts, range.start, range.end)) return false;
+        if(!filterByStore((p?.store_name || "").toString().trim())) return false;
+        return true;
+      });
+      const allTasks = openAllFiltered.concat(doneInRange);
+      const tasksForDistribution = allTasks.filter(t => {
+        const createdBy = getTaskUserLabel(t);
+        const closedBy = (t?.closed_by_username || "").toString().trim();
+        return Boolean(createdBy || closedBy);
+      });
+      const swapCounts = new Map();
+      let swapTotal = 0;
+      allTasks.forEach((task) => {
+        const phases = Array.isArray(task?.obs) ? task.obs : [];
+        phases.forEach((phase) => {
+          const status = (phase?.status || "").toString().toLowerCase();
+          if(!status.includes("troca")) return;
+          const dateRaw = (phase?.prazo || phase?.date || "").toString().trim();
+          const dateObj = parseIsoDate(dateRaw);
+          if(!dateObj) return;
+          if(!isWithinRange(dateObj.getTime(), range.start, range.end)) return;
+          swapTotal += 1;
+          const sizeFrom = (phase?.sizeFrom || phase?.size_original || "").toString().trim();
+          const sizeTo = (phase?.sizeTo || phase?.size_exchange || "").toString().trim();
+          let sizeKey = "";
+          if(sizeFrom && sizeTo){
+            sizeKey = `${sizeFrom} → ${sizeTo}`;
+          }else if(sizeFrom){
+            sizeKey = `${sizeFrom} → ?`;
+          }else if(sizeTo){
+            sizeKey = `? → ${sizeTo}`;
+          }
+          if(!sizeKey) return;
+          swapCounts.set(sizeKey, (swapCounts.get(sizeKey) || 0) + 1);
+        });
+      });
+      const swapList = Array.from(swapCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+      if(homeSwapsCount) homeSwapsCount.textContent = `${swapTotal} troca(s)`;
+      if(homeSwapList){
+        homeSwapList.innerHTML = swapList.length
+          ? swapList.map(([label, count]) => `
+              <div class="homeSwapItem">
+                <span>${escapeHtml(label)}</span>
+                <strong>${count}</strong>
+              </div>
+            `).join("")
+          : `<div class="muted">Nenhuma troca no per&iacute;odo.</div>`;
+      }
+      if(homeKpiGrid){
+        const kpis = [
+          { label: "Tarefas criadas no período", value: createdInRange.length },
+          { label: "Tarefas encerradas", value: doneInRange.length },
+          { label: "Tarefas extras encerradas", value: doneExtra },
+          { label: "Tarefas abertas", value: openAllFiltered.length },
+          { label: "Tarefas extras abertas", value: openExtra },
+          { label: "Personalizações no período", value: persInRange.length },
+          { label: "Trocas no período", value: swapTotal }
+        ];
+        homeKpiGrid.innerHTML = kpis.map(k => `
+          <div class="homeKpiItem">
+            <div class="homeKpiLabel">${escapeHtml(k.label)}</div>
+            <div class="homeKpiValue">${escapeHtml(String(k.value))}</div>
+          </div>
+        `).join("");
+      }
+      const buckets = buildHomeBuckets(range.start, range.end);
+      const normalDoneByBucket = buckets.map((b) => {
+        const count = doneInRange.filter(t => {
+          const ts = Date.parse((t.closedAt || t.updatedAt || t.createdAt || "").toString()) || 0;
+          if(!isWithinRange(ts, b.start, b.end)) return false;
+          return !(t.isExtra || t.extra);
+        }).length;
+        return { label: b.label, count };
+      });
+      const normalCreatedByBucket = buckets.map((b) => {
+        const count = createdInRange.filter(t => {
+          const ts = Date.parse((t.createdAt || t.updatedAt || "").toString()) || 0;
+          if(!isWithinRange(ts, b.start, b.end)) return false;
+          return !(t.isExtra || t.extra);
+        }).length;
+        return { label: b.label, count };
+      });
+      const extraDoneByBucket = buckets.map((b) => {
+        const count = doneInRange.filter(t => {
+          const ts = Date.parse((t.closedAt || t.updatedAt || t.createdAt || "").toString()) || 0;
+          if(!isWithinRange(ts, b.start, b.end)) return false;
+          return Boolean(t?.isExtra || t?.extra);
+        }).length;
+        return { label: b.label, count };
+      });
+      const extraCreatedByBucket = buckets.map((b) => {
+        const count = createdInRange.filter(t => {
+          const ts = Date.parse((t.createdAt || t.updatedAt || "").toString()) || 0;
+          if(!isWithinRange(ts, b.start, b.end)) return false;
+          return Boolean(t?.isExtra || t?.extra);
+        }).length;
+        return { label: b.label, count };
+      });
+      const persByBucket = buckets.map((b) => {
+        const count = persInRange.filter(p => {
+          const ts = getPersonalizationTimestamp(p);
+          return isWithinRange(ts, b.start, b.end);
+        }).length;
+        return { label: b.label, count };
+      });
+      homeTasksNormalChart.innerHTML = buildHomeDualChart(normalCreatedByBucket, normalDoneByBucket);
+      homeTasksExtraChart.innerHTML = buildHomeDualChart(extraCreatedByBucket, extraDoneByBucket);
+      homePersonalizationsChart.innerHTML = buildHomeChart(persByBucket, "isPersonalization");
+      if(homeStatusList){
+        const statusMap = new Map();
+        tasksForDistribution.forEach((t) => {
+          const status = (getEffectivePhaseStatus(t) || t.status || t.assunto || "Sem status").toString().trim() || "Sem status";
+          statusMap.set(status, (statusMap.get(status) || 0) + 1);
+        });
+        const statusItems = Array.from(statusMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([label, count]) => ({ label, count }));
+        homeStatusList.innerHTML = buildHomeBarList(statusItems);
+      }
+      if(homeStoreList){
+        const storeMap = new Map();
+        tasksForDistribution.forEach((t) => {
+          const store = getTaskStoreLabel(t) || "Sem loja";
+          storeMap.set(store, (storeMap.get(store) || 0) + 1);
+        });
+        const storeItems = Array.from(storeMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, count]) => ({ label, count }));
+        homeStoreList.innerHTML = buildHomeBarList(storeItems);
+      }
+      if(homePersonalizationStoreList){
+        const persStoreMap = new Map();
+        persInRange.forEach((p) => {
+          const store = (p?.store_name || "Sem loja").toString().trim() || "Sem loja";
+          persStoreMap.set(store, (persStoreMap.get(store) || 0) + 1);
+        });
+        const persStoreItems = Array.from(persStoreMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, count]) => ({ label, count }));
+        homePersonalizationStoreList.innerHTML = buildHomeBarList(persStoreItems);
+      }
+      if(homeUserClosedList){
+        const closedMap = new Map();
+        doneInRange.forEach((t) => {
+          const name = (t?.closed_by_username || "").toString().trim();
+          if(!name) return;
+          closedMap.set(name, (closedMap.get(name) || 0) + 1);
+        });
+        const closedItems = Array.from(closedMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, count]) => ({ label, count }));
+        homeUserClosedList.innerHTML = buildHomeBarList(closedItems);
+      }
+      if(homeUsersList){
+        if(!canAccessUsersView()){
+          homeUsersSummary.textContent = "";
+          homeUsersList.innerHTML = `<div class="muted">Acesso restrito.</div>`;
+        }else{
+          let users = getHomeVisibleUsers();
+          if(userFilter && userFilter !== "ALL"){
+            users = users.filter(u => (u?.username || "").toString().trim() === userFilter);
+          }
+          homeUsersSummary.textContent = `${users.length} usuário(s)`;
+          if(!users.length){
+            homeUsersList.innerHTML = `<div class="muted">Nenhum usu&aacute;rio encontrado.</div>`;
+          }else{
+            const activityDay = todayISO();
+            void refreshHomeActivityMetrics(users, activityDay);
+            homeUsersList.innerHTML = users.map(u => {
+              const username = (u?.username || "").toString().trim() || "-";
+              const presence = getUserPresenceInfo(u);
+              const lastActive = formatDateTimeFromTs(u?.last_active_at || 0);
+              const activityEntry = getHomeActivityCacheEntry(u?.id, activityDay);
+              const activityMetrics = activityEntry ? activityEntry.metrics : undefined;
+              const hasMetrics = activityEntry && activityMetrics;
+              const pendingLabel = activityEntry ? "Sem dados" : "Carregando...";
+              const workLabel = hasMetrics ? formatDuration(activityMetrics.workSeconds) : pendingLabel;
+              const createdLabel = hasMetrics ? String(activityMetrics.tasksCreatedCount) : pendingLabel;
+              const closedLabel = hasMetrics ? String(activityMetrics.tasksClosedCount) : pendingLabel;
+              return `
+                <div class="homeUserItem">
+                  <div class="homeUserMeta">
+                    <div class="homeUserTitle">${escapeHtml(username)}</div>
+                    <div class="homeUserSub">${escapeHtml(presence.presenceLabel)} &bull; &Uacute;ltimo ativo: ${escapeHtml(lastActive)}</div>
+                    <div class="homeUserStats">
+                      <span>Tarefas inseridas: ${escapeHtml(createdLabel)}</span>
+                      <span>Tarefas encerradas: ${escapeHtml(closedLabel)}</span>
+                      <span>Horas: ${escapeHtml(workLabel)}</span>
+                    </div>
+                  </div>
+                  <div class="homeUserActions">
+                  <button class="homeUserSummaryBtn" type="button" data-user-activity="${escapeHtml(String(u?.id || ""))}" data-user-name="${escapeHtml(username)}" title="Resumo de atividades" aria-label="Resumo de atividades">
+                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                      <line x1="6" y1="7" x2="20" y2="7"></line>
+                      <line x1="6" y1="12" x2="20" y2="12"></line>
+                      <line x1="6" y1="17" x2="20" y2="17"></line>
+                      <circle cx="4" cy="7" r="1"></circle>
+                      <circle cx="4" cy="12" r="1"></circle>
+                      <circle cx="4" cy="17" r="1"></circle>
+                    </svg>
+                  </button>
+                  <div class="userPresence ${presence.presenceClass}" title="${presence.presenceLabel}" aria-label="${presence.presenceLabel}"></div>
+                </div>
+              </div>
+              `;
+            }).join("");
+            if(homeUsersList.dataset.bound !== "1"){
+              homeUsersList.addEventListener("click", (e)=>{
+                const btn = e.target.closest("[data-user-activity]");
+                if(!btn) return;
+                const id = (btn.getAttribute("data-user-activity") || "").toString().trim();
+                const name = (btn.getAttribute("data-user-name") || "").toString().trim();
+                if(id) openUserActivity(id, name);
+              });
+              homeUsersList.dataset.bound = "1";
+            }
+          }
+        }
+      }
+    }
+    function updateHomeFilterUI(){
+      if(!homePeriodSelect) return;
+      homePeriodSelect.value = homePeriod;
+      const today = new Date(`${todayISO()}T00:00:00`);
+      const minDate = new Date(today.getTime() - (90 * 24 * 60 * 60 * 1000));
+      const minIso = minDate.toISOString().slice(0, 10);
+      const maxIso = today.toISOString().slice(0, 10);
+      if(homeDateFrom) homeDateFrom.min = minIso;
+      if(homeDateTo) homeDateTo.min = minIso;
+      if(homeDateFrom) homeDateFrom.max = maxIso;
+      if(homeDateTo) homeDateTo.max = maxIso;
+      if(homeCustomRange){
+        homeCustomRange.style.display = homePeriod === "custom" ? "flex" : "none";
+      }
+      if(homePeriod === "custom"){
+        if(homeDateFrom && homeCustomFrom) homeDateFrom.value = homeCustomFrom;
+        if(homeDateTo && homeCustomTo) homeDateTo.value = homeCustomTo;
+      }
+      if(homeStoreSelect){
+        const storeOptions = ['<option value="ALL">Todas as lojas</option>']
+          .concat(getStoreNames().map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
+        homeStoreSelect.innerHTML = storeOptions.join("");
+        homeStoreSelect.value = homeStoreFilter || "ALL";
+      }
+      if(homeUserSelect){
+        const showLoading = usersLoadingForced || ((usersLoading || !usersLoaded || Date.now() < usersLoadingMinUntil) && (!Array.isArray(usersCache) || usersCache.length === 0));
+        if(homeUsersLoading){
+          homeUsersLoading.hidden = !showLoading;
+        }
+        if(showLoading){
+          homeUserSelect.innerHTML = '<option value="ALL">Carregando usu\u00e1rios...</option>';
+          homeUserSelect.value = "ALL";
+          homeUserSelect.disabled = true;
+          return;
+        }
+        homeUserSelect.disabled = false;
+        const users = new Set();
+        const visibleUsers = getHomeVisibleUsers();
+        visibleUsers.forEach(u => {
+          const name = (u?.username || "").toString().trim();
+          if(name) users.add(name);
+        });
+        const options = ['<option value="ALL">Todos os usuários</option>']
+          .concat(Array.from(users).sort((a, b) => a.localeCompare(b)).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
+        homeUserSelect.innerHTML = options.join("");
+        homeUserSelect.value = homeUserFilter || "ALL";
+      }
+    }
+    function applyHomeFilter(){
+      if(homePeriodSelect){
+        homePeriod = (homePeriodSelect.value || "30d").toString();
+      }
+      if(homeStoreSelect){
+        homeStoreFilter = (homeStoreSelect.value || "ALL").toString();
+      }
+      if(homeUserSelect){
+        homeUserFilter = (homeUserSelect.value || "ALL").toString();
+      }
+      if(homePeriod === "custom"){
+        homeCustomFrom = (homeDateFrom?.value || "").toString().trim();
+        homeCustomTo = (homeDateTo?.value || "").toString().trim();
+        if(!homeCustomFrom || !homeCustomTo){
+          const today = new Date(`${todayISO()}T00:00:00`);
+          const defaultStart = new Date(today.getTime() - (29 * 24 * 60 * 60 * 1000));
+          homeCustomFrom = homeCustomFrom || defaultStart.toISOString().slice(0, 10);
+          homeCustomTo = homeCustomTo || today.toISOString().slice(0, 10);
+        }
+        const fromDate = parseIsoDate(homeCustomFrom);
+        const toDate = parseIsoDate(homeCustomTo);
+        const clamped = clampHomeRange(fromDate, toDate);
+        homeCustomFrom = clamped.start.toISOString().slice(0, 10);
+        homeCustomTo = clamped.end.toISOString().slice(0, 10);
+        if(homeDateFrom) homeDateFrom.value = homeCustomFrom;
+        if(homeDateTo) homeDateTo.value = homeCustomTo;
+      }
+      updateHomeFilterUI();
+      renderHomeDashboard();
+    }
+    async function refreshNotificationsFromServer(){
+      if(!canSeeNotifications()) return false;
+      try{
+        const key = getNotificationsStorageKey();
+        const result = await apiRequest(`${API_BASE}/storage.php`, {
+          action: "get",
+          keys: [key]
+        });
+        if(result?.data && Object.prototype.hasOwnProperty.call(result.data, key)){
+          const nextValue = (result.data[key] ?? "").toString();
+          storageCache[key] = nextValue;
+        }
+        notifications = loadNotifications();
+        updateNotificationsBadge();
+        renderNotifications();
+        return true;
+      }catch(e){
+        return false;
+      }
+    }
     function updatePersonalizationsBadges(){
       const count = (personalizations || []).length;
       if(personalizationsCountBadge){
         personalizationsCountBadge.textContent = String(count);
         personalizationsCountBadge.style.display = count ? "inline-flex" : "none";
-      }
-      if(personalizationsNotifyBadge){
-        personalizationsNotifyBadge.textContent = String(count);
-        personalizationsNotifyBadge.style.display = count ? "inline-flex" : "none";
       }
     }
     function getPersonalizationById(id){
@@ -14452,13 +16828,16 @@ navAtalhosBtn.addEventListener("click", ()=>{
         const storeLabel = (p.store_name || "-").toString().trim() || "-";
         const colorLabel = (p.color || "").toString().trim();
         const isNew = !p.viewed;
-        const badge = isNew ? `<span class="personalizationBadge">Nova</span>` : "";
+        const stageLabel = (p.stage_status || "").toString().trim();
+        const statusBadge = stageLabel
+          ? `<span class="personalizationStage">${escapeHtml(stageLabel)}</span>`
+          : (isNew ? `<span class="personalizationBadge">Nova</span>` : "");
         const colorText = colorLabel ? ` | Cor: ${escapeHtml(colorLabel)}` : "";
         return `
             <div class="personalizationCard ${isNew ? "isNew" : ""}" data-personalization-id="${escapeHtml(p.id)}">
               <div class="personalizationHeader">
                 <div class="personalizationTitle">${escapeHtml(p.customer_name || "Personaliza\u00e7\u00e3o")}</div>
-                ${badge}
+                ${statusBadge}
               </div>
               <div class="personalizationMeta">Loja: ${escapeHtml(storeLabel)}${colorText} | Enviado: ${escapeHtml(dateLabel)}</div>
               <div class="personalizationActions">
@@ -14483,6 +16862,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
       if(!personalizationOverlay) return;
       const p = getPersonalizationById(id);
       if(!p) return;
+      if(!p.stage_status){
+        p.stage_status = PERSONALIZATION_STAGE_OPTIONS[0];
+        updatePersonalizationStage(p.id, p.stage_status);
+      }
       personalizationSelectedId = String(p.id || "");
       const modelLabel = getPersonalizationModelLabel(p.model);
       const colorLabel = (p.color || "").toString().trim();
@@ -14495,9 +16878,156 @@ navAtalhosBtn.addEventListener("click", ()=>{
         const phoneRaw = (p.customer_phone || "").toString().trim();
         const storeRaw = (storeLabel || "").toString().trim();
         const notesRaw = (p.customer_notes || "").toString().trim();
+        const textFront = (p.custom_text || "").toString().trim();
+        const textBack = (p.custom_text_back || "").toString().trim();
+        const fontFront = (p.custom_text_font_label || p.custom_text_font || "").toString().trim();
+        const fontBack = (p.custom_text_font_label_back || p.custom_text_font_back || "").toString().trim();
+        const colorFront = (p.custom_text_color || "").toString().trim();
+        const colorBack = (p.custom_text_color_back || "").toString().trim();
+        const sizeFront = (p.custom_text_size || "").toString().trim();
+        const sizeBack = (p.custom_text_size_back || "").toString().trim();
+        const fontFileFront = (p.custom_font_file || "").toString().trim();
+        const fontFileBack = (p.custom_font_file_back || "").toString().trim();
+        const textFrontHtml = escapeHtml(textFront).replace(/\r?\n/g, "<br>");
+        const textBackHtml = escapeHtml(textBack).replace(/\r?\n/g, "<br>");
         const copyBtn = (value, label)=> value
           ? `<button type="button" class="copyIconBtn" data-copy-text="${escapeHtml(value)}" title="Copiar ${label}" aria-label="Copiar ${label}">${copyIcon}</button>`
           : `<button type="button" class="copyIconBtn" disabled title="Sem ${label}" aria-label="Sem ${label}">${copyIcon}</button>`;
+        const stageOptions = PERSONALIZATION_STAGE_OPTIONS.map((opt) => {
+          const selected = opt === p.stage_status ? " selected" : "";
+          return `<option value="${escapeHtml(opt)}"${selected}>${escapeHtml(opt)}</option>`;
+        }).join("");
+        const formatSize = (value)=> {
+          const num = Number(value);
+          if(Number.isFinite(num) && num > 0) return `${num}px`;
+          return value || "-";
+        };
+        const normalizeHexColor = (value)=> {
+          const raw = (value || "").toString().trim().toLowerCase();
+          if(!raw) return "";
+          const match = raw.match(/#([0-9a-f]{3}|[0-9a-f]{6})/);
+          let hex = match ? match[1] : raw.replace(/^#/, "");
+          if(/^[0-9a-f]{3}$/.test(hex)){
+            hex = hex.split("").map(ch => ch + ch).join("");
+          }
+          if(/^[0-9a-f]{6}$/.test(hex)){
+            return `#${hex}`;
+          }
+          return "";
+        };
+        const colorHexToName = {
+          "#000000": "Preto",
+          "#ffffff": "Branco",
+          "#ff0000": "Vermelho",
+          "#00ff00": "Verde",
+          "#0000ff": "Azul",
+          "#ffff00": "Amarelo",
+          "#ffa500": "Laranja",
+          "#800080": "Roxo",
+          "#808080": "Cinza",
+          "#a52a2a": "Marrom",
+          "#ffc0cb": "Rosa"
+        };
+        const colorNameToHex = {
+          "preto": "#000000",
+          "black": "#000000",
+          "branco": "#ffffff",
+          "white": "#ffffff",
+          "vermelho": "#ff0000",
+          "red": "#ff0000",
+          "verde": "#00ff00",
+          "green": "#00ff00",
+          "azul": "#0000ff",
+          "blue": "#0000ff",
+          "amarelo": "#ffff00",
+          "yellow": "#ffff00",
+          "laranja": "#ffa500",
+          "orange": "#ffa500",
+          "roxo": "#800080",
+          "purple": "#800080",
+          "cinza": "#808080",
+          "gray": "#808080",
+          "grey": "#808080",
+          "marrom": "#a52a2a",
+          "brown": "#a52a2a",
+          "rosa": "#ffc0cb",
+          "pink": "#ffc0cb"
+        };
+        const formatColorLabel = (value)=> {
+          const raw = (value || "").toString().trim();
+          if(!raw) return "-";
+          let hex = normalizeHexColor(raw);
+          if(!hex){
+            const key = raw.toLowerCase();
+            if(colorNameToHex[key]) hex = colorNameToHex[key];
+          }
+          if(!hex) return raw;
+          const name = colorHexToName[hex] || "Cor personalizada";
+          return `${name} (${hex})`;
+        };
+        const extraRows = [];
+        const fontFrontHref = fontFileFront ? buildImagePath(fontFileFront, "app/personalizacoes") : "";
+        const fontBackHref = fontFileBack ? buildImagePath(fontFileBack, "app/personalizacoes") : "";
+        const frontHasTextDetails = Boolean(textFront || fontFront || colorFront || sizeFront || fontFileFront);
+        const backHasTextDetails = Boolean(textBack || fontBack || colorBack || sizeBack || fontFileBack);
+        if(frontHasTextDetails){
+          const sizeFrontLabel = formatSize(sizeFront);
+          const colorFrontLabel = formatColorLabel(colorFront);
+          extraRows.push(`
+            <div class="personalizationDetailRow">
+              <span class="detailLabel">Texto (frente):</span>
+              <span class="detailValue">${textFront ? textFrontHtml : "-"}</span>
+              ${copyBtn(textFront, "texto")}
+            </div>
+            <div class="personalizationDetailRow detailNoWrap">
+              <span class="detailLabel">Fonte (frente):</span>
+              <span class="detailValue">
+                ${escapeHtml(fontFront || "-")}
+                ${fontFrontHref ? `<a class="btn small personalizationFontDownload" href="${escapeHtml(fontFrontHref)}" download>Baixar fonte</a>` : ""}
+              </span>
+              ${copyBtn(fontFront, "fonte")}
+            </div>
+            <div class="personalizationDetailRow">
+              <span class="detailLabel">Cor (frente):</span>
+              <span class="detailValue">${escapeHtml(colorFrontLabel)}</span>
+              ${copyBtn(colorFrontLabel !== "-" ? colorFrontLabel : "", "cor")}
+            </div>
+            <div class="personalizationDetailRow">
+              <span class="detailLabel">Tamanho (frente):</span>
+              <span class="detailValue">${escapeHtml(sizeFrontLabel)}</span>
+              ${copyBtn(sizeFront ? sizeFrontLabel : "", "tamanho")}
+            </div>
+          `);
+        }
+        if(backHasTextDetails){
+          const sizeBackLabel = formatSize(sizeBack);
+          const colorBackLabel = formatColorLabel(colorBack);
+          extraRows.push(`
+            <div class="personalizationDetailRow">
+              <span class="detailLabel">Texto (costas):</span>
+              <span class="detailValue">${textBack ? textBackHtml : "-"}</span>
+              ${copyBtn(textBack, "texto")}
+            </div>
+            <div class="personalizationDetailRow detailNoWrap">
+              <span class="detailLabel">Fonte (costas):</span>
+              <span class="detailValue">
+                ${escapeHtml(fontBack || "-")}
+                ${fontBackHref ? `<a class="btn small personalizationFontDownload" href="${escapeHtml(fontBackHref)}" download>Baixar fonte</a>` : ""}
+              </span>
+              ${copyBtn(fontBack, "fonte")}
+            </div>
+            <div class="personalizationDetailRow">
+              <span class="detailLabel">Cor (costas):</span>
+              <span class="detailValue">${escapeHtml(colorBackLabel)}</span>
+              ${copyBtn(colorBackLabel !== "-" ? colorBackLabel : "", "cor")}
+            </div>
+            <div class="personalizationDetailRow">
+              <span class="detailLabel">Tamanho (costas):</span>
+              <span class="detailValue">${escapeHtml(sizeBackLabel)}</span>
+              ${copyBtn(sizeBack ? sizeBackLabel : "", "tamanho")}
+            </div>
+          `);
+        }
         personalizationDetails.innerHTML = `
           <div class="personalizationDetailRow">
             <span class="detailLabel">Cliente:</span>
@@ -14509,7 +17039,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
             <span class="detailValue">${escapeHtml(emailRaw || "-")}</span>
             ${copyBtn(emailRaw, "e-mail")}
           </div>
-          <div class="personalizationDetailRow">
+          <div class="personalizationDetailRow detailNoWrap">
             <span class="detailLabel">Telefone:</span>
             <span class="detailValue">
               <button type="button" class="personalizationPhone" data-customer-whatsapp="${escapeHtml(phoneRaw)}">${escapeHtml(phoneRaw || "-")}</button>
@@ -14526,12 +17056,30 @@ navAtalhosBtn.addEventListener("click", ()=>{
             <span class="detailValue">${escapeHtml(dateLabel || "-")}</span>
             ${copyBtn(dateLabel, "envio")}
           </div>
+          <div class="personalizationDetailRow detailNoWrap">
+            <span class="detailLabel">Status:</span>
+            <span class="detailValue">
+              <select class="personalizationStatusSelect" id="personalizationStatusSelect">
+                ${stageOptions}
+              </select>
+            </span>
+            ${copyBtn(p.stage_status, "status")}
+          </div>
           <div class="personalizationDetailRow">
             <span class="detailLabel">Observa\u00e7\u00f5es:</span>
             <span class="detailValue">${escapeHtml(notesRaw || "-")}</span>
             ${copyBtn(notesRaw, "observa\u00e7\u00f5es")}
           </div>
+          ${extraRows.join("")}
         `;
+        const statusSelect = personalizationDetails.querySelector("#personalizationStatusSelect");
+        if(statusSelect){
+          statusSelect.addEventListener("change", () => {
+            const next = (statusSelect.value || "").toString();
+            if(!next) return;
+            updatePersonalizationStage(p.id, next);
+          });
+        }
         personalizationDetails.querySelectorAll("[data-copy-text]").forEach(btn=>{
           btn.addEventListener("click", async ()=>{
             const val = (btn.getAttribute("data-copy-text") || "").toString();
@@ -14540,25 +17088,53 @@ navAtalhosBtn.addEventListener("click", ()=>{
           });
         });
       }
-      if(personalizationPreviewImg){
-        const src = buildImagePath(p.preview_file, "app/personalizacoes");
-        if(src){
-          personalizationPreviewImg.src = src;
-          personalizationPreviewImg.style.display = "block";
+      if(personalizationPreviewImgFront){
+        const srcFront = buildImagePath(p.preview_file, "app/personalizacoes");
+        if(srcFront){
+          personalizationPreviewImgFront.src = srcFront;
+          personalizationPreviewImgFront.style.display = "block";
+          if(personalizationPreviewEmptyFront) personalizationPreviewEmptyFront.style.display = "none";
+          personalizationPreviewImgFront.closest(".personalizationPreviewCard")?.classList.add("hasPreview");
         }else{
-          personalizationPreviewImg.removeAttribute("src");
-          personalizationPreviewImg.style.display = "none";
+          personalizationPreviewImgFront.removeAttribute("src");
+          personalizationPreviewImgFront.style.display = "none";
+          if(personalizationPreviewEmptyFront) personalizationPreviewEmptyFront.style.display = "flex";
+          personalizationPreviewImgFront.closest(".personalizationPreviewCard")?.classList.remove("hasPreview");
         }
       }
-      if(personalizationStampDownload){
-        const href = buildImagePath(p.stamp_file, "app/personalizacoes");
-        personalizationStampDownload.href = href || "#";
-        personalizationStampDownload.style.display = href ? "inline-flex" : "none";
+      if(personalizationPreviewImgBack){
+        const srcBack = buildImagePath(p.preview_file_back, "app/personalizacoes");
+        if(srcBack){
+          personalizationPreviewImgBack.src = srcBack;
+          personalizationPreviewImgBack.style.display = "block";
+          if(personalizationPreviewEmptyBack) personalizationPreviewEmptyBack.style.display = "none";
+          personalizationPreviewImgBack.closest(".personalizationPreviewCard")?.classList.add("hasPreview");
+        }else{
+          personalizationPreviewImgBack.removeAttribute("src");
+          personalizationPreviewImgBack.style.display = "none";
+          if(personalizationPreviewEmptyBack) personalizationPreviewEmptyBack.style.display = "flex";
+          personalizationPreviewImgBack.closest(".personalizationPreviewCard")?.classList.remove("hasPreview");
+        }
       }
-      if(personalizationMockupDownload){
+      if(personalizationStampDownloadFront){
+        const href = buildImagePath(p.stamp_file, "app/personalizacoes");
+        personalizationStampDownloadFront.href = href || "#";
+        personalizationStampDownloadFront.style.display = href ? "inline-flex" : "none";
+      }
+      if(personalizationMockupDownloadFront){
         const href = buildImagePath(p.preview_file, "app/personalizacoes");
-        personalizationMockupDownload.href = href || "#";
-        personalizationMockupDownload.style.display = href ? "inline-flex" : "none";
+        personalizationMockupDownloadFront.href = href || "#";
+        personalizationMockupDownloadFront.style.display = href ? "inline-flex" : "none";
+      }
+      if(personalizationStampDownloadBack){
+        const href = buildImagePath(p.stamp_file_back, "app/personalizacoes");
+        personalizationStampDownloadBack.href = href || "#";
+        personalizationStampDownloadBack.style.display = href ? "inline-flex" : "none";
+      }
+      if(personalizationMockupDownloadBack){
+        const href = buildImagePath(p.preview_file_back, "app/personalizacoes");
+        personalizationMockupDownloadBack.href = href || "#";
+        personalizationMockupDownloadBack.style.display = href ? "inline-flex" : "none";
       }
       if(personalizationFinalDownload){
         const href = buildImagePath(p.final_file, "app/personalizacoes");
@@ -14587,7 +17163,7 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     async function deletePersonalizationFiles(p, includeFinal){
       if(!p) return;
-      const files = [p.stamp_file, p.preview_file, p.mockup_file];
+      const files = [p.stamp_file, p.preview_file, p.mockup_file, p.stamp_file_back, p.preview_file_back, p.mockup_file_back];
       if(includeFinal) files.push(p.final_file);
       for(const file of files){
         const name = (file || "").toString().trim();
@@ -14627,7 +17203,17 @@ navAtalhosBtn.addEventListener("click", ()=>{
       const list = (personalizations || []).slice();
       const idx = list.findIndex(item => String(item.id || "") === String(p.id || ""));
       if(idx >= 0){
-        list[idx] = { ...list[idx], status: "concluida", stamp_file: "", preview_file: "", mockup_file: "", updated_at: new Date().toISOString() };
+        list[idx] = {
+          ...list[idx],
+          status: "concluida",
+          stamp_file: "",
+          preview_file: "",
+          mockup_file: "",
+          stamp_file_back: "",
+          preview_file_back: "",
+          mockup_file_back: "",
+          updated_at: new Date().toISOString()
+        };
         savePersonalizations(list);
       }
       openPersonalizationOverlay(p.id);
@@ -14645,6 +17231,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
     }
     async function refreshAppDataForUser(){
       await bootstrapStorage();
+      refreshState.tasks.last = 0;
+      refreshState.personalizations.last = 0;
+      refreshState.notifications.last = 0;
+      refreshState.users.last = 0;
       items = loadBase();
       menuButtons = loadMenuButtons();
       quickLinks = loadQuickLinks();
@@ -14658,8 +17248,18 @@ navAtalhosBtn.addEventListener("click", ()=>{
       tasksDone = loadTasksDone();
       calendarHistory = loadCalendarHistory();
       personalizations = loadPersonalizations();
+      notifications = loadNotifications();
       seedTransportadorasLinks();
       userProfile = loadUserProfile();
+      const cachedUsers = loadUsersCache();
+      if(cachedUsers && Array.isArray(cachedUsers.list) && cachedUsers.list.length){
+        usersCache = cachedUsers.list;
+        usersLoaded = true;
+        usersLoading = false;
+        refreshState.users.last = Date.now();
+      }
+      updateNotificationsBadge();
+      renderNotifications();
       initTheme();
       initSideMenu();
       // mantem o calendario consistente na inicializacao
@@ -14678,15 +17278,14 @@ navAtalhosBtn.addEventListener("click", ()=>{
       updateAdminAccessUI();
       updateTaskCountBadges();
       initTasksUI();
-      const savedView = (storageGet(STORAGE_KEY_VIEW) || "").toString().trim();
-      const allowedViews = ["search", "tasks", "personalizations", "done", "users", "userActivity"];
-      const queryView = new URLSearchParams(window.location.search).get("view");
-      let initialView = allowedViews.includes(savedView) ? savedView : "search";
-      if(queryView && allowedViews.includes(queryView)){
-        initialView = queryView;
-      }
+      initBrowserNotifyPermission();
+      notifyNewPersonalizations();
+      notifyNewExtraTasks();
+      startBrowserNotifications();
+      const allowedViews = ["home", "search", "tasks", "personalizations", "done", "users", "userActivity"];
+      let initialView = "home";
       if((initialView === "users" || initialView === "userActivity") && !canAccessUsersView()){
-        initialView = "search";
+        initialView = "home";
       }
       setView(initialView);
       ensureMiniCalendarNavPlacement();
@@ -14698,8 +17297,10 @@ navAtalhosBtn.addEventListener("click", ()=>{
         return;
       }
       if(!storageGet(STORAGE_KEY_STORES)){
-        openStoresConfig({ required:true });
-        return;
+        if(!isSecondaryUser()){
+          openStoresConfig({ required:true });
+          return;
+        }
       }
     }
 async function bootstrapApp(){

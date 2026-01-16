@@ -1,0 +1,339 @@
+﻿<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FlowDesk - Personaliza&ccedil;&atilde;o</title>
+  <link rel="icon" href="/FlowDesk/favicon.ico?v=1">
+  <link rel="icon" type="image/png" sizes="32x32" href="/FlowDesk/imagens/app/Favicon/favicon-32.png?v=3">
+  <link rel="icon" type="image/png" sizes="16x16" href="/FlowDesk/imagens/app/Favicon/favicon-16.png?v=3">
+  <link rel="shortcut icon" href="/FlowDesk/imagens/app/Favicon/favicon-32.png?v=3">
+  <link rel="stylesheet" href="../codigos/personalizacao.css?v=19">
+  <link rel="stylesheet" href="../codigos/personalizacao-admin.css?v=17">
+</head>
+<body class="personalizacaoBody adminBody">
+  <div class="adminLayout" id="adminLayout">
+    <div class="adminMain" id="adminMain">
+      <main class="personalizacaoShell">
+    <div class="personalizacaoTopbar" id="storeTopbar">
+      <div class="topbarLogo" id="storeTopLogo">
+        <a id="storeTopLogoLink" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">
+          <img id="storeTopLogoImg" alt="Logo da loja" style="display:none;" />
+        </a>
+      </div>
+      <div class="topbarSocials" id="storeTopSocials"></div>
+      <a class="storeBackBtn storeBackBtnTop" id="storeBackBtn" href="#" style="display:none;">
+        <svg class="storeBackIcon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 11l9-7 9 7"></path>
+          <path d="M5 10v10h14V10"></path>
+          <path d="M9 20v-6h6v6"></path>
+        </svg>
+        Loja
+      </a>
+    </div>
+    <header class="personalizacaoHeader">
+      <div>
+        <h1>Personalize a sua camiseta</h1>
+        <p>Envie sua arte ou use o campo de texto, ajuste a posi&ccedil;&atilde;o da estampa dentro da &aacute;rea indicada, preencha os seus dados e envie o pedido.</p>
+        <div class="personalizacaoAlert" id="storeAlert" style="display:none;"></div>
+      </div>
+    </header>
+
+    <div class="adminPublishBar">
+      <button class="btn primary" type="button" id="adminPublishBtn">Publicar altera&ccedil;&otilde;es</button>
+      <button class="btn" type="button" id="adminSaveBtn">Salvar sem publicar</button>
+      <button class="btn" type="button" id="adminResetBtn">Resetar configurac&otilde;es</button>
+      <div class="adminPublishHint" id="adminPublishHint"></div>
+    </div>
+
+    <div class="personalizacaoGrid">
+      <section class="personalizacaoPanel" id="configPanel">
+        <div class="panelTitle">Configura&ccedil;&atilde;o</div>
+
+        <div class="fieldGroup">
+          <div class="label">Enviar estampa</div>
+          <div class="fileRow">
+            <input type="file" id="stampUploadInput" class="fileInputHidden" accept="image/png,image/jpeg,image/webp" />
+            <button class="btn small" type="button" id="stampChooseBtn">
+              <svg class="btnIcon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3l4 4h-3v6h-2V7H8l4-4zm-7 12h14v4H5v-4z"/>
+              </svg>
+              Escolher arquivo
+            </button>
+            <input type="text" id="stampFileName" class="fileText" value="Vazio" readonly />
+            <button class="iconBtn trashIconBtn" type="button" id="stampClearBtn" title="Remover estampa" aria-label="Remover estampa" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 3V2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 1 1 0 2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5H4a1 1 0 1 1 0-2h5zm2-1v1h2V2h-2zM8 7h2v10H8V7zm6 0h2v10h-2V7z"/>
+              </svg>
+            </button>
+          </div>
+          <div class="note">Formatos aceitos: PNG, JPG, JPEG, WEBP. Tamanho maximo: 15 MB.</div>
+          <div class="error" id="stampUploadError" style="display:none;"></div>
+        </div>
+
+        <div class="sectionDivider" id="configDividerTextBefore"></div>
+
+        <div class="fieldGroup textBlock" id="customTextBlock">
+          <div class="label">Texto na camiseta</div>
+          <textarea id="customTextInput" rows="2" maxlength="18" placeholder="Digite o texto que deseja aplicar"></textarea>
+          <div class="textTools">
+            <div class="fieldGroup">
+              <div class="label">Fonte</div>
+              <select id="customTextFont">
+                <option value="Arial" selected>Arial</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
+              </select>
+            </div>
+            <div class="fieldGroup textToolCenter">
+              <div class="label">Cor do texto</div>
+              <div class="colorInputRow">
+                <input type="color" id="customTextColorPicker" value="#000000" />
+              </div>
+            </div>
+            <div class="fieldGroup">
+              <div class="label">Tamanho</div>
+              <input type="number" id="customTextSize" class="textSizeInput" min="12" max="80" value="32" />
+            </div>
+          </div>
+          <div class="fieldGroup" id="customFontBlock">
+            <div class="label">Enviar fonte personalizada</div>
+            <div class="fileRow">
+              <input type="file" id="customTextFontUpload" class="fileInputHidden" accept=".ttf,.otf,.woff,.woff2" />
+              <button class="btn small" type="button" id="customFontChooseBtn">
+                <svg class="btnIcon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3l4 4h-3v6h-2V7H8l4-4zm-7 12h14v4H5v-4z"/>
+                </svg>
+                Escolher arquivo
+              </button>
+              <input type="text" id="customFontFileName" class="fileText" value="Vazio" readonly />
+              <button class="iconBtn trashIconBtn" type="button" id="customFontClearBtn" title="Remover fonte" aria-label="Remover fonte" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 3V2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 1 1 0 2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5H4a1 1 0 1 1 0-2h5zm2-1v1h2V2h-2zM8 7h2v10H8V7zm6 0h2v10h-2V7z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="error" id="customFontError" style="display:none;"></div>
+          </div>
+          <div class="note">Digite o texto, escolha a fonte e a cor. O texto aparecer&aacute; na altura do peito da foto. Limite de 18 caracteres. A op&ccedil;&atilde;o de cor do texto deve ser aquela palheta que d&aacute; para escolher rgb e hexadecimal. Fontes aceitas: TTF, OTF, WOFF, WOFF2.</div>
+        </div>
+
+        <div class="sectionDivider" id="configDividerTextAfter"></div>
+
+        <div class="fieldGroup" id="colorGroup">
+          <div class="label">Cor da camiseta</div>
+          <select id="shirtColor" required>
+            <option value="">Selecione</option>
+            <option value="Cinza mescla" data-hex="#adadad">Cinza mescla</option>
+            <option value="Preto" data-hex="#000000">Preto</option>
+            <option value="Branco" data-hex="#ffffff">Branco</option>
+            <option value="Mostarda" data-hex="#d59529">Mostarda</option>
+            <option value="Azul Royal" data-hex="#003df6">Azul Royal</option>
+            <option value="Azul marinho" data-hex="#00005e">Azul marinho</option>
+            <option value="Vinho" data-hex="#800020">Vinho</option>
+            <option value="Vermelho" data-hex="#ff0000">Vermelho</option>
+            <option value="Marrom" data-hex="#654321">Marrom</option>
+            <option value="Laranja" data-hex="#ffa500">Laranja</option>
+            <option value="Amarelo" data-hex="#e7e70d">Amarelo</option>
+            <option value="Rosa bebe" data-hex="#f4c2c2">Rosa bebe</option>
+            <option value="Roxo" data-hex="#440044">Roxo</option>
+            <option value="Cinza chumbo" data-hex="#283136">Cinza chumbo</option>
+            <option value="Verde musgo" data-hex="#2d3a18">Verde musgo</option>
+          </select>
+          <div class="error" id="shirtColorError" style="display:none;"></div>
+        </div>
+        <div class="fieldGroup">
+          <div class="label">Tamanho da camiseta</div>
+          <select id="shirtSize" required>
+            <option value="">Selecione</option>
+            <optgroup label="Tamanhos tradicionais">
+              <option value="P">P</option>
+              <option value="M">M</option>
+              <option value="G">G</option>
+              <option value="GG">GG</option>
+              <option value="XG">XG</option>
+              <option value="XGG">XGG</option>
+            </optgroup>
+          </select>
+          <div class="error" id="shirtSizeError" style="display:none;"></div>
+        </div>
+        <div class="infoBox" id="attentionBox">
+          <div class="warningTitle">Aten&ccedil;&atilde;o</div>
+          <ul id="attentionList">
+            <li>Estampas claras funcionam melhor em camisetas escuras.</li>
+            <li>Estampas escuras funcionam melhor em camisetas claras.</li>
+          </ul>
+          <div class="sizeInfo" id="sizeInfo"></div>
+          <a class="btn small" href="https://www.remove.bg/pt-br" target="_blank" rel="noopener">
+            <svg class="btnIcon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16v12H4V6zm2 2v8h12V8H6zm2 6l3-4 3 4 2-3 2 3H8z"/>
+            </svg>
+            Retire o fundo da imagem
+          </a>
+          <div class="infoBoxSpacer"></div>
+          <a class="btn small" href="https://www.dafont.com/pt/" target="_blank" rel="noopener">
+            <svg class="btnIcon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4l8 4-8 4-8-4 8-4zm0 10l8-4v6l-8 4-8-4V10l8 4z"/>
+            </svg>
+            Baixe uma fonte
+          </a>
+        </div>
+      </section>
+
+      <section class="personalizacaoPanel" id="mockupPanel">
+        <div class="panelTitle">Mockup <span class="mockupSideLabel" id="mockupSideLabel">Frente</span></div>
+        <div class="mockupHint" id="mockupHint">
+          Arraste e solte sua imagem no campo indicado. Você pode mover e redimensionar a área de inclusão da estampa e ajustar o tamanho da estampa depois de inserir.
+        </div>
+        <div class="mockupPriceNote" id="mockupPriceNote">
+          Preco: <strong id="priceValue">R$ 82,90</strong>
+        </div>
+        <div class="mockupTools">
+          <button class="btn small" type="button" id="mockupSideToggleBtn">Costas da camiseta</button>
+        </div>
+        <div class="mockupStageWrap">
+          <div class="mockupStage" id="mockupStage">
+            <img id="mockupImg" alt="Mockup selecionado" />
+            <div class="printArea" id="printArea">
+              <img id="stampImg" alt="Estampa" />
+              <div id="stampText" aria-hidden="true"></div>
+              <div class="resizeHandle" id="stampResizeHandle" aria-hidden="true"></div>
+              <div class="areaHandle handle-nw" data-area-handle="nw" aria-hidden="true"></div>
+              <div class="areaHandle handle-ne" data-area-handle="ne" aria-hidden="true"></div>
+              <div class="areaHandle handle-n" data-area-handle="n" aria-hidden="true"></div>
+              <div class="areaHandle handle-s" data-area-handle="s" aria-hidden="true"></div>
+              <div class="areaHandle handle-sw" data-area-handle="sw" aria-hidden="true"></div>
+              <div class="areaHandle handle-se" data-area-handle="se" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+        <div class="mockupSidePreviews" id="mockupSidePreviews">
+          <div class="mockupSidePreview" data-side="front">
+            <div class="mockupSideTitle">Frente</div>
+            <img id="mockupPreviewFront" alt="Preview frente" />
+            <div class="mockupSideEmpty" id="mockupPreviewFrontEmpty">Sem estampa</div>
+          </div>
+          <div class="mockupSidePreview" data-side="back">
+            <div class="mockupSideTitle">Costas</div>
+            <img id="mockupPreviewBack" alt="Preview costas" />
+            <div class="mockupSideEmpty" id="mockupPreviewBackEmpty">Sem estampa</div>
+          </div>
+        </div>
+        
+      </section>
+
+      <section class="personalizacaoPanel personalizacaoPanelFull" id="customerPanel">
+        <div class="panelTitle">Dados do cliente</div>
+        <div class="formNote">Todos os campos sao obrigat&oacute;rios.</div>
+        <form id="personalizacaoForm" class="personalizacaoForm" autocomplete="on">
+          <div class="formGrid">
+            <div class="fieldGroup">
+              <div class="labelRow">
+                <label class="label" for="customerName">Nome</label>
+                <span class="requiredTag">Obrigat&oacute;rio</span>
+              </div>
+              <input id="customerName" type="text" placeholder="Seu nome completo" required />
+              <div class="error" id="customerNameError" style="display:none;"></div>
+            </div>
+            <div class="fieldGroup">
+              <div class="labelRow">
+                <label class="label" for="customerEmail">E-mail</label>
+                <span class="requiredTag">Obrigat&oacute;rio</span>
+              </div>
+              <input id="customerEmail" type="email" placeholder="email@dominio.com" required />
+              <div class="error" id="customerEmailError" style="display:none;"></div>
+            </div>
+            <div class="fieldGroup">
+              <div class="labelRow">
+                <label class="label" for="customerPhone">Telefone</label>
+                <span class="requiredTag">Obrigat&oacute;rio</span>
+              </div>
+              <input id="customerPhone" type="text" placeholder="(11) 99999-9999" required />
+              <div class="error" id="customerPhoneError" style="display:none;"></div>
+            </div>
+            <div class="fieldGroup">
+              <div class="labelRow">
+                <label class="label" for="customerNotes">Observações sobre a estampa</label>
+                <span class="requiredTag">Obrigat&oacute;rio</span>
+              </div>
+              <textarea id="customerNotes" rows="4" placeholder="Descreva detalhes importantes" required></textarea>
+              <div class="error" id="customerNotesError" style="display:none;"></div>
+            </div>
+          </div>
+          <div class="formActions">
+            <button class="btn primary" type="submit" id="submitPersonalizacaoBtn">Enviar personalização</button>
+            <div class="sendProgress" id="sendProgress" style="display:none;">
+              <div class="sendProgressTrack">
+                <div class="sendProgressBar" id="sendProgressBar"></div>
+              </div>
+              <div class="sendProgressText" id="sendProgressText">Enviando...</div>
+            </div>
+            <div class="formMessage" id="formMessage"></div>
+          </div>
+        </form>
+      </section>
+    </div>
+    <div class="personalizacaoPopupOverlay" id="colorMismatchOverlay" style="display:none;">
+      <div class="personalizacaoPopup">
+        <div class="personalizacaoPopupTitle">Aten&ccedil;&atilde;o</div>
+        <div class="personalizacaoPopupText">
+          A frente e as costas est&atilde;o com cores diferentes. Deixe os dois lados com a mesma cor para enviar.
+        </div>
+        <div class="personalizacaoPopupActions">
+          <button class="btn" type="button" id="colorMismatchClose">Ok</button>
+        </div>
+      </div>
+    </div>
+  </main>
+    </div>
+    <aside class="adminSidebar" id="adminSidebar" aria-hidden="true">
+      <div class="adminSidebarHeader">
+        <div class="adminSidebarTitle" id="adminSidebarTitle">Editar</div>
+        <button class="btn small" type="button" id="adminSidebarClose">Fechar</button>
+      </div>
+      <div class="adminSidebarBody" id="adminSidebarBody"></div>
+    </aside>
+  </div>
+
+  <div class="personalizacaoPopupOverlay" id="personalizacaoCustomPopupOverlay" style="display:none;">
+    <div class="personalizacaoPopup">
+      <div class="personalizacaoPopupTitle" id="personalizacaoCustomPopupTitle">Aviso</div>
+      <div class="personalizacaoPopupText" id="personalizacaoCustomPopupBody"></div>
+      <div class="personalizacaoPopupActions">
+        <button class="btn" type="button" id="personalizacaoCustomPopupClose">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="personalizacaoPopupOverlay" id="personalizacaoSuccessOverlay" style="display:none;">
+    <div class="personalizacaoPopup">
+      <h3>Personaliza&ccedil;&atilde;o enviada com sucesso!</h3>
+      <p>Vamos preparar o modelo e enviar para a sua aprova&ccedil;&atilde;o em at&eacute; 48 horas.</p>
+      <div class="popupActions">
+        <a class="btn" id="personalizacaoSuccessWhatsapp" href="#" target="_blank" rel="noopener noreferrer">Falar no WhatsApp</a>
+        <button class="btn primary" type="button" id="personalizacaoSuccessClose">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="personalizacaoPopupOverlay" id="adminActionOverlay" style="display:none;">
+    <div class="personalizacaoPopup adminActionPopup">
+      <div class="personalizacaoPopupTitle" id="adminActionTitle">Processando...</div>
+      <div class="adminActionProgress">
+        <div class="adminActionTrack">
+          <div class="adminActionBar" id="adminActionBar"></div>
+        </div>
+        <div class="adminActionStatus" id="adminActionStatus">Carregando...</div>
+      </div>
+      <div class="personalizacaoPopupText adminActionResult" id="adminActionResult" style="display:none;"></div>
+      <div class="personalizacaoPopupActions">
+        <button class="btn primary" type="button" id="adminActionClose" disabled>Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../codigos/personalizacao.js?v=32"></script>
+  <script src="../codigos/personalizacao-admin.js?v=30"></script>
+</body>
+</html>

@@ -67,6 +67,27 @@ while ($row = $stmt->fetch()) {
       if ($whatsappPhone !== "") {
         $whatsappLink = "https://api.whatsapp.com/send?phone=552" . $whatsappPhone;
       }
+      $instagramUrl = trim((string)($store["instagramUrl"] ?? ""));
+      $facebookUrl = trim((string)($store["facebookUrl"] ?? ""));
+      $tiktokUrl = trim((string)($store["tiktokUrl"] ?? ""));
+      $youtubeUrl = trim((string)($store["youtubeUrl"] ?? ""));
+      $pinterestUrl = trim((string)($store["pinterestUrl"] ?? ""));
+      $socialExtras = [];
+      if (isset($store["socialExtras"]) && is_array($store["socialExtras"])) {
+        foreach ($store["socialExtras"] as $extra) {
+          if (!is_array($extra)) continue;
+          $label = trim((string)($extra["name"] ?? ""));
+          $supportUrl = trim((string)($extra["supportUrl"] ?? $extra["support_url"] ?? $extra["url"] ?? ""));
+          $profileUrl = trim((string)($extra["profileUrl"] ?? $extra["profile_url"] ?? ""));
+          if ($label !== "" && ($supportUrl !== "" || $profileUrl !== "")) {
+            $socialExtras[] = [
+              "name" => $label,
+              "support_url" => $supportUrl,
+              "profile_url" => $profileUrl
+            ];
+          }
+        }
+      }
       respond([
         "ok" => true,
         "store" => [
@@ -74,7 +95,14 @@ while ($row = $stmt->fetch()) {
           "logo_url" => $logoUrl,
           "site_url" => trim((string)($store["siteUrl"] ?? "")),
           "whatsapp_phone" => $whatsappPhone,
-          "whatsapp_link" => $whatsappLink
+          "whatsapp_link" => $whatsappLink,
+          "instagram_url" => $instagramUrl,
+          "facebook_url" => $facebookUrl,
+          "tiktok_url" => $tiktokUrl,
+          "youtube_url" => $youtubeUrl,
+          "pinterest_url" => $pinterestUrl,
+          "social_extras" => $socialExtras,
+          "personalizacao_config" => $store["personalizacaoConfig"] ?? null
         ]
       ]);
     }

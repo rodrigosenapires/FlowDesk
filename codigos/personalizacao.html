@@ -3,37 +3,42 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FlowDesk - Personalizacao</title>
+  <title>FlowDesk - Personaliza&ccedil;&atilde;o</title>
   <link rel="icon" href="/FlowDesk/favicon.ico?v=1">
   <link rel="icon" type="image/png" sizes="32x32" href="/FlowDesk/imagens/app/Favicon/favicon-32.png?v=3">
   <link rel="icon" type="image/png" sizes="16x16" href="/FlowDesk/imagens/app/Favicon/favicon-16.png?v=3">
   <link rel="shortcut icon" href="/FlowDesk/imagens/app/Favicon/favicon-32.png?v=3">
-  <link rel="stylesheet" href="../codigos/personalizacao.css?v=1">
+  <link rel="stylesheet" href="../codigos/personalizacao.css?v=19">
 </head>
 <body class="personalizacaoBody">
   <main class="personalizacaoShell">
-    <header class="personalizacaoHeader">
-      <div>
-        <img class="personalizacaoLogo" src="../imagens/app/logo/logo-fundo-claro.png" alt="FlowDesk" />
-        <h1>Personalize a sua camiseta</h1>
-        <p>Envie sua arte ou use o campo de texto, ajuste a posi&ccedil;&atilde;o da estampa dentro da &aacute;rea indicada, preencha os seus dados e envie o pedido.</p>
-        <a class="storeBackBtn" id="storeBackBtn" href="#" style="display:none;">
-          <svg class="storeBackIcon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11l9-7 9 7"></path>
-            <path d="M5 10v10h14V10"></path>
-            <path d="M9 20v-6h6v6"></path>
-          </svg>
-          Loja
+    <div class="personalizacaoTopbar" id="storeTopbar">
+      <div class="topbarLogo" id="storeTopLogo">
+        <a id="storeTopLogoLink" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">
+          <img id="storeTopLogoImg" alt="Logo da loja" style="display:none;" />
         </a>
       </div>
-      <div class="storeBrand" id="storeBrand" style="display:none;">
-        <div class="personalizacaoAlert" id="storeAlert"></div>
+      <div class="topbarSocials" id="storeTopSocials"></div>
+      <a class="storeBackBtn storeBackBtnTop" id="storeBackBtn" href="#" style="display:none;">
+        <svg class="storeBackIcon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 11l9-7 9 7"></path>
+          <path d="M5 10v10h14V10"></path>
+          <path d="M9 20v-6h6v6"></path>
+        </svg>
+        Loja
+      </a>
+    </div>
+    <header class="personalizacaoHeader">
+      <div>
+        <h1>Personalize a sua camiseta</h1>
+        <p>Envie sua arte ou use o campo de texto, ajuste a posi&ccedil;&atilde;o da estampa dentro da &aacute;rea indicada, preencha os seus dados e envie o pedido.</p>
+        <div class="personalizacaoAlert" id="storeAlert" style="display:none;"></div>
       </div>
     </header>
 
     <div class="personalizacaoGrid">
-      <section class="personalizacaoPanel">
-                <div class="panelTitle">Configura&ccedil;&atilde;o</div>
+      <section class="personalizacaoPanel" id="configPanel">
+        <div class="panelTitle">Configura&ccedil;&atilde;o</div>
 
         <div class="fieldGroup">
           <div class="label">Enviar estampa</div>
@@ -46,7 +51,7 @@
               Escolher arquivo
             </button>
             <input type="text" id="stampFileName" class="fileText" value="Vazio" readonly />
-            <button class="iconBtn" type="button" id="stampClearBtn" title="Remover estampa" aria-label="Remover estampa" disabled>
+            <button class="iconBtn trashIconBtn" type="button" id="stampClearBtn" title="Remover estampa" aria-label="Remover estampa" disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M9 3V2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 1 1 0 2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5H4a1 1 0 1 1 0-2h5zm2-1v1h2V2h-2zM8 7h2v10H8V7zm6 0h2v10h-2V7z"/>
               </svg>
@@ -56,9 +61,9 @@
           <div class="error" id="stampUploadError" style="display:none;"></div>
         </div>
 
-        <div class="sectionDivider"></div>
+        <div class="sectionDivider" id="configDividerTextBefore"></div>
 
-        <div class="fieldGroup textBlock">
+        <div class="fieldGroup textBlock" id="customTextBlock">
           <div class="label">Texto na camiseta</div>
           <textarea id="customTextInput" rows="2" maxlength="18" placeholder="Digite o texto que deseja aplicar"></textarea>
           <div class="textTools">
@@ -82,7 +87,7 @@
               <input type="number" id="customTextSize" class="textSizeInput" min="12" max="80" value="32" />
             </div>
           </div>
-          <div class="fieldGroup">
+          <div class="fieldGroup" id="customFontBlock">
             <div class="label">Enviar fonte personalizada</div>
             <div class="fileRow">
               <input type="file" id="customTextFontUpload" class="fileInputHidden" accept=".ttf,.otf,.woff,.woff2" />
@@ -93,17 +98,18 @@
                 Escolher arquivo
               </button>
               <input type="text" id="customFontFileName" class="fileText" value="Vazio" readonly />
-              <button class="iconBtn" type="button" id="customFontClearBtn" title="Remover fonte" aria-label="Remover fonte" disabled>
+              <button class="iconBtn trashIconBtn" type="button" id="customFontClearBtn" title="Remover fonte" aria-label="Remover fonte" disabled>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M9 3V2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 1 1 0 2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5H4a1 1 0 1 1 0-2h5zm2-1v1h2V2h-2zM8 7h2v10H8V7zm6 0h2v10h-2V7z"/>
                 </svg>
               </button>
             </div>
+            <div class="error" id="customFontError" style="display:none;"></div>
           </div>
           <div class="note">Digite o texto, escolha a fonte e a cor. O texto aparecer&aacute; na altura do peito da foto. Limite de 18 caracteres. A op&ccedil;&atilde;o de cor do texto deve ser aquela palheta que d&aacute; para escolher rgb e hexadecimal. Fontes aceitas: TTF, OTF, WOFF, WOFF2.</div>
         </div>
 
-        <div class="sectionDivider"></div>
+        <div class="sectionDivider" id="configDividerTextAfter"></div>
 
         <div class="fieldGroup" id="colorGroup">
           <div class="label">Cor da camiseta</div>
@@ -139,19 +145,12 @@
               <option value="XG">XG</option>
               <option value="XGG">XGG</option>
             </optgroup>
-            <optgroup label="Plus Size">
-              <option value="G1">G1</option>
-              <option value="G2">G2</option>
-              <option value="G3">G3</option>
-              <option value="G4">G4</option>
-              <option value="G5">G5</option>
-            </optgroup>
           </select>
           <div class="error" id="shirtSizeError" style="display:none;"></div>
         </div>
-        <div class="infoBox">
+        <div class="infoBox" id="attentionBox">
           <div class="warningTitle">Aten&ccedil;&atilde;o</div>
-          <ul>
+          <ul id="attentionList">
             <li>Estampas claras funcionam melhor em camisetas escuras.</li>
             <li>Estampas escuras funcionam melhor em camisetas claras.</li>
           </ul>
@@ -162,22 +161,26 @@
             </svg>
             Retire o fundo da imagem
           </a>
+          <div class="infoBoxSpacer"></div>
+          <a class="btn small" href="https://www.dafont.com/pt/" target="_blank" rel="noopener">
+            <svg class="btnIcon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4l8 4-8 4-8-4 8-4zm0 10l8-4v6l-8 4-8-4V10l8 4z"/>
+            </svg>
+            Baixe uma fonte
+          </a>
         </div>
       </section>
 
-      <section class="personalizacaoPanel">
-        <div class="panelTitle">Mockup</div>
-        <div class="mockupHint">
+      <section class="personalizacaoPanel" id="mockupPanel">
+        <div class="panelTitle">Mockup <span class="mockupSideLabel" id="mockupSideLabel">Frente</span></div>
+        <div class="mockupHint" id="mockupHint">
           Arraste e solte sua imagem no campo indicado. Você pode mover e redimensionar a área de inclusão da estampa e ajustar o tamanho da estampa depois de inserir.
         </div>
+        <div class="mockupPriceNote" id="mockupPriceNote">
+          Preco: <strong id="priceValue">R$ 82,90</strong>
+        </div>
         <div class="mockupTools">
-          <div class="opacityControl">
-            <button class="btn small" type="button" id="opacityToggleBtn">Transparencia</button>
-            <div class="opacityPanel" id="opacityPanel">
-              <input type="range" id="stampOpacityRange" min="10" max="100" step="5" value="100" />
-              <span id="stampOpacityValue">100%</span>
-            </div>
-          </div>
+          <button class="btn small" type="button" id="mockupSideToggleBtn">Costas da camiseta</button>
         </div>
         <div class="mockupStageWrap">
           <div class="mockupStage" id="mockupStage">
@@ -195,10 +198,22 @@
             </div>
           </div>
         </div>
+        <div class="mockupSidePreviews" id="mockupSidePreviews">
+          <div class="mockupSidePreview" data-side="front">
+            <div class="mockupSideTitle">Frente</div>
+            <img id="mockupPreviewFront" alt="Preview frente" />
+            <div class="mockupSideEmpty" id="mockupPreviewFrontEmpty">Sem estampa</div>
+          </div>
+          <div class="mockupSidePreview" data-side="back">
+            <div class="mockupSideTitle">Costas</div>
+            <img id="mockupPreviewBack" alt="Preview costas" />
+            <div class="mockupSideEmpty" id="mockupPreviewBackEmpty">Sem estampa</div>
+          </div>
+        </div>
         
       </section>
 
-      <section class="personalizacaoPanel personalizacaoPanelFull">
+      <section class="personalizacaoPanel personalizacaoPanelFull" id="customerPanel">
         <div class="panelTitle">Dados do cliente</div>
         <div class="formNote">Todos os campos sao obrigat&oacute;rios.</div>
         <form id="personalizacaoForm" class="personalizacaoForm" autocomplete="on">
@@ -249,7 +264,28 @@
         </form>
       </section>
     </div>
+    <div class="personalizacaoPopupOverlay" id="colorMismatchOverlay" style="display:none;">
+      <div class="personalizacaoPopup">
+        <div class="personalizacaoPopupTitle">Aten&ccedil;&atilde;o</div>
+        <div class="personalizacaoPopupText">
+          A frente e as costas est&atilde;o com cores diferentes. Deixe os dois lados com a mesma cor para enviar.
+        </div>
+        <div class="personalizacaoPopupActions">
+          <button class="btn" type="button" id="colorMismatchClose">Ok</button>
+        </div>
+      </div>
+    </div>
   </main>
+
+  <div class="personalizacaoPopupOverlay" id="personalizacaoCustomPopupOverlay" style="display:none;">
+    <div class="personalizacaoPopup">
+      <div class="personalizacaoPopupTitle" id="personalizacaoCustomPopupTitle">Aviso</div>
+      <div class="personalizacaoPopupText" id="personalizacaoCustomPopupBody"></div>
+      <div class="personalizacaoPopupActions">
+        <button class="btn" type="button" id="personalizacaoCustomPopupClose">Fechar</button>
+      </div>
+    </div>
+  </div>
 
   <div class="personalizacaoPopupOverlay" id="personalizacaoSuccessOverlay" style="display:none;">
     <div class="personalizacaoPopup">
@@ -262,6 +298,6 @@
     </div>
   </div>
 
-  <script src="../codigos/personalizacao.js?v=1"></script>
+  <script src="../codigos/personalizacao.js?v=32"></script>
 </body>
 </html>

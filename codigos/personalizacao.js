@@ -1,20 +1,26 @@
 ﻿(() => {
   const STORE_ID = new URLSearchParams(window.location.search).get("loja") || "";
+  const PREVIEW_SCALE = 0.65;
+  const BACK_AREA_OFFSET_PX = -20;
+  const BACK_AREA_TOP_SCREEN_PX = 120.185;
+  const ATTENTION_TEXT_MAX = 240;
 
   const MODEL_CONFIG = {
     masculino: {
       areaTopRatio: 0.42,
       areaTopOffsetPx: 6,
       areaHeightRatio: 0.36,
-      areaWidthRatio: (297 / 420) * 0.92,
+      areaWidthRatio: (297 / 420) * 0.96,
       areaLeftRatio: -0.025,
-      areaLeftOffsetPx: 23,
-      areaWidthOffsetPx: 4,
+      areaLeftOffsetPx: 26,
+      areaWidthOffsetPx: 12,
       mockups: []
     }
   };
 
+  const storeTopbar = document.getElementById("storeTopbar");
   const storeAlert = document.getElementById("storeAlert");
+  const storeTopLogoLink = document.getElementById("storeTopLogoLink");
   const colorGroup = document.getElementById("colorGroup");
   const colorGrid = document.getElementById("colorGrid");
   const mockupUploadGroup = document.getElementById("mockupUploadGroup");
@@ -40,6 +46,13 @@
   const opacityPanel = document.getElementById("opacityPanel");
   const stampOpacityRange = document.getElementById("stampOpacityRange");
   const stampOpacityValue = document.getElementById("stampOpacityValue");
+  const mockupSideToggleBtn = document.getElementById("mockupSideToggleBtn");
+  const mockupSideLabel = document.getElementById("mockupSideLabel");
+  const mockupPreviewFront = document.getElementById("mockupPreviewFront");
+  const mockupPreviewBack = document.getElementById("mockupPreviewBack");
+  const mockupPreviewFrontEmpty = document.getElementById("mockupPreviewFrontEmpty");
+  const mockupPreviewBackEmpty = document.getElementById("mockupPreviewBackEmpty");
+  const mockupSidePreviews = document.getElementById("mockupSidePreviews");
   const stampClearBtn = document.getElementById("stampClearBtn");
   const stampChooseBtn = document.getElementById("stampChooseBtn");
   const stampFileName = document.getElementById("stampFileName");
@@ -51,8 +64,26 @@
   const customFontChooseBtn = document.getElementById("customFontChooseBtn");
   const customFontFileName = document.getElementById("customFontFileName");
   const customFontClearBtn = document.getElementById("customFontClearBtn");
+  const customFontError = document.getElementById("customFontError");
   const stampText = document.getElementById("stampText");
+  const priceValue = document.getElementById("priceValue");
+  const mockupPriceNote = document.getElementById("mockupPriceNote");
+  const mockupHint = document.getElementById("mockupHint");
+  const configPanel = document.getElementById("configPanel");
+  const mockupPanel = document.getElementById("mockupPanel");
+  const customerPanel = document.getElementById("customerPanel");
+  const attentionBox = document.getElementById("attentionBox");
+  const attentionList = document.getElementById("attentionList");
+  const customTextBlock = document.getElementById("customTextBlock");
+  const customFontBlock = document.getElementById("customFontBlock");
+  const configDividerTextBefore = document.getElementById("configDividerTextBefore");
+  const configDividerTextAfter = document.getElementById("configDividerTextAfter");
+  const customPopupOverlay = document.getElementById("personalizacaoCustomPopupOverlay");
+  const customPopupTitle = document.getElementById("personalizacaoCustomPopupTitle");
+  const customPopupBody = document.getElementById("personalizacaoCustomPopupBody");
+  const customPopupClose = document.getElementById("personalizacaoCustomPopupClose");
   const areaHandles = Array.from(document.querySelectorAll("[data-area-handle]"));
+  const sectionDividers = Array.from(document.querySelectorAll(".sectionDivider"));
 
   const form = document.getElementById("personalizacaoForm");
   const submitBtn = document.getElementById("submitPersonalizacaoBtn");
@@ -60,8 +91,11 @@
   const sendProgress = document.getElementById("sendProgress");
   const sendProgressBar = document.getElementById("sendProgressBar");
   const sendProgressText = document.getElementById("sendProgressText");
-  const storeBrand = document.getElementById("storeBrand");
   const storeBackBtn = document.getElementById("storeBackBtn");
+  const storeTopLogoImg = document.getElementById("storeTopLogoImg");
+  const storeTopSocials = document.getElementById("storeTopSocials");
+  const colorMismatchOverlay = document.getElementById("colorMismatchOverlay");
+  const colorMismatchClose = document.getElementById("colorMismatchClose");
   const successOverlay = document.getElementById("personalizacaoSuccessOverlay");
   const successCloseBtn = document.getElementById("personalizacaoSuccessClose");
   const successWhatsappBtn = document.getElementById("personalizacaoSuccessWhatsapp");
@@ -74,57 +108,166 @@
   const customerEmailError = document.getElementById("customerEmailError");
   const customerPhoneError = document.getElementById("customerPhoneError");
   const customerNotesError = document.getElementById("customerNotesError");
+  let personalizacaoConfig = null;
 
-  const state = {
-    model: "masculino",
-    color: "",
-    colorCss: "",
-    mockupFile: null,
-    mockupSource: "",
-    stampFile: null,
-    stampAspect: 1,
-    stampReady: false,
-    stampOpacity: 1,
-    customText: "",
-    customTextColor: "#000000",
-    customTextFont: "Arial",
-    customTextSize: 32,
-    areaCustom: false,
-    areaKey: "",
-    areaAdjustMode: true,
-    areaLocked: true,
-    areaW: MODEL_CONFIG.masculino.areaW,
-    areaH: MODEL_CONFIG.masculino.areaH,
-    areaX: 0,
-    areaY: 0,
-    mockupW: 0,
-    mockupH: 0,
-    mockupScale: 1,
-    stamp: { x: 0, y: 0, w: 0, h: 0 }
+  function createSideState(){
+    return {
+      model: "masculino",
+      color: "",
+      colorName: "",
+      colorCss: "",
+      mockupFile: null,
+      mockupFileUrl: "",
+      mockupSource: "",
+      mockupDisplaySrc: "",
+      stampFile: null,
+      stampFileName: "Vazio",
+      stampSrc: "",
+      stampAspect: 1,
+      stampReady: false,
+      stampOpacity: 1,
+      customText: "",
+      customTextColor: "#000000",
+      customTextFont: "Arial",
+      customTextSize: 32,
+      customFontFile: null,
+      customFontFileName: "Vazio",
+      customFontLabel: "",
+      areaCustom: false,
+      areaKey: "",
+      areaAdjustMode: true,
+      areaLocked: true,
+      areaW: MODEL_CONFIG.masculino.areaW,
+      areaH: MODEL_CONFIG.masculino.areaH,
+      areaX: 0,
+      areaY: 0,
+      mockupW: 0,
+      mockupH: 0,
+      mockupScale: 1,
+      stamp: { x: 0, y: 0, w: 0, h: 0 }
+    };
+  }
+
+  const sideStates = {
+    front: createSideState(),
+    back: createSideState()
   };
+  let activeSide = "front";
+  let state = sideStates[activeSide];
+  const sidePreviewUrls = { front: "", back: "" };
+  let previewTimer = null;
   let storeInfo = null;
   let sendProgressTimer = null;
   let sendProgressValue = 0;
 
   function showStoreMessage(message){
     if(!storeAlert) return;
-    storeAlert.classList.remove("isLogo");
     storeAlert.textContent = message || "";
     storeAlert.style.display = message ? "block" : "none";
-    if(storeBrand) storeBrand.style.display = message ? "flex" : "none";
   }
-  function showStoreLogo(logoUrl, name){
-    if(!storeAlert || !logoUrl) return;
-    storeAlert.classList.add("isLogo");
-    const label = name ? name : "Logo da loja";
-    const link = (storeInfo && storeInfo.site_url) ? storeInfo.site_url : "";
-    if(link){
-      storeAlert.innerHTML = `<a href="${link}"><img src="${logoUrl}" alt="${label}"></a>`;
+
+  function setTopLogo(logoUrl, name){
+    if(!storeTopLogoImg) return;
+    if(logoUrl){
+      storeTopLogoImg.src = logoUrl;
+      storeTopLogoImg.alt = name ? name : "Logo da loja";
+      storeTopLogoImg.style.display = "block";
     }else{
-      storeAlert.innerHTML = `<img src="${logoUrl}" alt="${label}">`;
+      storeTopLogoImg.removeAttribute("src");
+      storeTopLogoImg.style.display = "none";
     }
-    storeAlert.style.display = "block";
-    if(storeBrand) storeBrand.style.display = "flex";
+  }
+  function setTopLogoLink(url){
+    if(!storeTopLogoLink) return;
+    const link = (url || "").toString().trim();
+    if(link){
+      storeTopLogoLink.href = link;
+      storeTopLogoLink.style.display = "inline-flex";
+    }else{
+      storeTopLogoLink.href = "#";
+      storeTopLogoLink.style.display = "none";
+    }
+  }
+
+  function buildSocialButtons(){
+    if(!storeTopSocials){
+      return;
+    }
+    if(!storeInfo){
+      storeTopSocials.innerHTML = "";
+      return;
+    }
+    const items = [];
+    const normalizeSocialKey = (value) => (value || "")
+      .toString()
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+    const getSocialIconBase = (label) => {
+      const key = normalizeSocialKey(label);
+      if(key === "instagram") return "instagram";
+      if(key === "facebook") return "facebook";
+      if(key === "tiktok") return "tik-tok";
+      if(key === "youtube") return "youtube";
+      if(key === "pinterest") return "pinterest";
+      if(key === "twitter") return "twitter";
+      return "";
+    };
+    const getTopbarLuminance = () => {
+      if(!storeTopbar) return null;
+      const raw = getComputedStyle(storeTopbar).backgroundColor || "";
+      const match = raw.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+      if(!match) return null;
+      const r = Number(match[1]);
+      const g = Number(match[2]);
+      const b = Number(match[3]);
+      if(Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    };
+    const applyTopbarContrast = () => {
+      const luminance = getTopbarLuminance();
+      if(typeof luminance !== "number") return;
+      if(storeBackBtn){
+        storeBackBtn.style.color = luminance >= 0.6 ? "#111111" : "#ffffff";
+      }
+    };
+    const getTopbarIconVariant = () => {
+      const luminance = getTopbarLuminance();
+      return typeof luminance === "number" && luminance >= 0.6 ? "preto" : "branco";
+    };
+    const addItem = (label, url) => {
+      const link = (url || "").toString().trim();
+      if(!link) return;
+      const iconBase = getSocialIconBase(label);
+      if(!iconBase) return;
+      items.push({ label, url: link, iconBase });
+    };
+    applyTopbarContrast();
+    addItem("Instagram", storeInfo.instagram_url);
+    addItem("Facebook", storeInfo.facebook_url);
+    addItem("TikTok", storeInfo.tiktok_url);
+    addItem("YouTube", storeInfo.youtube_url);
+    addItem("Pinterest", storeInfo.pinterest_url);
+    if(Array.isArray(storeInfo.social_extras)){
+      storeInfo.social_extras.forEach((extra) => {
+        const label = (extra && extra.name) ? extra.name.toString().trim() : "";
+        const url = (extra && (extra.profile_url || extra.profileUrl)) ? (extra.profile_url || extra.profileUrl).toString().trim() : "";
+        if(label && url){
+          addItem(label, url);
+        }
+      });
+    }
+    if(!items.length){
+      storeTopSocials.innerHTML = "";
+      return;
+    }
+    const iconVariant = getTopbarIconVariant();
+    storeTopSocials.innerHTML = items.map((item) => {
+      const iconSrc = `/FlowDesk/imagens/app/icones/${item.iconBase}-${iconVariant}.png`;
+      return `<a class="topbarSocialBtn" href="${item.url}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(item.label)}">
+        <img class="topbarSocialIcon" src="${iconSrc}" alt="${escapeHtml(item.label)}" loading="lazy" />
+      </a>`;
+    }).join("");
   }
   async function loadStoreInfo(){
     if(!STORE_ID){
@@ -141,8 +284,21 @@
         return;
       }
       storeInfo = data.store;
-      if(storeInfo.logo_url){
-        showStoreLogo(storeInfo.logo_url, storeInfo.name);
+      setTopLogo(storeInfo.logo_url, storeInfo.name);
+      setTopLogoLink(storeInfo.site_url);
+      buildSocialButtons();
+      if(storeInfo.personalizacao_config){
+        let parsedConfig = storeInfo.personalizacao_config;
+        if(typeof parsedConfig === "string"){
+          try{
+            parsedConfig = JSON.parse(parsedConfig);
+          }catch(e){
+            parsedConfig = null;
+          }
+        }
+        applyConfigToUI(parsedConfig);
+      }else{
+        applyConfigToUI(null);
       }
       if(storeBackBtn){
         const link = storeInfo.site_url || "";
@@ -152,9 +308,6 @@
         }else{
           storeBackBtn.style.display = "none";
         }
-      }
-      if(storeBrand){
-        storeBrand.style.display = storeInfo.logo_url || storeBackBtn?.style.display === "inline-flex" ? "flex" : "none";
       }
     }catch(err){
       showStoreMessage("Nao localizamos a loja. Verifique o link de personalizacao.");
@@ -179,6 +332,116 @@
     }
   }
 
+  function getSideLabel(side){
+    return side === "back" ? "Costas" : "Frente";
+  }
+
+  function updateSideToggleLabel(){
+    if(mockupSideLabel){
+      mockupSideLabel.textContent = getSideLabel(activeSide);
+    }
+    if(mockupSideToggleBtn){
+      mockupSideToggleBtn.textContent = activeSide === "front" ? "Costas da camiseta" : "Frente da camiseta";
+    }
+  }
+
+  function updatePreviewForSide(side, url){
+    const imgEl = side === "back" ? mockupPreviewBack : mockupPreviewFront;
+    const emptyEl = side === "back" ? mockupPreviewBackEmpty : mockupPreviewFrontEmpty;
+    const holder = imgEl ? imgEl.closest(".mockupSidePreview") : null;
+    if(sidePreviewUrls[side]){
+      URL.revokeObjectURL(sidePreviewUrls[side]);
+      sidePreviewUrls[side] = "";
+    }
+    if(imgEl && url){
+      imgEl.src = url;
+      sidePreviewUrls[side] = url;
+      if(holder) holder.classList.add("hasPreview");
+      if(emptyEl) emptyEl.style.display = "none";
+      return;
+    }
+    if(imgEl){
+      imgEl.removeAttribute("src");
+    }
+    if(holder) holder.classList.remove("hasPreview");
+    if(emptyEl) emptyEl.style.display = "block";
+  }
+
+  function schedulePreviewUpdate(){
+    if(previewTimer){
+      clearTimeout(previewTimer);
+      previewTimer = null;
+    }
+    previewTimer = setTimeout(async () => {
+      const hasStamp = state.stampReady && state.stampSrc;
+      const hasText = (state.customText || "").trim().length > 0;
+      if(!state.mockupW || !state.mockupH || !stampImg || (!hasStamp && !hasText)){
+        updatePreviewForSide(activeSide, "");
+        return;
+      }
+      const blob = await buildPreviewBlob(PREVIEW_SCALE);
+      if(!blob){
+        updatePreviewForSide(activeSide, "");
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      updatePreviewForSide(activeSide, url);
+    }, 220);
+  }
+
+  function applyStateToUI(){
+    updateSideToggleLabel();
+    if(customTextInput){
+      customTextInput.value = state.customText || "";
+    }
+    if(customTextFont){
+      customTextFont.value = state.customTextFont || "Arial";
+    }
+    if(customTextColorPicker){
+      customTextColorPicker.value = state.customTextColor || "#000000";
+    }
+    if(customTextSize){
+      customTextSize.value = String(state.customTextSize || 32);
+    }
+    if(customFontFileName){
+      customFontFileName.value = state.customFontFileName || "Vazio";
+    }
+    if(stampOpacityRange){
+      stampOpacityRange.value = String(Math.round(state.stampOpacity * 100));
+    }
+    if(stampOpacityValue){
+      stampOpacityValue.textContent = `${Math.round(state.stampOpacity * 100)}%`;
+    }
+    if(stampFileName){
+      stampFileName.value = state.stampFileName || "Vazio";
+    }
+    updateShirtColorSelect();
+    if(stampImg){
+      if(state.stampSrc){
+        stampImg.src = state.stampSrc;
+        stampImg.style.display = "block";
+      }else{
+        stampImg.removeAttribute("src");
+        stampImg.style.display = "none";
+      }
+    }
+    if(stampResizeHandle){
+      stampResizeHandle.style.display = state.stampReady ? "block" : "none";
+    }
+    setStampClearEnabled(!!state.stampFile);
+    updateStampTextPreview();
+    updatePrintAreaPosition();
+  }
+
+  async function setActiveSide(side){
+    if(side !== "front" && side !== "back") return;
+    if(side === activeSide) return;
+    activeSide = side;
+    state = sideStates[activeSide];
+    applyStateToUI();
+    await applyMockupForCurrentSide();
+  }
+
   function toLabel(value){
     const raw = (value || "").toString().replace(/-/g, " ");
     return raw.replace(/\b\w/g, (m) => m.toUpperCase());
@@ -195,10 +458,448 @@
     }
   }
 
+  function escapeHtml(value){
+    return (value || "").toString()
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   function setFormMessage(message, ok){
     if(!formMessage) return;
     formMessage.textContent = message || "";
     formMessage.style.color = ok ? "#1b7f4a" : "#d64545";
+  }
+
+  function getDefaultColors(){
+    if(!shirtColor) return [];
+    const options = Array.from(shirtColor.querySelectorAll("option"));
+    return options
+      .map((opt) => ({
+        name: (opt.value || "").toString(),
+        hex: (opt.dataset.hex || "").toString(),
+        enabled: opt.value !== ""
+      }))
+      .filter((item) => item.name);
+  }
+
+  function getDefaultSizes(){
+    if(!shirtSize) return [];
+    const options = Array.from(shirtSize.querySelectorAll("option"));
+    return options
+      .map((opt) => (opt.value || "").toString())
+      .filter((value) => value && value !== "Selecione");
+  }
+
+  function getDefaultAttention(){
+    if(!attentionList) return [];
+    return Array.from(attentionList.querySelectorAll("li"))
+      .map((li) => (li.textContent || "").trim())
+      .filter(Boolean);
+  }
+
+  function buildDefaultConfig(){
+    return {
+      version: 1,
+      global: {
+        topbarColor: (storeTopbar && storeTopbar.style.backgroundColor) || "",
+        pageBg: "",
+        dividerColor: "",
+        editBtnBg: "",
+        editBtnText: "",
+        actionBtnBg: "",
+        actionBtnText: "",
+        popup: {
+          enabled: false,
+          autoShow: false,
+          title: "",
+          content: ""
+        }
+      },
+      cards: {
+          config: {
+            bg: "",
+            text: "",
+            fieldText: "",
+            buttonBg: "",
+            buttonText: "",
+            trashIconColor: "",
+            attentionTextColor: "",
+            attentionBgColor: "",
+            textFieldsEnabled: true,
+            colors: getDefaultColors(),
+            sizes: getDefaultSizes(),
+            attentionText: getDefaultAttention()
+        },
+          mockup: {
+            hintText: (mockupHint && mockupHint.textContent) ? mockupHint.textContent.trim() : "",
+            bg: "",
+            panelBg: "",
+            text: "",
+            previewEmptyTextColor: "",
+            buttonBg: "",
+            buttonText: "",
+            priceSingle: "",
+            priceDouble: ""
+        },
+        customer: {
+          bg: "",
+          text: "",
+          buttonBg: "",
+          buttonText: ""
+        }
+      }
+    };
+  }
+
+  function mergeConfig(base, incoming){
+    if(!incoming || typeof incoming !== "object") return base;
+    const out = JSON.parse(JSON.stringify(base));
+    const merge = (target, src) => {
+      Object.keys(src || {}).forEach((key) => {
+        if(src[key] && typeof src[key] === "object" && !Array.isArray(src[key])){
+          if(!target[key] || typeof target[key] !== "object") target[key] = {};
+          merge(target[key], src[key]);
+        }else{
+          target[key] = src[key];
+        }
+      });
+    };
+    merge(out, incoming);
+    return out;
+  }
+
+  function normalizeConfig(incoming){
+    const base = buildDefaultConfig();
+    const next = mergeConfig(base, incoming);
+    if(!Array.isArray(next.cards.config.colors)) next.cards.config.colors = base.cards.config.colors;
+    if(!Array.isArray(next.cards.config.sizes)) next.cards.config.sizes = base.cards.config.sizes;
+    if(!Array.isArray(next.cards.config.attentionText)) next.cards.config.attentionText = base.cards.config.attentionText;
+    return next;
+  }
+
+  function applyConfigToUI(config){
+    const cfg = normalizeConfig(config);
+    personalizacaoConfig = cfg;
+
+    if(storeTopbar && cfg.global.topbarColor){
+      storeTopbar.style.background = cfg.global.topbarColor;
+      buildSocialButtons();
+    }
+    if(cfg.global.pageBg){
+      document.body.style.background = cfg.global.pageBg;
+    }else{
+      document.body.style.removeProperty("background");
+    }
+    if(document.body.classList.contains("adminBody")){
+      const editButtons = document.querySelectorAll(".adminEditBtn");
+      editButtons.forEach((btn) => {
+        if(cfg.global.editBtnBg){
+          btn.style.background = cfg.global.editBtnBg;
+          btn.style.borderColor = cfg.global.editBtnBg;
+        }else{
+          btn.style.removeProperty("background");
+          btn.style.removeProperty("border-color");
+        }
+        if(cfg.global.editBtnText){
+          btn.style.color = cfg.global.editBtnText;
+        }else{
+          btn.style.removeProperty("color");
+        }
+      });
+      const actionButtons = document.querySelectorAll("#adminPublishBtn, #adminSaveBtn, #adminResetBtn");
+      actionButtons.forEach((btn) => {
+        if(cfg.global.actionBtnBg){
+          btn.style.background = cfg.global.actionBtnBg;
+          btn.style.borderColor = cfg.global.actionBtnBg;
+        }else{
+          btn.style.removeProperty("background");
+          btn.style.removeProperty("border-color");
+        }
+        if(cfg.global.actionBtnText){
+          btn.style.color = cfg.global.actionBtnText;
+        }else{
+          btn.style.removeProperty("color");
+        }
+      });
+    }
+    if(sectionDividers.length && cfg.global.dividerColor){
+      sectionDividers.forEach((divider) => {
+        divider.style.background = cfg.global.dividerColor;
+      });
+    }
+
+      if(configPanel){
+        if(cfg.cards.config.bg){
+          configPanel.style.background = cfg.cards.config.bg;
+        }else{
+          configPanel.style.removeProperty("background");
+        }
+        if(cfg.cards.config.text){
+          configPanel.style.color = cfg.cards.config.text;
+          configPanel.style.setProperty("--config-text-color", cfg.cards.config.text);
+        }else{
+          configPanel.style.removeProperty("color");
+          configPanel.style.removeProperty("--config-text-color");
+        }
+        if(cfg.cards.config.fieldText){
+          configPanel.style.setProperty("--config-field-text-color", cfg.cards.config.fieldText);
+        }else{
+          configPanel.style.removeProperty("--config-field-text-color");
+        }
+        const cfgButtons = configPanel.querySelectorAll(".btn, .iconBtn");
+        cfgButtons.forEach((btn) => {
+          if(btn.classList.contains("adminEditBtn")) return;
+          if(cfg.cards.config.buttonBg){
+            btn.style.background = cfg.cards.config.buttonBg;
+            btn.style.borderColor = cfg.cards.config.buttonBg;
+          }else{
+            btn.style.removeProperty("background");
+            btn.style.removeProperty("border-color");
+          }
+          if(cfg.cards.config.buttonText){
+            btn.style.color = cfg.cards.config.buttonText;
+          }else{
+            btn.style.removeProperty("color");
+          }
+        });
+        if(cfg.cards.config.trashIconColor){
+          configPanel.style.setProperty("--trash-icon-color", cfg.cards.config.trashIconColor);
+        }else{
+          configPanel.style.removeProperty("--trash-icon-color");
+        }
+      }
+    if(customTextBlock){
+      customTextBlock.style.display = cfg.cards.config.textFieldsEnabled ? "" : "none";
+    }
+    if(customFontBlock){
+      customFontBlock.style.display = cfg.cards.config.textFieldsEnabled ? "" : "none";
+    }
+    if(configDividerTextBefore){
+      configDividerTextBefore.style.display = cfg.cards.config.textFieldsEnabled ? "" : "none";
+    }
+    if(configDividerTextAfter){
+      configDividerTextAfter.style.display = "";
+    }
+      if(attentionList){
+        attentionList.innerHTML = (cfg.cards.config.attentionText || [])
+          .map((text) => `<li>${escapeHtml(text)}</li>`)
+          .join("");
+      }
+      if(attentionBox){
+        const attentionTargets = attentionBox.querySelectorAll(".warningTitle, .sizeInfo, ul, li");
+        if(cfg.cards.config.attentionTextColor){
+          attentionBox.style.color = cfg.cards.config.attentionTextColor;
+          attentionBox.style.setProperty("--muted", cfg.cards.config.attentionTextColor);
+          attentionTargets.forEach((el) => {
+            el.style.color = cfg.cards.config.attentionTextColor;
+          });
+          if(attentionList) attentionList.style.color = cfg.cards.config.attentionTextColor;
+        }else if(cfg.cards.config.text){
+          attentionBox.style.color = cfg.cards.config.text;
+          attentionBox.style.removeProperty("--muted");
+          attentionTargets.forEach((el) => {
+            el.style.color = cfg.cards.config.text;
+          });
+          if(attentionList) attentionList.style.color = cfg.cards.config.text;
+        }else{
+          attentionBox.style.removeProperty("color");
+          attentionBox.style.removeProperty("--muted");
+          attentionTargets.forEach((el) => {
+            el.style.removeProperty("color");
+          });
+          if(attentionList) attentionList.style.removeProperty("color");
+        }
+        if(cfg.cards.config.attentionBgColor){
+          attentionBox.style.background = cfg.cards.config.attentionBgColor;
+        }else{
+          attentionBox.style.removeProperty("background");
+        }
+      }
+
+    if(shirtColor){
+      const enabledColors = (cfg.cards.config.colors || []).filter(c => c && c.enabled);
+      const options = ['<option value="">Selecione</option>'].concat(
+        enabledColors.map(c => `<option value="${escapeHtml(c.name)}" data-hex="${escapeHtml(c.hex || "")}">${escapeHtml(c.name)}</option>`)
+      );
+      shirtColor.innerHTML = options.join("");
+    }
+    if(shirtSize){
+      const sizes = (cfg.cards.config.sizes || []).filter(Boolean);
+      const options = ['<option value="">Selecione</option>'].concat(
+        sizes.map(size => `<option value="${escapeHtml(size)}">${escapeHtml(size)}</option>`)
+      );
+      shirtSize.innerHTML = options.join("");
+    }
+
+    if(mockupPanel){
+      if(cfg.cards.mockup.text){
+        mockupPanel.style.color = cfg.cards.mockup.text;
+      }else{
+        mockupPanel.style.removeProperty("color");
+      }
+      if(cfg.cards.mockup.panelBg){
+        mockupPanel.style.background = cfg.cards.mockup.panelBg;
+      }else{
+        mockupPanel.style.removeProperty("background");
+      }
+    }
+    if(mockupHint && cfg.cards.mockup.hintText){
+      mockupHint.textContent = cfg.cards.mockup.hintText;
+    }
+    if(mockupHint){
+      if(cfg.cards.mockup.text){
+        mockupHint.style.color = cfg.cards.mockup.text;
+      }else{
+        mockupHint.style.removeProperty("color");
+      }
+    }
+    if(mockupSideLabel){
+      if(cfg.cards.mockup.text){
+        mockupSideLabel.style.color = cfg.cards.mockup.text;
+      }else{
+        mockupSideLabel.style.removeProperty("color");
+      }
+    }
+    if(mockupPriceNote){
+      if(cfg.cards.mockup.text){
+        mockupPriceNote.style.color = cfg.cards.mockup.text;
+      }else{
+        mockupPriceNote.style.removeProperty("color");
+      }
+    }
+    if(mockupStage && cfg.cards.mockup.bg){
+      mockupStage.closest(".mockupStageWrap")?.setAttribute("style", `background:${cfg.cards.mockup.bg}; border-color:${cfg.cards.mockup.bg};`);
+    }else if(mockupStage){
+      const wrap = mockupStage.closest(".mockupStageWrap");
+      if(wrap) wrap.removeAttribute("style");
+    }
+    if(mockupSidePreviews && cfg.cards.mockup.bg){
+      mockupSidePreviews.querySelectorAll(".mockupSidePreview").forEach((el) => {
+        el.style.background = cfg.cards.mockup.bg;
+        el.style.borderColor = cfg.cards.mockup.bg;
+      });
+    }else if(mockupSidePreviews){
+      mockupSidePreviews.querySelectorAll(".mockupSidePreview").forEach((el) => {
+        el.style.removeProperty("background");
+        el.style.removeProperty("border-color");
+      });
+    }
+    if(cfg.cards.mockup.previewEmptyTextColor){
+      if(mockupPreviewFrontEmpty) mockupPreviewFrontEmpty.style.color = cfg.cards.mockup.previewEmptyTextColor;
+      if(mockupPreviewBackEmpty) mockupPreviewBackEmpty.style.color = cfg.cards.mockup.previewEmptyTextColor;
+      if(mockupSidePreviews){
+        mockupSidePreviews.querySelectorAll(".mockupSideTitle").forEach((title) => {
+          title.style.color = cfg.cards.mockup.previewEmptyTextColor;
+        });
+      }
+    }else{
+      if(mockupPreviewFrontEmpty) mockupPreviewFrontEmpty.style.removeProperty("color");
+      if(mockupPreviewBackEmpty) mockupPreviewBackEmpty.style.removeProperty("color");
+      if(mockupSidePreviews){
+        mockupSidePreviews.querySelectorAll(".mockupSideTitle").forEach((title) => {
+          title.style.removeProperty("color");
+        });
+      }
+    }
+      if(mockupPanel){
+        const buttons = mockupPanel.querySelectorAll(".btn");
+        buttons.forEach((btn) => {
+          if(btn.classList.contains("adminEditBtn")) return;
+          if(cfg.cards.mockup.buttonBg) btn.style.background = cfg.cards.mockup.buttonBg;
+          if(cfg.cards.mockup.buttonText) btn.style.color = cfg.cards.mockup.buttonText;
+          if(cfg.cards.mockup.buttonBg) btn.style.borderColor = cfg.cards.mockup.buttonBg;
+        });
+      }
+
+    if(customerPanel){
+      if(cfg.cards.customer.bg){
+        customerPanel.style.background = cfg.cards.customer.bg;
+      }else{
+        customerPanel.style.removeProperty("background");
+      }
+      if(cfg.cards.customer.text){
+        customerPanel.style.color = cfg.cards.customer.text;
+        customerPanel.style.setProperty("--customer-text-color", cfg.cards.customer.text);
+      }else{
+        customerPanel.style.removeProperty("color");
+        customerPanel.style.removeProperty("--customer-text-color");
+      }
+    }
+    if(submitBtn){
+      if(cfg.cards.customer.buttonBg) submitBtn.style.background = cfg.cards.customer.buttonBg;
+      if(cfg.cards.customer.buttonText) submitBtn.style.color = cfg.cards.customer.buttonText;
+      if(cfg.cards.customer.buttonBg) submitBtn.style.borderColor = cfg.cards.customer.buttonBg;
+    }
+
+    if(customPopupOverlay){
+      const popupCfg = cfg.global.popup || {};
+      if(customPopupTitle) customPopupTitle.textContent = popupCfg.title || "Aviso";
+      if(customPopupBody) customPopupBody.textContent = popupCfg.content || "";
+      if(popupCfg.enabled){
+        customPopupOverlay.style.display = popupCfg.autoShow ? "flex" : "none";
+      }else{
+        customPopupOverlay.style.display = "none";
+      }
+    }
+    updatePriceInfo();
+  }
+
+  function sideHasContent(targetState){
+    return Boolean(targetState.stampFile) || ((targetState.customText || "").trim().length > 0);
+  }
+
+  function updatePriceInfo(){
+    if(!priceValue || !mockupPriceNote) return;
+    const cfg = personalizacaoConfig ? normalizeConfig(personalizacaoConfig) : buildDefaultConfig();
+    const priceSingle = (cfg.cards.mockup.priceSingle || "").toString().trim();
+    const priceDouble = (cfg.cards.mockup.priceDouble || "").toString().trim();
+    if(!priceSingle && !priceDouble){
+      mockupPriceNote.style.display = "none";
+      return;
+    }
+    const hasFront = sideHasContent(sideStates.front);
+    const hasBack = sideHasContent(sideStates.back);
+    const next = (hasFront && hasBack) ? (priceDouble || priceSingle) : priceSingle;
+    if(!next){
+      mockupPriceNote.style.display = "none";
+      return;
+    }
+    mockupPriceNote.style.display = "";
+    priceValue.textContent = next;
+  }
+
+  function updateShirtColorSelect(){
+    if(!shirtColor) return;
+    const targetName = state.colorName;
+    if(!targetName) return;
+    const options = Array.from(shirtColor.options);
+    const match = options.find((opt) => normalizeColorName(opt.value) === targetName);
+    if(match && shirtColor.value !== match.value){
+      shirtColor.value = match.value;
+    }
+  }
+
+  function showColorMismatch(){
+    if(!colorMismatchOverlay) return;
+    colorMismatchOverlay.style.display = "flex";
+  }
+
+  function hideColorMismatch(){
+    if(!colorMismatchOverlay) return;
+    colorMismatchOverlay.style.display = "none";
+  }
+
+  function focusInvalidField(el){
+    if(!el) return;
+    if(typeof el.scrollIntoView === "function"){
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    if(typeof el.focus === "function"){
+      el.focus({ preventScroll: true });
+    }
   }
 
   function setSendProgress(value, label){
@@ -302,7 +1003,7 @@
   function getAreaStorageKey(){
     const suffix = getMockupKey();
     if(!suffix) return "";
-    return `area_${state.model}_${suffix}`;
+    return `area_${activeSide}_${state.model}_${suffix}`;
   }
 
   function getAreaPercent(){
@@ -358,8 +1059,26 @@
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("load_error"));
+      img.onerror = () => reject(new Error(`load_error:${src}`));
       img.src = src;
+    });
+  }
+
+  function waitForImageLoad(img){
+    return new Promise((resolve) => {
+      if(!img){
+        resolve();
+        return;
+      }
+      if(img.complete && img.naturalWidth){
+        resolve();
+        return;
+      }
+      const onLoad = () => {
+        img.removeEventListener("load", onLoad);
+        resolve();
+      };
+      img.addEventListener("load", onLoad);
     });
   }
 
@@ -369,7 +1088,14 @@
     if(maleMapCache) return maleMapCache;
     const displacementSrc = "../imagens/app/masculino/displacement.png";
     const maskSrc = "../imagens/app/masculino/mascara.png";
-    const [dispImg, maskImg] = await Promise.all([loadImage(displacementSrc), loadImage(maskSrc)]);
+    let dispImg;
+    let maskImg;
+    try{
+      [dispImg, maskImg] = await Promise.all([loadImage(displacementSrc), loadImage(maskSrc)]);
+    }catch(err){
+      maleMapCache = null;
+      return null;
+    }
     const dispCanvas = document.createElement("canvas");
     dispCanvas.width = dispImg.naturalWidth || dispImg.width;
     dispCanvas.height = dispImg.naturalHeight || dispImg.height;
@@ -473,6 +1199,12 @@
     return { x: nextX, y: nextY };
   }
 
+  function getBackAreaOffsetPx(){
+    if(activeSide !== "back") return 0;
+    const scale = state.mockupScale || 1;
+    return Math.round(BACK_AREA_OFFSET_PX / scale);
+  }
+
   function saveAreaToStorage(){
     const key = getAreaStorageKey();
     const pct = getAreaPercent();
@@ -494,12 +1226,16 @@
       if(!data || !isFinite(data.x) || !isFinite(data.y) || !isFinite(data.w) || !isFinite(data.h)){
         return false;
       }
-      const rect = clampAreaRect(
+      let rect = clampAreaRect(
         Math.round(state.mockupW * data.x),
         Math.round(state.mockupH * data.y),
         Math.round(state.mockupW * data.w),
         Math.round(state.mockupH * data.h)
       );
+      const backOffset = getBackAreaOffsetPx();
+      if(backOffset){
+        rect = clampAreaRect(rect.x, rect.y + backOffset, rect.w, rect.h);
+      }
       state.areaX = rect.x;
       state.areaY = rect.y;
       state.areaW = rect.w;
@@ -516,11 +1252,16 @@
   function setDefaultArea(info){
     const ratioTop = Number.isFinite(info.areaTopRatio) ? info.areaTopRatio : 0.3;
     const ratioH = Number.isFinite(info.areaHeightRatio) ? info.areaHeightRatio : 0.38;
-    const topOffset = Number.isFinite(info.areaTopOffsetPx) ? info.areaTopOffsetPx : 0;
+    let topOffset = Number.isFinite(info.areaTopOffsetPx) ? info.areaTopOffsetPx : 0;
     const targetH = Math.round(state.mockupH * ratioH);
     let targetW = 750;
-    if(Number.isFinite(info.areaWidthRatio)){
-      targetW = Math.round(targetH * info.areaWidthRatio);
+    let widthRatio = Number.isFinite(info.areaWidthRatio) ? info.areaWidthRatio : null;
+    if(activeSide === "back" && widthRatio){
+      widthRatio *= 1.15;
+      topOffset -= 8;
+    }
+    if(widthRatio){
+      targetW = Math.round(targetH * widthRatio);
     }else if(Number.isFinite(info.areaW)){
       targetW = info.areaW;
     }
@@ -529,12 +1270,16 @@
     }
     const ratioLeft = Number.isFinite(info.areaLeftRatio) ? info.areaLeftRatio : 0;
     const leftOffset = Number.isFinite(info.areaLeftOffsetPx) ? info.areaLeftOffsetPx : 0;
-    const rect = clampAreaRect(
+    let rect = clampAreaRect(
       Math.round((state.mockupW - targetW) / 2 + (state.mockupW * ratioLeft) + leftOffset),
       Math.round(state.mockupH * ratioTop + topOffset),
       Math.round(Math.min(targetW, state.mockupW)),
       Math.round(targetH)
     );
+    const backOffset = getBackAreaOffsetPx();
+    if(backOffset){
+      rect = clampAreaRect(rect.x, rect.y + backOffset, rect.w, rect.h);
+    }
     state.areaX = rect.x;
     state.areaY = rect.y;
     state.areaW = rect.w;
@@ -616,6 +1361,15 @@
     return { hex, css: `rgb(${r}, ${g}, ${b})` };
   }
 
+  function normalizeColorName(value){
+    const raw = (value || "").toString().trim().toLowerCase();
+    if(!raw) return "";
+    const noAccents = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const slug = noAccents.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    const normalized = slug === "rosa-bebe" ? "rosa" : slug;
+    return normalized.replace(/-costas$/, "");
+  }
+
   function getSelectedShirtHex(){
     if(!shirtColor) return null;
     const opt = shirtColor.options[shirtColor.selectedIndex];
@@ -624,11 +1378,44 @@
     return hex ? hex.toLowerCase() : null;
   }
 
+  function getSideMockupBase(){
+    if(state.model !== "masculino") return "";
+    if(activeSide === "back"){
+      const colorName = normalizeColorName(state.colorName) || "branco";
+      const fileName = colorName === "branco" ? "branco-costas.png" : `${colorName}.png`;
+      return `../imagens/app/masculino/${fileName}`;
+    }
+    return "../imagens/app/masculino/branco.png";
+  }
+
   async function applyTintedMockup(){
     if(state.model !== "masculino" || !state.colorCss) return;
-    const baseSrc = "../imagens/app/masculino/branco.png";
+    const baseSrc = getSideMockupBase();
+    if(!baseSrc) return;
+    if(activeSide === "back"){
+      setMockupImage(baseSrc);
+      const colorName = normalizeColorName(state.colorName) || "branco";
+      state.mockupSource = colorName === "branco" ? "masculino/branco-costas.png" : `masculino/${colorName}.png`;
+      state.mockupFile = null;
+      state.mockupDisplaySrc = baseSrc;
+      return;
+    }
     const maskSrc = "../imagens/app/masculino/mascara.png";
-    const [baseImg, maskImg] = await Promise.all([loadImage(baseSrc), loadImage(maskSrc)]);
+    let baseImg;
+    let maskImg;
+    try{
+      [baseImg, maskImg] = await Promise.all([loadImage(baseSrc), loadImage(maskSrc)]);
+    }catch(err){
+      try{
+        [baseImg, maskImg] = await Promise.all([
+          loadImage("../imagens/app/masculino/branco.png"),
+          loadImage(maskSrc)
+        ]);
+      }catch(errFallback){
+        setMockupImage("");
+        return;
+      }
+    }
     const canvas = document.createElement("canvas");
     canvas.width = baseImg.naturalWidth || baseImg.width;
     canvas.height = baseImg.naturalHeight || baseImg.height;
@@ -670,9 +1457,11 @@
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
 
-    setMockupImage(canvas.toDataURL("image/png"));
+    const dataUrl = canvas.toDataURL("image/png");
+    setMockupImage(dataUrl);
     state.mockupSource = "masculino/branco.png";
     state.mockupFile = null;
+    state.mockupDisplaySrc = dataUrl;
   }
 
   async function setColor(color){
@@ -680,47 +1469,65 @@
       const hex = getSelectedShirtHex() || color;
       const parsed = parseColorInput(hex);
       if(!parsed) return;
-      state.color = parsed.hex;
-      state.colorCss = parsed.css;
+      const colorName = normalizeColorName(shirtColor ? shirtColor.value : color);
+      const targets = activeSide === "back" ? [sideStates.back] : [sideStates.front, sideStates.back];
+      targets.forEach((target) => {
+        target.color = parsed.hex;
+        target.colorName = colorName;
+        target.colorCss = parsed.css;
+      });
       renderColors();
       await applyTintedMockup();
       return;
     }
-    state.color = color;
-    state.areaCustom = false;
-    state.areaKey = "";
+    const targets = activeSide === "back" ? [sideStates.back] : [sideStates.front, sideStates.back];
+    targets.forEach((target) => {
+      target.color = color;
+      target.colorName = normalizeColorName(color);
+      target.areaCustom = false;
+      target.areaKey = "";
+    });
     renderColors();
     if(state.model === "feminino"){
       const src = `../imagens/app/${state.model}/${color}.png`;
       state.mockupSource = `${state.model}/${color}.png`;
       state.mockupFile = null;
+      state.mockupDisplaySrc = src;
       setMockupImage(src);
     }
   }
 
   function setModel(model){
-    state.model = model;
-    state.color = "";
-    state.colorCss = "";
-    state.mockupFile = null;
-    state.mockupSource = "";
-    state.areaCustom = false;
-    state.areaKey = "";
+    Object.values(sideStates).forEach((target) => {
+      target.model = model;
+      target.color = "";
+      target.colorName = "";
+      target.colorCss = "";
+      target.mockupFile = null;
+      target.mockupFileUrl = "";
+      target.mockupSource = "";
+      target.mockupDisplaySrc = "";
+      target.areaCustom = false;
+      target.areaKey = "";
+    });
     if(mockupUploadBtn && model === "proprio"){
       mockupUploadBtn.classList.add("active");
     }else if(mockupUploadBtn){
       mockupUploadBtn.classList.remove("active");
     }
-  if(model === "proprio"){
+    if(model === "proprio"){
       if(colorGroup) colorGroup.style.display = "none";
       if(mockupUploadGroup) mockupUploadGroup.style.display = "block";
       setMockupImage("");
     }else{
       if(colorGroup) colorGroup.style.display = "block";
       if(mockupUploadGroup) mockupUploadGroup.style.display = "none";
+      if(shirtColor && !shirtColor.value){
+        shirtColor.value = "Branco";
+      }
       const info = MODEL_CONFIG[model];
-    if(model === "masculino"){
-        const defaultHex = getSelectedShirtHex() || "#d9d9d9";
+      if(model === "masculino"){
+        const defaultHex = getSelectedShirtHex() || "#ffffff";
         void setColor(defaultHex);
       }else if(info && info.mockups.length){
         void setColor(info.mockups[0]);
@@ -738,6 +1545,45 @@
     }
     mockupImg.style.display = "block";
     mockupImg.src = src;
+    state.mockupDisplaySrc = src;
+  }
+
+  async function applyMockupForCurrentSide(){
+    if(state.model === "proprio"){
+      if(state.mockupFileUrl){
+        setMockupImage(state.mockupFileUrl);
+        return;
+      }
+      if(state.mockupFile){
+        state.mockupFileUrl = URL.createObjectURL(state.mockupFile);
+        setMockupImage(state.mockupFileUrl);
+        return;
+      }
+      setMockupImage("");
+      return;
+    }
+    if(state.model === "masculino"){
+      if(state.colorCss){
+        await applyTintedMockup();
+        return;
+      }
+      const baseSrc = getSideMockupBase();
+      if(baseSrc){
+        if(activeSide === "back"){
+          const colorName = normalizeColorName(state.colorName) || "branco";
+          state.mockupSource = colorName === "branco" ? "masculino/branco-costas.png" : `masculino/${colorName}.png`;
+        }else{
+          state.mockupSource = "masculino/branco.png";
+        }
+        setMockupImage(baseSrc);
+      }
+      return;
+    }
+    if(state.model === "feminino" && state.color){
+      const src = `../imagens/app/${state.model}/${state.color}.png`;
+      state.mockupSource = `${state.model}/${state.color}.png`;
+      setMockupImage(src);
+    }
   }
 
   function updatePrintAreaPosition(){
@@ -746,9 +1592,15 @@
     printArea.style.width = `${state.areaW * scale}px`;
     printArea.style.height = `${state.areaH * scale}px`;
     printArea.style.left = `${state.areaX * scale}px`;
-    printArea.style.top = `${state.areaY * scale}px`;
+    let topPx = state.areaY * scale;
+    if(activeSide === "back"){
+      topPx = BACK_AREA_TOP_SCREEN_PX;
+      state.areaY = topPx / scale;
+    }
+    printArea.style.top = `${topPx}px`;
     updateAreaDebug();
     updateStampTextPreview();
+    schedulePreviewUpdate();
   }
 
   function updateStageLayout(){
@@ -825,11 +1677,13 @@
   function updateStampTextPreview(){
     if(!stampText || !printArea) return;
     const text = (state.customText || "").slice(0, 18);
-    if(!text){
-      stampText.textContent = "";
-      stampText.style.display = "none";
-      return;
-    }
+      if(!text){
+        stampText.textContent = "";
+        stampText.style.display = "none";
+        schedulePreviewUpdate();
+        updatePriceInfo();
+        return;
+      }
     const scale = state.mockupScale || 1;
     const maxWidth = Math.max(40, state.areaW * scale * 0.8);
     const maxSize = Math.max(14, state.areaH * scale * 0.2);
@@ -843,6 +1697,8 @@
     stampText.style.fontFamily = state.customTextFont;
     stampText.style.fontSize = `${fontSize}px`;
     stampText.style.color = state.customTextColor;
+    schedulePreviewUpdate();
+    updatePriceInfo();
   }
 
   function drawCustomText(ctx, areaX, areaY, areaW, areaH){
@@ -906,70 +1762,103 @@
     stampClearBtn.classList.toggle("isDisabled", !enabled);
   }
 
-  function resetStamp(){
-    state.stampFile = null;
-    state.stampReady = false;
-    state.stampAspect = 1;
-    state.stampOpacity = 1;
-    state.stamp = { x: 0, y: 0, w: 0, h: 0 };
-    if(stampImg){
-      stampImg.removeAttribute("src");
-      stampImg.style.display = "none";
-      stampImg.style.opacity = "1";
+  function resetStamp(targetState = state){
+    const targetSide = targetState === sideStates.back ? "back" : "front";
+    targetState.stampFile = null;
+    targetState.stampFileName = "Vazio";
+    targetState.stampSrc = "";
+    targetState.stampReady = false;
+    targetState.stampAspect = 1;
+    targetState.stampOpacity = 1;
+    targetState.stamp = { x: 0, y: 0, w: 0, h: 0 };
+    if(targetState === state){
+      if(stampImg){
+        stampImg.removeAttribute("src");
+        stampImg.style.display = "none";
+        stampImg.style.opacity = "1";
+      }
+      if(stampResizeHandle){
+        stampResizeHandle.style.display = "none";
+      }
+      if(stampUploadInput){
+        stampUploadInput.value = "";
+      }
+      if(stampFileName){
+        stampFileName.value = "Vazio";
+      }
+      if(stampOpacityRange){
+        stampOpacityRange.value = "100";
+      }
+      if(stampOpacityValue){
+        stampOpacityValue.textContent = "100%";
+      }
+      setStampClearEnabled(false);
+      updatePreviewForSide(activeSide, "");
     }
-    if(stampResizeHandle){
-      stampResizeHandle.style.display = "none";
+    if(targetState !== state){
+      updatePreviewForSide(targetSide, "");
     }
-    if(stampUploadInput){
-      stampUploadInput.value = "";
-    }
-    if(stampFileName){
-      stampFileName.value = "Vazio";
-    }
-    if(stampOpacityRange){
-      stampOpacityRange.value = "100";
-    }
-    if(stampOpacityValue){
-      stampOpacityValue.textContent = "100%";
-    }
-    setStampClearEnabled(false);
+    updatePriceInfo();
   }
 
-  function loadStampFile(file){
+  function loadStampFile(file, targetState = state){
     if(!file){
-      resetStamp();
+      resetStamp(targetState);
       return;
     }
     const allowed = ["image/png", "image/jpeg", "image/webp"];
     if(!allowed.includes(file.type)){
       setError(stampUploadError, "Formato invalido. Use PNG, JPG, JPEG ou WEBP.");
-      resetStamp();
+      resetStamp(targetState);
       return;
     }
     if(file.size > 15 * 1024 * 1024){
       setError(stampUploadError, "Arquivo maior que 15 MB.");
-      resetStamp();
+      resetStamp(targetState);
       return;
     }
-    state.stampFile = file;
-    setStampClearEnabled(true);
+    targetState.stampFile = file;
+    targetState.stampFileName = file.name || "Vazio";
+    targetState.stampReady = false;
     const url = URL.createObjectURL(file);
-    stampImg.onload = () => {
-      state.stampAspect = stampImg.naturalHeight / stampImg.naturalWidth || 1;
-      state.stampReady = true;
-      if(state.mockupW && state.mockupH){
+    targetState.stampSrc = url;
+    loadImage(url).then((img) => {
+      targetState.stampAspect = img.naturalHeight / img.naturalWidth || 1;
+      targetState.stampReady = true;
+      if(targetState === state && state.mockupW && state.mockupH){
         initStampPlacement();
+        schedulePreviewUpdate();
       }
-    };
-    stampImg.src = url;
+    }).catch(() => {
+      resetStamp(targetState);
+    });
+    if(targetState === state){
+      setStampClearEnabled(true);
+      if(stampImg){
+        stampImg.src = url;
+      }
+      if(stampFileName){
+        stampFileName.value = targetState.stampFileName;
+      }
+    }
+    updatePriceInfo();
   }
 
   async function loadCustomFont(file){
     if(!file || !customTextFont) return;
     const name = file.name.replace(/\.[^.]+$/, "") || "Fonte personalizada";
     const fontName = `Fonte_${Date.now()}`;
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    const formatMap = {
+      ttf: "truetype",
+      otf: "opentype",
+      woff: "woff",
+      woff2: "woff2"
+    };
+    const formatHint = formatMap[ext] ? ` format("${formatMap[ext]}")` : "";
+    const fontUrl = URL.createObjectURL(file);
     try{
-      const fontFace = new FontFace(fontName, URL.createObjectURL(file));
+      const fontFace = new FontFace(fontName, `url(${fontUrl})${formatHint}`);
       await fontFace.load();
       document.fonts.add(fontFace);
       const option = document.createElement("option");
@@ -978,6 +1867,9 @@
       customTextFont.appendChild(option);
       customTextFont.value = fontName;
       state.customTextFont = fontName;
+      state.customFontFile = file;
+      state.customFontFileName = file.name || "Vazio";
+      state.customFontLabel = name;
       if(customFontClearBtn){
         customFontClearBtn.disabled = false;
         customFontClearBtn.classList.remove("isDisabled");
@@ -985,10 +1877,12 @@
       if(customFontFileName){
         customFontFileName.value = file.name || "Vazio";
       }
+      setError(customFontError, "");
       updateStampTextPreview();
     }catch(e){
-      setFormMessage("Nao foi possivel carregar a fonte.", false);
+      setError(customFontError, "Nao foi possivel carregar a fonte.");
     }finally{
+      URL.revokeObjectURL(fontUrl);
       if(customTextFontUpload){
         customTextFontUpload.value = "";
       }
@@ -1005,9 +1899,13 @@
       customTextFont.value = "Arial";
     }
     state.customTextFont = "Arial";
+    state.customFontFile = null;
+    state.customFontFileName = "Vazio";
+    state.customFontLabel = "";
     if(customFontFileName){
       customFontFileName.value = "Vazio";
     }
+    setError(customFontError, "");
     if(customFontClearBtn){
       customFontClearBtn.disabled = true;
       customFontClearBtn.classList.add("isDisabled");
@@ -1024,6 +1922,7 @@
     if(stampOpacityValue){
       stampOpacityValue.textContent = `${pct}%`;
     }
+    schedulePreviewUpdate();
   }
 
   function startDrag(e, mode){
@@ -1174,43 +2073,54 @@
     dragState = null;
     areaDragState = null;
     areaResizeState = null;
+    schedulePreviewUpdate();
   }
 
-  async function buildPreviewBlob(){
+  async function buildPreviewBlob(scale = 1){
+    const previewScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
     const canvas = document.createElement("canvas");
-    canvas.width = state.mockupW;
-    canvas.height = state.mockupH;
+    canvas.width = Math.max(1, Math.round(state.mockupW * previewScale));
+    canvas.height = Math.max(1, Math.round(state.mockupH * previewScale));
     const ctx = canvas.getContext("2d");
     if(!ctx) return null;
-    ctx.drawImage(mockupImg, 0, 0, state.mockupW, state.mockupH);
+    ctx.drawImage(mockupImg, 0, 0, canvas.width, canvas.height);
 
-    const stampX = Math.round(state.areaX + (state.stamp.x / state.mockupScale));
-    const stampY = Math.round(state.areaY + (state.stamp.y / state.mockupScale));
-    const stampW = Math.round(state.stamp.w / state.mockupScale);
-    const stampH = Math.round(state.stamp.h / state.mockupScale);
+    const hasStamp = state.stampReady && state.stampSrc;
+    if(hasStamp){
+      const stampX = Math.round((state.areaX + (state.stamp.x / state.mockupScale)) * previewScale);
+      const stampY = Math.round((state.areaY + (state.stamp.y / state.mockupScale)) * previewScale);
+      const stampW = Math.round((state.stamp.w / state.mockupScale) * previewScale);
+      const stampH = Math.round((state.stamp.h / state.mockupScale) * previewScale);
 
-    let drawn = false;
-    if(state.model === "masculino" && !state.mockupFile){
-      try{
-        await getMaleMapData();
-        drawn = drawStampWithDisplacement(
-          ctx,
-          state.mockupW,
-          state.mockupH,
-          { x: state.areaX, y: state.areaY, w: state.areaW, h: state.areaH },
-          { x: stampX, y: stampY, w: stampW, h: stampH },
-          state.stampOpacity
-        );
-      }catch(e){
-        drawn = false;
+      let drawn = false;
+      if(previewScale === 1 && state.model === "masculino" && !state.mockupFile && activeSide === "front"){
+        try{
+          await getMaleMapData();
+          drawn = drawStampWithDisplacement(
+            ctx,
+            state.mockupW,
+            state.mockupH,
+            { x: state.areaX, y: state.areaY, w: state.areaW, h: state.areaH },
+            { x: stampX, y: stampY, w: stampW, h: stampH },
+            state.stampOpacity
+          );
+        }catch(e){
+          drawn = false;
+        }
+      }
+      if(!drawn){
+        ctx.globalAlpha = state.stampOpacity;
+        ctx.drawImage(stampImg, stampX, stampY, stampW, stampH);
+        ctx.globalAlpha = 1;
       }
     }
-    if(!drawn){
-      ctx.globalAlpha = state.stampOpacity;
-      ctx.drawImage(stampImg, stampX, stampY, stampW, stampH);
-      ctx.globalAlpha = 1;
-    }
-    drawCustomText(ctx, state.areaX, state.areaY, state.areaW, state.areaH);
+    drawCustomText(
+      ctx,
+      Math.round(state.areaX * previewScale),
+      Math.round(state.areaY * previewScale),
+      Math.round(state.areaW * previewScale),
+      Math.round(state.areaH * previewScale)
+    );
 
     return new Promise((resolve) => {
       canvas.toBlob((blob) => resolve(blob), "image/png");
@@ -1226,38 +2136,42 @@
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     const areaPct = getAreaPercent();
-    const stampPct = getStampPercentInArea();
-    if(!areaPct || !stampPct) return null;
+    if(!areaPct) return null;
+    const hasStamp = state.stampReady && state.stampSrc;
+    const stampPct = hasStamp ? getStampPercentInArea() : null;
+    if(hasStamp && !stampPct) return null;
 
     const areaX = Math.round(canvas.width * areaPct.x);
     const areaY = Math.round(canvas.height * areaPct.y);
     const areaW = Math.round(canvas.width * areaPct.w);
     const areaH = Math.round(canvas.height * areaPct.h);
-    const stampX = Math.round(areaX + (areaW * stampPct.x));
-    const stampY = Math.round(areaY + (areaH * stampPct.y));
-    const stampW = Math.round(areaW * stampPct.w);
-    const stampH = Math.round(areaH * stampPct.h);
+    if(hasStamp){
+      const stampX = Math.round(areaX + (areaW * stampPct.x));
+      const stampY = Math.round(areaY + (areaH * stampPct.y));
+      const stampW = Math.round(areaW * stampPct.w);
+      const stampH = Math.round(areaH * stampPct.h);
 
-    let drawn = false;
-    if(state.model === "masculino" && !state.mockupFile){
-      try{
-        await getMaleMapData();
-        drawn = drawStampWithDisplacement(
-          ctx,
-          canvas.width,
-          canvas.height,
-          { x: areaX, y: areaY, w: areaW, h: areaH },
-          { x: stampX, y: stampY, w: stampW, h: stampH },
-          state.stampOpacity
-        );
-      }catch(e){
-        drawn = false;
+      let drawn = false;
+      if(state.model === "masculino" && !state.mockupFile && activeSide === "front"){
+        try{
+          await getMaleMapData();
+          drawn = drawStampWithDisplacement(
+            ctx,
+            canvas.width,
+            canvas.height,
+            { x: areaX, y: areaY, w: areaW, h: areaH },
+            { x: stampX, y: stampY, w: stampW, h: stampH },
+            state.stampOpacity
+          );
+        }catch(e){
+          drawn = false;
+        }
       }
-    }
-    if(!drawn){
-      ctx.globalAlpha = state.stampOpacity;
-      ctx.drawImage(stampImg, stampX, stampY, stampW, stampH);
-      ctx.globalAlpha = 1;
+      if(!drawn){
+        ctx.globalAlpha = state.stampOpacity;
+        ctx.drawImage(stampImg, stampX, stampY, stampW, stampH);
+        ctx.globalAlpha = 1;
+      }
     }
     drawCustomText(ctx, areaX, areaY, areaW, areaH);
 
@@ -1268,6 +2182,7 @@
 
   function validateForm(){
     let ok = true;
+    let firstInvalid = null;
     setError(customerNameError, "");
     setError(customerEmailError, "");
     setError(customerPhoneError, "");
@@ -1277,26 +2192,46 @@
     if(!customerName.value.trim()){
       setError(customerNameError, "Informe seu nome.");
       ok = false;
+      if(!firstInvalid) firstInvalid = customerName;
     }
     if(!customerEmail.value.trim()){
       setError(customerEmailError, "Informe seu e-mail.");
       ok = false;
+      if(!firstInvalid) firstInvalid = customerEmail;
+    }else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.value.trim())){
+      setError(customerEmailError, "E-mail invalido.");
+      ok = false;
+      if(!firstInvalid) firstInvalid = customerEmail;
     }
     if(!customerPhone.value.trim()){
       setError(customerPhoneError, "Informe seu telefone.");
       ok = false;
+      if(!firstInvalid) firstInvalid = customerPhone;
+    }else{
+      const digits = customerPhone.value.replace(/\D+/g, "");
+      if(digits.length < 10){
+        setError(customerPhoneError, "Telefone invalido.");
+        ok = false;
+        if(!firstInvalid) firstInvalid = customerPhone;
+      }
     }
     if(!customerNotes.value.trim()){
       setError(customerNotesError, "Informe as observacoes.");
       ok = false;
+      if(!firstInvalid) firstInvalid = customerNotes;
     }
     if(!shirtColor || !shirtColor.value.trim()){
       setError(shirtColorError, "Selecione a cor.");
       ok = false;
+      if(!firstInvalid) firstInvalid = shirtColor;
     }
     if(!shirtSize || !shirtSize.value.trim()){
       setError(shirtSizeError, "Selecione o tamanho.");
       ok = false;
+      if(!firstInvalid) firstInvalid = shirtSize;
+    }
+    if(!ok && firstInvalid){
+      focusInvalidField(firstInvalid);
     }
     return ok;
   }
@@ -1308,71 +2243,131 @@
       return;
     }
     if(!validateForm()) return;
+    const frontColor = sideStates.front.colorName || "";
+    const backColor = sideStates.back.colorName || "";
+    const backHasContent = !!sideStates.back.stampFile || (sideStates.back.customText || "").trim().length > 0;
+    if(backHasContent && frontColor && backColor && frontColor !== backColor){
+      showColorMismatch();
+      return;
+    }
+    const originalSide = activeSide;
+    await setActiveSide("front");
     if(!state.model){
-      setFormMessage("Selecione o modelo.", false);
+      setError(mockupUploadError, "Selecione o modelo.");
+      await setActiveSide(originalSide);
       return;
     }
     if(state.model !== "proprio" && !state.color){
-      setFormMessage("Selecione a cor da camiseta.", false);
+      setError(shirtColorError, "Selecione a cor da camiseta.");
+      focusInvalidField(shirtColor);
+      await setActiveSide(originalSide);
       return;
     }
     if(state.model === "proprio" && !state.mockupFile){
-      setFormMessage("Envie o mockup personalizado.", false);
+      setError(mockupUploadError, "Envie o mockup personalizado.");
+      focusInvalidField(mockupUploadBtn || mockupUploadInput);
+      await setActiveSide(originalSide);
       return;
     }
     if(state.model === "proprio"){
       const key = getAreaStorageKey();
       const saved = key ? localStorage.getItem(key) : null;
       if(!saved){
-        setFormMessage("Ajuste a area de impressao antes de enviar.", false);
+        setError(mockupUploadError, "Ajuste a area de impressao antes de enviar.");
+        focusInvalidField(printArea);
+        await setActiveSide(originalSide);
         return;
       }
     }
-    if(!state.stampFile){
-      setFormMessage("Envie a estampa em PNG.", false);
-      return;
-    }
-    if(!mockupImg.src){
-      setFormMessage("Selecione o mockup.", false);
-      return;
-    }
-
-    const previewBlob = await buildPreviewBlob();
-    if(!previewBlob){
-      setFormMessage("Nao foi possivel gerar o preview.", false);
-      return;
-    }
-
     const formData = new FormData();
     formData.append("store_id", STORE_ID);
-    formData.append("model", state.model);
-    formData.append("color", state.color);
-    formData.append("area_w", String(state.areaW));
-    formData.append("area_h", String(state.areaH));
-    formData.append("area_x", String(state.areaX));
-    formData.append("area_y", String(state.areaY));
-    const areaPct = getAreaPercent();
-    if(areaPct){
-      formData.append("area_x_pct", String(areaPct.x));
-      formData.append("area_y_pct", String(areaPct.y));
-      formData.append("area_w_pct", String(areaPct.w));
-      formData.append("area_h_pct", String(areaPct.h));
-    }
-    formData.append("stamp_x", String(Math.round(state.stamp.x / state.mockupScale)));
-    formData.append("stamp_y", String(Math.round(state.stamp.y / state.mockupScale)));
-    formData.append("stamp_w", String(Math.round(state.stamp.w / state.mockupScale)));
-    formData.append("stamp_h", String(Math.round(state.stamp.h / state.mockupScale)));
-    formData.append("mockup_source", state.mockupSource);
+    formData.append("model", sideStates.front.model);
+    formData.append("color", sideStates.front.color);
     formData.append("customer_name", customerName.value.trim());
     formData.append("customer_email", customerEmail.value.trim());
     formData.append("customer_phone", customerPhone.value.trim());
     formData.append("customer_notes", customerNotes.value.trim());
     formData.append("order_color", shirtColor ? shirtColor.value.trim() : "");
     formData.append("order_size", shirtSize ? shirtSize.value.trim() : "");
-    formData.append("stamp_file", state.stampFile, state.stampFile.name || "estampa.png");
-    formData.append("preview_file", previewBlob, "preview.png");
-    if(state.model === "proprio" && state.mockupFile){
-      formData.append("mockup_file", state.mockupFile, state.mockupFile.name || "mockup.png");
+
+    let hasBack = false;
+    const sides = ["front", "back"];
+    for(const side of sides){
+      await setActiveSide(side);
+      await waitForImageLoad(mockupImg);
+      if(!mockupImg || !mockupImg.src){
+        if(side === "front"){
+          setError(mockupUploadError, "Selecione o mockup.");
+          focusInvalidField(mockupUploadBtn || mockupUploadInput);
+          await setActiveSide(originalSide);
+          return;
+        }
+        continue;
+      }
+      const hasText = (state.customText || "").trim().length > 0;
+      const hasStampFile = !!state.stampFile;
+      if(!hasStampFile && !hasText){
+        if(side === "front"){
+          setError(stampUploadError, "Envie a estampa em PNG ou escreva o texto.");
+          focusInvalidField(stampChooseBtn || stampUploadInput);
+          await setActiveSide(originalSide);
+          return;
+        }
+        continue;
+      }
+      if(state.stampSrc && stampImg && stampImg.src !== state.stampSrc){
+        stampImg.src = state.stampSrc;
+        await waitForImageLoad(stampImg);
+      }
+      const previewBlob = await buildPreviewBlob();
+      if(!previewBlob){
+        if(side === "front"){
+          setError(stampUploadError, "Nao foi possivel gerar o preview.");
+          await setActiveSide(originalSide);
+          return;
+        }
+        continue;
+      }
+      const suffix = side === "back" ? "_back" : "";
+      formData.append(`area_w${suffix}`, String(state.areaW));
+      formData.append(`area_h${suffix}`, String(state.areaH));
+      formData.append(`area_x${suffix}`, String(state.areaX));
+      formData.append(`area_y${suffix}`, String(state.areaY));
+      const areaPct = getAreaPercent();
+      if(areaPct){
+        formData.append(`area_x_pct${suffix}`, String(areaPct.x));
+        formData.append(`area_y_pct${suffix}`, String(areaPct.y));
+        formData.append(`area_w_pct${suffix}`, String(areaPct.w));
+        formData.append(`area_h_pct${suffix}`, String(areaPct.h));
+      }
+      formData.append(`stamp_x${suffix}`, String(Math.round(state.stamp.x / state.mockupScale)));
+      formData.append(`stamp_y${suffix}`, String(Math.round(state.stamp.y / state.mockupScale)));
+      formData.append(`stamp_w${suffix}`, String(Math.round(state.stamp.w / state.mockupScale)));
+      formData.append(`stamp_h${suffix}`, String(Math.round(state.stamp.h / state.mockupScale)));
+      formData.append(`mockup_source${suffix}`, state.mockupSource);
+      formData.append(`custom_text${suffix}`, (state.customText || "").toString());
+      formData.append(`custom_text_font${suffix}`, (state.customTextFont || "").toString());
+      formData.append(`custom_text_font_label${suffix}`, (state.customFontLabel || "").toString());
+      formData.append(`custom_text_color${suffix}`, (state.customTextColor || "").toString());
+      formData.append(`custom_text_size${suffix}`, String(state.customTextSize || ""));
+      if(state.customFontFile){
+        formData.append(`custom_font_file${suffix}`, state.customFontFile, state.customFontFile.name || `fonte${suffix || ""}`);
+      }
+      formData.append(`has_text${suffix}`, hasText ? "1" : "0");
+      if(hasStampFile){
+        formData.append(`stamp_file${suffix}`, state.stampFile, state.stampFile.name || `estampa${suffix || ""}.png`);
+      }
+      formData.append(`preview_file${suffix}`, previewBlob, `preview${suffix || ""}.png`);
+      if(state.model === "proprio" && state.mockupFile){
+        formData.append(`mockup_file${suffix}`, state.mockupFile, state.mockupFile.name || `mockup${suffix || ""}.png`);
+      }
+      if(side === "back"){
+        hasBack = true;
+      }
+    }
+    await setActiveSide(originalSide);
+    if(hasBack){
+      formData.append("has_back", "1");
     }
 
     submitBtn.disabled = true;
@@ -1394,7 +2389,8 @@
         openSuccessPopup();
       }, 200);
       form.reset();
-      resetStamp();
+      resetStamp(sideStates.front);
+      resetStamp(sideStates.back);
     }catch(err){
       failSendProgress();
       setFormMessage("Nao foi possivel enviar. Tente novamente.", false);
@@ -1408,7 +2404,11 @@
       setError(mockupUploadError, "");
       const file = mockupUploadInput.files && mockupUploadInput.files[0];
       if(!file){
+        if(state.mockupFileUrl){
+          URL.revokeObjectURL(state.mockupFileUrl);
+        }
         state.mockupFile = null;
+        state.mockupFileUrl = "";
         return;
       }
       if(!file.type.startsWith("image/")){
@@ -1416,12 +2416,15 @@
         mockupUploadInput.value = "";
         return;
       }
+      if(state.mockupFileUrl){
+        URL.revokeObjectURL(state.mockupFileUrl);
+      }
       state.mockupFile = file;
       state.mockupSource = "mockup-personalizado";
       state.areaCustom = false;
       state.areaKey = "";
-      const url = URL.createObjectURL(file);
-      setMockupImage(url);
+      state.mockupFileUrl = URL.createObjectURL(file);
+      setMockupImage(state.mockupFileUrl);
     });
   }
 
@@ -1557,6 +2560,12 @@
       }
     });
   }
+  if(mockupSideToggleBtn){
+    mockupSideToggleBtn.addEventListener("click", () => {
+      const nextSide = activeSide === "front" ? "back" : "front";
+      void setActiveSide(nextSide);
+    });
+  }
   if(mockupUploadBtn){
     mockupUploadBtn.addEventListener("click", () => {
       setModel("proprio");
@@ -1589,13 +2598,47 @@
       resetStamp();
     });
   }
+  if(mockupUploadInput){
+    mockupUploadInput.addEventListener("change", () => {
+      setError(mockupUploadError, "");
+    });
+  }
   window.addEventListener("resize", updateStageLayout);
 
   if(form){
     form.addEventListener("submit", handleSubmit);
   }
+  if(colorMismatchClose){
+    colorMismatchClose.addEventListener("click", hideColorMismatch);
+  }
+  if(colorMismatchOverlay){
+    colorMismatchOverlay.addEventListener("click", (e) => {
+      if(e.target !== colorMismatchOverlay) return;
+      hideColorMismatch();
+    });
+  }
+  if(customPopupClose){
+    customPopupClose.addEventListener("click", () => {
+      if(customPopupOverlay) customPopupOverlay.style.display = "none";
+    });
+  }
+  if(customPopupOverlay){
+    customPopupOverlay.addEventListener("click", (e) => {
+      if(e.target !== customPopupOverlay) return;
+      customPopupOverlay.style.display = "none";
+    });
+  }
 
   updateSizeInfo();
   renderColors();
   setModel("masculino");
+  updatePriceInfo();
+
+  if(typeof window !== "undefined"){
+    window.personalizacaoConfigApi = {
+      applyConfigToUI,
+      buildDefaultConfig,
+      normalizeConfig
+    };
+  }
 })();

@@ -6,7 +6,7 @@
   <title>Flowdesk</title>
   <link rel="icon" href="../imagens/app/Favicon/favicon-versao-clara.png" media="(prefers-color-scheme: light)">
   <link rel="icon" href="../imagens/app/Favicon/favicon-versao-escura.png" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="styles.css?v=55">
+  <link rel="stylesheet" href="styles.css?v=66">
   <style>
     .copyRow > div{
       flex:1 1 0;
@@ -132,6 +132,14 @@
       </div>
     </div>
     <div class="sideMenuBtns">
+      <button class="themeBtn sideBtn" id="goToHomeBtn" title="In&iacute;cio" aria-label="In&iacute;cio">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 10l9-7 9 7"></path>
+          <path d="M5 10v10h14V10"></path>
+          <path d="M9 20v-6h6v6"></path>
+        </svg>
+        <span class="sideLabel">In&iacute;cio</span>
+      </button>
       <button class="themeBtn sideBtn" id="goToSearchBtn" title="Buscador" aria-label="Buscador">
         <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="11" cy="11" r="7"></circle>
@@ -214,18 +222,21 @@
         </svg>
         <span class="sideLabel">E-mail</span>
       </button>
-      <div class="themeBtn sideBtn" id="themeToggleBtn" title="Tema" aria-label="Tema">
-        <span id="themeIcon"></span>
-        <span class="sideLabel">Tema</span>
-      </div>
-      <div class="themeBtn sideBtn" id="backupMenuBtn" title="Backup" aria-label="Backup">
+      <button class="themeBtn sideBtn" id="storeMessagesBtn" type="button" title="Mensagens da loja" aria-label="Mensagens da loja">
         <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="5" y="4" width="14" height="16" rx="2"></rect>
-          <rect x="8" y="4" width="8" height="5"></rect>
-          <rect x="8" y="13" width="8" height="6" rx="1"></rect>
+          <path d="M4 6h16v10H8l-4 4V6z"></path>
+          <path d="M8 10h8"></path>
+          <path d="M8 13h6"></path>
         </svg>
-        <span class="sideLabel">Backup</span>
-      </div>
+        <span class="sideLabel">Mensagens da loja</span>
+      </button>
+      <button class="themeBtn sideBtn" id="reclameAquiBtn" type="button" title="Reclame Aqui" aria-label="Reclame Aqui">
+        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="3"></rect>
+          <text x="12" y="16" text-anchor="middle" font-size="10" font-family="Arial" fill="currentColor">R</text>
+        </svg>
+        <span class="sideLabel">Reclame Aqui</span>
+      </button>
       <div class="themeBtn sideBtn" id="settingsBtn" title="Configura&ccedil;&otilde;es" aria-label="Configura&ccedil;&otilde;es">
         <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="3"></circle>
@@ -245,13 +256,13 @@
         </span>
         <span class="userName" id="userName">Minha conta</span>
       </button>
-      <button class="userNotifyBtn" id="personalizationsNotifyBtn" type="button" title="Personaliza&ccedil;&otilde;es" aria-label="Personaliza&ccedil;&otilde;es">
-        <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 7H3s3 0 3-7"></path>
-          <path d="M10 19a2 2 0 0 0 4 0"></path>
-        </svg>
-        <span class="notifyBadge" id="personalizationsNotifyBadge">0</span>
-      </button>
+        <button class="userNotifyBtn" id="appNotifyBtn" type="button" title="Mensagens" aria-label="Mensagens">
+          <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 7H3s3 0 3-7"></path>
+            <path d="M10 19a2 2 0 0 0 4 0"></path>
+          </svg>
+          <span class="notifyBadge" id="appNotifyBadge">0</span>
+        </button>
       <div class="userPauseWrap" id="userPauseWrap">
         <button class="userNotifyBtn userPauseBtn" id="userPauseBtn" type="button" title="Pausar" aria-label="Pausar">
           <svg class="iconStroke pauseIcon" viewBox="0 0 24 24" aria-hidden="true">
@@ -339,6 +350,19 @@
               <path d="M3 8l9 6 9-6"></path>
             </svg>
           </button>
+          <button class="themeBtn" type="button" data-header-proxy="storeMessagesBtn" title="Mensagens da loja" aria-label="Mensagens da loja">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16v10H8l-4 4V6z"></path>
+              <path d="M8 10h8"></path>
+              <path d="M8 13h6"></path>
+            </svg>
+          </button>
+          <button class="themeBtn" type="button" data-header-proxy="reclameAquiBtn" title="Reclame Aqui" aria-label="Reclame Aqui">
+            <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="3"></rect>
+              <text x="12" y="16" text-anchor="middle" font-size="10" font-family="Arial" fill="currentColor">R</text>
+            </svg>
+          </button>
           <button class="themeBtn" type="button" data-header-proxy="themeToggleBtn" title="Tema" aria-label="Tema">
             <span id="themeIconMobile"></span>
           </button>
@@ -404,6 +428,7 @@
         </div>
 
         <div class="menuBtnsRow">
+          <button class="btn small" id="navHomeBtn">In&iacute;cio</button>
           <button class="btn small" id="navAtalhosBtn">Buscador</button>
           <button class="btn small" id="navToggleViewBtn">Tarefas</button>
           <button class="btn small" id="navTasksExtraBtn">Tarefas extras</button>
@@ -437,6 +462,18 @@
       <button class="btn small" id="drawerPrev">&#x25C0;</button>
       <div class="count" id="drawerPageInfo">P&aacute;gina 1/1</div>
       <button class="btn small" id="drawerNext">&#x25B6;</button>
+    </div>
+  </aside>
+
+  <!-- Drawer: Mensagens -->
+  <div class="drawerBackdrop" id="notifyDrawerBackdrop"></div>
+  <aside class="drawer drawerRight notifyDrawer" id="notifyDrawer">
+    <div class="drawerHd">
+      <h3>Mensagens</h3>
+      <button class="btn small" id="closeNotifyDrawerBtn">Fechar</button>
+    </div>
+    <div class="drawerBd">
+      <div class="notifyList" id="notifyList"></div>
     </div>
   </aside>
 
@@ -524,6 +561,24 @@
           </div>
           <div class="menuBtnsRow">
             <span class="extraLinksRow" id="transportadorasExtraLinks"></span>
+          </div>
+        </div>
+        <div class="menuCard storeSearchCard">
+          <div class="menuTop">
+            <div class="menuIcon">
+              <svg class="menuIconSvg" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6"></circle>
+                <path d="M20 20l-3.5-3.5"></path>
+              </svg>
+            </div>
+            <p class="menuTitle">Pesquise na loja</p>
+          </div>
+          <div class="menuSearchFields">
+            <input id="storeSearchInput" type="text" placeholder="Ex: He-man" />
+            <input id="storeSearchWhatsapp" type="text" placeholder="WhatsApp com DDD" />
+            <div class="menuSearchAction">
+              <button class="btn small" type="button" id="storeSearchSendBtn">Enviar</button>
+            </div>
           </div>
         </div>
       </div>
@@ -696,6 +751,176 @@
       <div class="viewTitle" id="viewTitleText">Buscador de Solu&ccedil;&otilde;es</div>
     </div>
     <div class="viewStack" id="viewStack">
+      <!-- ===== VIEW: INICIO ===== -->
+      <div id="viewHome" class="viewScreen viewHidden">
+        <div class="grid single homeGrid">
+          <div class="homeFilterPeriodTop" id="homePeriodTopLabel"></div>
+          <section class="card homeFilterCard">
+            <div class="hd homeFilterHeader">
+              <div class="homeFilterHeaderSide">
+                <h2>Filtro</h2>
+              </div>
+              <button class="btn small iconBtn homeFilterRefreshBtn" id="homeUsersRefreshBtn" title="Atualizar usuários" aria-label="Atualizar usuários">
+                <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M21 12a9 9 0 1 1-3-6.7"></path>
+                  <polyline points="21 3 21 9 15 9"></polyline>
+                </svg>
+              </button>
+              <div class="homeFilterHeaderSide"></div>
+            </div>
+            <div class="bd">
+              <div class="homeFilterBar searchrow">
+                <div class="homeFilterFields">
+                  <div class="homeFilterGroup">
+                    <div class="label">Per&iacute;odo</div>
+                    <select id="homePeriodSelect">
+                      <option value="7d">7 dias</option>
+                      <option value="30d" selected>30 dias</option>
+                      <option value="90d">3 meses</option>
+                      <option value="custom">Personalizado</option>
+                    </select>
+                  </div>
+                  <div class="homeFilterGroup homeCustomRange" id="homeCustomRange">
+                    <div class="homeFilterDate">
+                      <div class="label">De</div>
+                      <input type="date" id="homeDateFrom" />
+                    </div>
+                    <div class="homeFilterDate">
+                      <div class="label">At&eacute;</div>
+                      <input type="date" id="homeDateTo" />
+                    </div>
+                  </div>
+                  <div class="homeFilterGroup">
+                    <div class="label">Loja</div>
+                    <select id="homeStoreSelect"></select>
+                  </div>
+                  <div class="homeFilterGroup">
+                    <div class="label">Usu&aacute;rio</div>
+                    <select id="homeUserSelect"></select>
+                  </div>
+                </div>
+                <div class="homeUsersLoading" id="homeUsersLoading" aria-live="polite" hidden>
+                  <div class="homeUsersLoadingBar"></div>
+                  <span>Carregando usu&aacute;rios...</span>
+                </div>
+                <div class="homeFilterActions">
+                  <button class="homeFilterIconBtn" id="homeApplyBtn" type="button" title="Aplicar" aria-label="Aplicar">
+                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 12h10"></path>
+                      <polyline points="11 7 16 12 11 17"></polyline>
+                      <rect x="16" y="4" width="4" height="16" rx="1"></rect>
+                    </svg>
+                  </button>
+                  <button class="homeFilterIconBtn" id="homeClearBtn" type="button" title="Limpar filtros" aria-label="Limpar filtros">
+                    <svg class="iconStroke" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 6h18"></path>
+                      <path d="M8 6V4h8v2"></path>
+                      <rect x="6" y="6" width="12" height="14" rx="2"></rect>
+                      <path d="M10 10v6"></path>
+                      <path d="M14 10v6"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="card homeKpiCard">
+            <div class="hd">
+              <h2>Indicadores</h2>
+            </div>
+            <div class="bd">
+              <div class="homeKpiGrid" id="homeKpiGrid"></div>
+            </div>
+          </section>
+          <section class="card homeChartCard">
+            <div class="hd">
+              <h2>Tarefas di&aacute;rias</h2>
+            </div>
+            <div class="bd">
+              <div class="homeChartLegend">
+                <span class="homeChartLegendItem">
+                  <span class="homeChartLegendSwatch isCreated"></span>
+                  Criadas
+                </span>
+                <span class="homeChartLegendItem">
+                  <span class="homeChartLegendSwatch isClosed"></span>
+                  Encerradas
+                </span>
+              </div>
+              <div class="homeChart" id="homeTasksNormalChart"></div>
+            </div>
+          </section>
+          <section class="card homeChartCard">
+            <div class="hd">
+              <h2>Tarefas extras</h2>
+            </div>
+            <div class="bd">
+              <div class="homeChartLegend">
+                <span class="homeChartLegendItem">
+                  <span class="homeChartLegendSwatch isCreated"></span>
+                  Criadas
+                </span>
+                <span class="homeChartLegendItem">
+                  <span class="homeChartLegendSwatch isClosed"></span>
+                  Encerradas
+                </span>
+              </div>
+              <div class="homeChart" id="homeTasksExtraChart"></div>
+            </div>
+          </section>
+          <section class="card homeChartCard">
+            <div class="hd">
+              <h2>Personaliza&ccedil;&otilde;es</h2>
+            </div>
+            <div class="bd">
+              <div class="homeChart" id="homePersonalizationsChart"></div>
+            </div>
+          </section>
+          <section class="card homeDistCard">
+            <div class="hd">
+              <h2>Distribui&ccedil;&atilde;o</h2>
+            </div>
+            <div class="bd">
+              <div class="homeDistGrid">
+                <div class="homeDistBlock">
+                  <div class="homeChartTitle">Tarefas por status</div>
+                  <div class="homeBarList" id="homeStatusList"></div>
+                </div>
+                <div class="homeDistBlock">
+                  <div class="homeChartTitle">Tarefas por loja</div>
+                  <div class="homeBarList" id="homeStoreList"></div>
+                </div>
+                <div class="homeDistBlock">
+                  <div class="homeChartTitle">Personaliza&ccedil;&otilde;es por loja</div>
+                  <div class="homeBarList" id="homePersonalizationStoreList"></div>
+                </div>
+                <div class="homeDistBlock">
+                  <div class="homeChartTitle">Encerradas por usu&aacute;rio</div>
+                  <div class="homeBarList" id="homeUserClosedList"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="card homeSwapCard">
+            <div class="hd">
+              <h2>Trocas por tamanho</h2>
+              <div class="count" id="homeSwapsCount"></div>
+            </div>
+            <div class="bd">
+              <div class="homeSwapList" id="homeSwapList"></div>
+            </div>
+          </section>
+          <section class="card homeUsersCard">
+            <div class="hd">
+              <h2>Usu&aacute;rios</h2>
+              <div class="count" id="homeUsersSummary"></div>
+            </div>
+            <div class="bd">
+              <div class="homeUsersList" id="homeUsersList"></div>
+            </div>
+          </section>
+        </div>
+      </div>
       <!-- ===== VIEW: BUSCADOR ===== -->
       <div id="viewSearch" class="viewScreen isActive">
       <div class="grid single">
@@ -795,6 +1020,7 @@
 
               <div class="pager" id="tasksPager" style="margin-top:12px; justify-content:center;">
                 <button class="btn small" id="tasksNextBtn">Ver pr&oacute;xima</button>
+                <button class="btn small" id="tasksAllBtn" style="display:none;">Ver todas as tarefas</button>
                 <button class="btn small" id="tasksSingleBtn" style="display:none;">Exibir apenas uma tarefa por vez</button>
               </div>
             </div>
@@ -805,10 +1031,15 @@
       <!-- ===== VIEW: PERSONALIZACOES ===== -->
       <div id="viewPersonalizations" class="viewScreen viewHidden">
         <div class="grid single personalizationsGrid">
+          <div class="personalizationsPageActions">
+            <button class="btn small" id="personalizationsEditPageBtn">Editar p&aacute;gina de personaliza&ccedil;&atilde;o</button>
+          </div>
           <section class="card personalizationsCard">
             <div class="hd">
               <h2>Personaliza&ccedil;&otilde;es</h2>
-              <div class="count" id="personalizationsCount"></div>
+              <div class="personalizationsHeaderActions">
+                <div class="count" id="personalizationsCount"></div>
+              </div>
             </div>
             <div class="bd">
               <div class="personalizationsList" id="personalizationsList"></div>
@@ -1914,6 +2145,11 @@
         <div class="formGrid">
           <button class="btn small" id="openUserProfileSettingsBtn">Informa&ccedil;&otilde;es do usu&aacute;rio</button>
           <button class="btn small" id="openStoresConfigBtn">Informa&ccedil;&otilde;es das lojas</button>
+          <button class="btn small" id="openAnyDeskBtn">Abrir AnyDesk</button>
+          <button class="btn small" id="themeToggleBtn" title="Tema" aria-label="Tema">Tema</button>
+          <button class="btn small" id="backupMenuBtn" title="Backup" aria-label="Backup">Backup</button>
+          <button class="btn small" id="testDailyReportBtn" style="display:none;">Testar relat&oacute;rio di&aacute;rio</button>
+          <button class="btn small" id="testMonthlyReportBtn" style="display:none;">Testar relat&oacute;rio mensal</button>
         </div>
       </div>
     </div>
@@ -2045,7 +2281,7 @@
         <div class="socialHubTitle">
           <div class="socialHubTitleRow">
             <div class="socialHubEyebrow">Central social</div>
-            <button class="btn small" id="metaInboxCloseBtn">Voltar</button>
+            <button class="btn small" id="metaInboxCloseBtn">Fechar</button>
           </div>
           <h3>Atendimento nas redes</h3>
           <div class="note socialHubSubtitle">Acesse rapidamente os canais de cada loja e responda direto no inbox.</div>
@@ -2054,6 +2290,32 @@
       <div class="mb">
         
         <div class="storeLinksGrid storeLinksGridSocial" id="metaInboxGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Mensagens da loja -->
+  <div class="miniOverlay" id="storeMessagesOverlay">
+    <div class="miniModal storeLinksModal">
+      <div class="mh">
+        <h3>Mensagens da loja</h3>
+        <button class="btn small" id="storeMessagesCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="storeLinksGrid" id="storeMessagesGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Reclame Aqui -->
+  <div class="miniOverlay" id="reclameAquiOverlay">
+    <div class="miniModal storeLinksModal">
+      <div class="mh">
+        <h3>Reclame Aqui</h3>
+        <button class="btn small" id="reclameAquiCloseBtn">Fechar</button>
+      </div>
+      <div class="mb">
+        <div class="storeLinksGrid" id="reclameAquiGrid"></div>
       </div>
     </div>
   </div>
@@ -2076,16 +2338,15 @@
     <div class="miniModal">
       <div class="mh">
         <h3>Concluir tarefa</h3>
-        <button class="btn small" id="closeTaskCancelBtn">Cancelar</button>
+        <button class="btn small" id="closeTaskCancelBtn">Fechar</button>
       </div>
       <div class="mb">
         <div class="note" style="font-size:13px; text-align:center;">
-          Deseja criar uma nova fase ou encerrar a tarefa?
+          Crie a fase de encerramento para concluir a tarefa.
         </div>
       </div>
       <div class="mf closeTaskActions">
-        <button class="btn" id="closeTaskNewPhaseBtn">Criar nova fase</button>
-        <button class="btn danger" id="closeTaskDoneBtn">Encerrar tarefa</button>
+        <button class="btn" id="closeTaskNewPhaseBtn">Criar fase de encerramento</button>
       </div>
     </div>
   </div>
@@ -2102,14 +2363,25 @@
           <div class="personalizationInfo">
             <div class="personalizationDetails" id="personalizationDetails"></div>
           </div>
-          <div class="personalizationPreview">
-            <img id="personalizationPreviewImg" alt="Preview do mockup" />
+          <div class="personalizationPreviewGrid">
+            <div class="personalizationPreviewCard" data-side="front">
+              <div class="personalizationPreviewTitle">Frente</div>
+              <img id="personalizationPreviewImgFront" alt="Preview do mockup frente" />
+              <div class="personalizationPreviewEmpty" id="personalizationPreviewEmptyFront">Sem estampa</div>
+            </div>
+            <div class="personalizationPreviewCard" data-side="back">
+              <div class="personalizationPreviewTitle">Costas</div>
+              <img id="personalizationPreviewImgBack" alt="Preview do mockup costas" />
+              <div class="personalizationPreviewEmpty" id="personalizationPreviewEmptyBack">Sem estampa</div>
+            </div>
           </div>
         </div>
         <div class="personalizationActionsDivider"></div>
         <div class="personalizationActionsRow">
-          <a class="btn small" id="personalizationStampDownload" href="#" download>Baixar estampa</a>
-          <a class="btn small" id="personalizationMockupDownload" href="#" download>Baixar mockup</a>
+          <a class="btn small" id="personalizationStampDownloadFront" href="#" download>Baixar estampa (frente)</a>
+          <a class="btn small" id="personalizationMockupDownloadFront" href="#" download>Baixar mockup (frente)</a>
+          <a class="btn small" id="personalizationStampDownloadBack" href="#" download>Baixar estampa (costas)</a>
+          <a class="btn small" id="personalizationMockupDownloadBack" href="#" download>Baixar mockup (costas)</a>
           <button class="btn small iconOnly iconBare" id="personalizationWhatsappBtn" title="WhatsApp" aria-label="WhatsApp">
             <svg class="sakIcon" viewBox="0 0 48 48" aria-hidden="true">
               <path class="sakFill" d="M24 4C13.5 4 5 10.8 5 19.2c0 5.1 3.1 9.5 7.9 12-0.2 1.9-0.8 4.4-2.7 7 3.3-0.4 5.8-1.4 7.8-2.3 1.8 0.4 3.8 0.7 5.9 0.7 10.5 0 19-6.8 19-15.2S34.5 4 24 4z"></path>
@@ -2157,7 +2429,7 @@
     </div>
   </div>
 
-<script src="app.js?v=69"></script>
+<script src="app.js?v=81"></script>
 
   </body>
 </html>

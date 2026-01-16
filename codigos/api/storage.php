@@ -29,6 +29,7 @@ $shared_keys = [
   "tarefasDiarias_v1",
   "tarefasDiarias_concluidas_v1",
   "calendarHistory_v1",
+  "notifications_shared_v1",
 ];
 
 function is_shared_storage_key(string $key, array $shared_keys): bool {
